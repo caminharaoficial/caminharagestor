@@ -208,7 +208,13 @@
         </section>
 
         <section class="section" id="stock">
-          <div class="page-heading"><div><h1>Estoque</h1><p class="subtitle">Quantidade por numeração de cada produto.</p></div><button class="btn btn-primary" id="newStockBtn">＋ Adicionar numeração</button></div>
+          <div class="page-heading">
+            <div><h1>Estoque</h1><p class="subtitle">Quantidade por numeração de cada produto.</p></div>
+            <div style="display:flex; gap:10px;">
+              <button class="btn btn-light" id="cleanOrphansBtn" style="color:#b04545; border-color:#b04545;">Limpar Registros Órfãos</button>
+              <button class="btn btn-primary" id="newStockBtn">＋ Adicionar numeração</button>
+            </div>
+          </div>
           <div class="panel" id="stockFormPanel" hidden style="margin-bottom:18px">
             <div class="panel-head"><div><h2>Adicionar/atualizar numeração</h2><div class="panel-desc">Se a combinação produto+numeração já existir, será atualizada.</div></div></div>
             <form id="stockForm">
@@ -502,8 +508,17 @@
 
     async function deleteProduct(id) {
       const p = productById(id); if (!p) return;
-      if (!confirm(`Excluir ${p.marca} ${p.modelo}? As numerações de estoque NÃO serão apagadas automaticamente.`)) return;
-      try { await apiPost({ action: 'delete', sheet: 'Produtos', id }); notify('Produto excluído.'); await loadAll(); }
+      if (!confirm(`Excluir ${p.marca} ${p.modelo}?\n\nATENÇÃO: Todas as numerações de estoque deste produto também serão apagadas.`)) return;
+      try {
+        // 1. Apaga o produto
+        await apiPost({ action: 'delete', sheet: 'Produtos', id });
+        
+        // 2. Apaga todas as linhas de estoque que pertencem a este produto
+        await apiPost({ action: 'deleteWhere', sheet: 'Estoque', coluna: 'id_produto', valor: id });
+        
+        notify('Produto e estoques excluídos.');
+        await loadAll();
+      }
       catch (err) { notify('Erro: ' + err.message, true); }
     }
 
@@ -550,6 +565,27 @@
     document.getElementById('reloadSettingsBtn').addEventListener('click', () => loadAll());
 
     // ====== Start ======
+
+    // ====== Limpar estoques órfãos ======
+    document.getElementById('cleanOrphansBtn').addEventListener('click', async () => {
+      const orfaos = stock.filter(s => !productById(s.id_produto));
+      if (orfaos.length === 0) {
+        notify('Nenhum registro órfão encontrado. Tudo limpo!');
+        return;
+      }
+      if (!confirm(`Foram encontrados ${orfaos.length} registros de estoque sem produto correspondente.\n\nDeseja apagá-los permanentemente da planilha?`)) return;
+      
+      try {
+        for (const s of orfaos) {
+          await apiPost({ action: 'delete', sheet: 'Estoque', id: s.id });
+        }
+        notify(`${orfaos.length} registros órfãos apagados.`);
+        await loadAll();
+      } catch (err) {
+        notify('Erro ao limpar: ' + err.message, true);
+      }
+    });
+
     loadAll();
   </script>
 </body>
