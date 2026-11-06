@@ -211,6 +211,7 @@
           <div class="page-heading">
             <div><h1>Estoque</h1><p class="subtitle">Quantidade por numeração de cada produto.</p></div>
             <div style="display:flex; gap:10px;">
+              <button class="btn btn-primary" id="fixOrphansBtn" style="background:#27775d;">Gerar Estoque Faltante</button>
               <button class="btn btn-light" id="cleanOrphansBtn" style="color:#b04545; border-color:#b04545;">Limpar Registros Órfãos</button>
               <button class="btn btn-primary" id="newStockBtn">＋ Adicionar numeração</button>
             </div>
@@ -329,7 +330,7 @@
           apiRead('Produtos'), apiRead('Estoque'), apiRead('Vendas')
         ]);
         products = p.filter(x => x.id);
-        stock = s.filter(x => x.id);
+        stock = s.filter(x => x.id_produto); // Correção aqui: filtra pelo id_produto e não pelo id
         sales = v.filter(x => x.id);
         setConnection(true);
         renderAll();
@@ -591,6 +592,48 @@
       }
     });
 
+    // ====== Gerar Estoque Faltante (COLE O CÓDIGO 3 AQUI) ======
+    document.getElementById('fixOrphansBtn').addEventListener('click', async () => {
+      // Encontra produtos que não têm NENHUMA linha na tabela de estoque
+      const orfaos = products.filter(p => stockForProduct(p.id).length === 0);
+      
+      if (orfaos.length === 0) {
+        notify('Todos os produtos já possuem estoque cadastrado.');
+        return;
+      }
+      
+      if (!confirm(`Foram encontrados ${orfaos.length} produtos sem numerações de estoque.\n\nDeseja recriar a grade deles na aba Estoque?`)) return;
+      
+      let count = 0;
+      try {
+        for (const p of orfaos) {
+          const grade = p.grade || '37,38,39,40'; // Se o produto antigo não tiver grade, usa uma padrão
+          const numeros = grade.split(',').map(n => n.trim()).filter(Boolean);
+          
+          for (const num of numeros) {
+            await apiPost({
+              action: 'append', sheet: 'Estoque',
+              data: {
+                id: uuid(),
+                id_produto: p.id,
+                sku_variacao: `${p.sku}-${num}`,
+                numero: num,
+                quantidade: 0,
+                vendidos: 0,
+                atualizado_em: new Date().toISOString()
+              }
+            });
+            count++;
+          }
+        }
+        notify(`${count} numerações geradas com sucesso!`);
+        await loadAll();
+      } catch (err) {
+        notify('Erro ao gerar: ' + err.message, true);
+      }
+    });
+
+    // ====== Start ======
     loadAll();
   </script>
 </body>
