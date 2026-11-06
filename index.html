@@ -181,19 +181,22 @@
             <form id="productForm">
               <input type="hidden" id="editId" />
               <div class="form-grid">
+                <div class="field"><label for="productSku">SKU (deixe vazio p/ gerar)</label><input id="productSku" maxlength="40" placeholder="Ex.: CAR-LYO-AZU"/></div>
+                <div class="field"><label for="productCollection">Coleção</label><input id="productCollection" maxlength="40" placeholder="Ex.: Verão 2026"/></div>
                 <div class="field"><label for="productBrand">Marca *</label><input id="productBrand" required maxlength="60" placeholder="Ex.: CARTAGO"/></div>
                 <div class="field"><label for="productModel">Modelo *</label><input id="productModel" required maxlength="80" placeholder="Ex.: LYON"/></div>
                 <div class="field"><label for="productColor">Cor</label><input id="productColor" maxlength="60" placeholder="Ex.: AZUL/BEGE"/></div>
                 <div class="field"><label for="productGender">Gênero</label><select id="productGender"><option value="">—</option><option>FEMININO</option><option>MASCULINO</option><option>INFANTIL</option><option>UNISSEX</option></select></div>
                 <div class="field"><label for="productCost">Custo unitário (R$)</label><input id="productCost" type="number" min="0" step="0.01" placeholder="0,00"/></div>
                 <div class="field"><label for="productPrice">Preço de venda (R$) *</label><input id="productPrice" type="number" min="0" step="0.01" required placeholder="0,00"/></div>
+                <div class="field"><label for="productMinStock">Estoque mínimo (alerta por numeração)</label><input id="productMinStock" type="number" min="0" step="1" placeholder="Ex.: 1"/></div>
               </div>
               <div class="form-actions"><button class="btn btn-primary" type="submit">Salvar produto</button><button class="btn btn-light" type="button" id="cancelFormBtn">Cancelar</button></div>
             </form>
           </div>
           <section class="panel">
             <div class="toolbar"><input class="search" id="productSearch" placeholder="Buscar por marca, modelo ou cor..." aria-label="Buscar produtos"/><button class="btn btn-light" id="refreshBtn">Atualizar</button></div>
-            <div class="table-wrap"><table><thead><tr><th>Marca</th><th>Modelo</th><th>Cor</th><th>Gênero</th><th>Custo</th><th>Preço</th><th>Estoque</th><th>Ações</th></tr></thead><tbody id="productsTable"><tr><td colspan="8" class="table-empty">Carregando...</td></tr></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>SKU</th><th>Marca</th><th>Modelo</th><th>Cor</th><th>Gênero</th><th>Coleção</th><th>Custo</th><th>Preço</th><th>Estoque</th><th>Ações</th></tr></thead><tbody id="productsTable"><tr><td colspan="10" class="table-empty">Carregando...</td></tr></tbody></table></div>
           </section>
         </section>
 
@@ -210,7 +213,7 @@
               <div class="form-actions"><button class="btn btn-primary" type="submit">Salvar</button><button class="btn btn-light" type="button" id="cancelStockBtn">Cancelar</button></div>
             </form>
           </div>
-          <section class="panel"><div class="panel-head"><div><h2>Posição de estoque</h2><div class="panel-desc">Uma linha por numeração.</div></div></div><div class="table-wrap"><table><thead><tr><th>Produto</th><th>Numeração</th><th>Qtd.</th><th>Vendidos</th><th>Situação</th></tr></thead><tbody id="stockTable"><tr><td colspan="5" class="table-empty">Carregando...</td></tr></tbody></table></div></section>
+          <section class="panel"><div class="panel-head"><div><h2>Posição de estoque</h2><div class="panel-desc">Uma linha por numeração.</div></div></div><div class="table-wrap"><table><thead><tr><th>Produto</th><th>SKU</th><th>Numeração</th><th>Qtd.</th><th>Vendidos</th><th>Situação</th></tr></thead><tbody id="stockTable"><tr><td colspan="6" class="table-empty">Carregando...</td></tr></tbody></table></div></section>
         </section>
 
         <section class="section" id="orders">
@@ -247,7 +250,6 @@
 
   <script>
     // ====== CONFIG ======
-    // Cole aqui o URL do seu Apps Script (termina com /exec)
     const API_URL = 'https://script.google.com/macros/s/AKfycbx03IKIX_yOZK5CaiQgv5E_J_Xo9a6SU_s59MAv_G9bTmWY3zfmcnCuv5fENQrj2eVm/exec';
 
     // ====== Estado ======
@@ -259,6 +261,15 @@
     const money = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const uuid = () => (crypto?.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(36).slice(2,8));
+
+    // Gera SKU a partir de marca+modelo+cor (ex: CAR-LYO-AZU)
+    function generateSku(marca, modelo, cor) {
+      const clean = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+      const m = clean(marca).slice(0,3) || 'XXX';
+      const mo = clean(modelo).slice(0,3) || 'XXX';
+      const c = clean(cor).slice(0,3) || 'GEN';
+      return `${m}-${mo}-${c}`;
+    }
 
     function notify(msg, isError) {
       const t = document.getElementById('toast');
@@ -305,7 +316,7 @@
           apiRead('Produtos'), apiRead('Estoque'), apiRead('Vendas')
         ]);
         products = p.filter(x => x.id);
-        stock = s.filter(x => x.id_produto);
+        stock = s.filter(x => x.id);
         sales = v.filter(x => x.id);
         setConnection(true);
         renderAll();
@@ -315,19 +326,17 @@
       }
     }
 
-    // ====== Render ======
+    // ====== Helpers ======
     function productById(id) { return products.find(p => String(p.id) === String(id)); }
     function stockForProduct(id) { return stock.filter(s => String(s.id_produto) === String(id)); }
     function totalStock(id) { return stockForProduct(id).reduce((sum, s) => sum + Number(s.quantidade || 0), 0); }
 
     function renderAll() {
-      // Métricas
       document.getElementById('metricProducts').textContent = products.length;
       document.getElementById('metricStock').textContent = stock.reduce((sum, s) => sum + Number(s.quantidade || 0), 0);
       document.getElementById('metricOrders').textContent = sales.length;
       document.getElementById('metricSales').textContent = money(sales.reduce((sum, s) => sum + Number(s.valor_venda || 0) * Number(s.quantidade || 0), 0));
 
-      // Recentes
       const recent = [...products].slice(-5).reverse();
       document.getElementById('recentProducts').innerHTML = recent.length
         ? recent.map(p => `<tr><td><strong>${esc(p.modelo)}</strong></td><td>${esc(p.marca)}</td><td>${money(p.preco_venda)}</td><td>${totalStock(p.id)}</td></tr>`).join('')
@@ -340,13 +349,15 @@
 
     function renderProducts() {
       const q = document.getElementById('productSearch').value.trim().toLowerCase();
-      const filtered = products.filter(p => [p.marca, p.modelo, p.cor, p.genero].some(v => String(v || '').toLowerCase().includes(q)));
+      const filtered = products.filter(p => [p.marca, p.modelo, p.cor, p.genero, p.sku, p.colecao].some(v => String(v || '').toLowerCase().includes(q)));
       const tbody = document.getElementById('productsTable');
       tbody.innerHTML = filtered.length ? filtered.map(p => `<tr>
-        <td>${esc(p.marca)}</td><td><strong>${esc(p.modelo)}</strong></td><td>${esc(p.cor || '—')}</td><td>${esc(p.genero || '—')}</td>
+        <td><strong>${esc(p.sku || '—')}</strong></td>
+        <td>${esc(p.marca)}</td><td>${esc(p.modelo)}</td><td>${esc(p.cor || '—')}</td>
+        <td>${esc(p.genero || '—')}</td><td>${esc(p.colecao || '—')}</td>
         <td>${money(p.custo)}</td><td>${money(p.preco_venda)}</td><td>${totalStock(p.id)}</td>
         <td><button class="btn btn-light" data-edit="${esc(p.id)}" style="padding:6px 9px">Editar</button> <button class="btn btn-danger" data-del="${esc(p.id)}" style="padding:6px 9px">Excluir</button></td>
-      </tr>`).join('') : `<tr><td colspan="8" class="table-empty">${q ? 'Sem resultados.' : 'Nenhum produto cadastrado.'}</td></tr>`;
+      </tr>`).join('') : `<tr><td colspan="10" class="table-empty">${q ? 'Sem resultados.' : 'Nenhum produto cadastrado.'}</td></tr>`;
       tbody.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => editProduct(b.dataset.edit));
       tbody.querySelectorAll('[data-del]').forEach(b => b.onclick = () => deleteProduct(b.dataset.del));
     }
@@ -357,17 +368,24 @@
       stock.forEach(s => {
         const p = productById(s.id_produto);
         if (!p) return;
+        const min = Number(p.estoque_minimo || 0);
+        const qty = Number(s.quantidade);
+        let status = '<span style="color:#27775d;font-weight:700">Disponível</span>';
+        if (qty <= 0) status = '<span style="color:#b04545;font-weight:700">Sem estoque</span>';
+        else if (qty <= min) status = '<span style="color:#a16b1e;font-weight:700">Baixo</span>';
         rows.push(`<tr>
           <td><strong>${esc(p.marca)} ${esc(p.modelo)}</strong></td>
-          <td>${esc(s.numero)}</td><td>${Number(s.quantidade)}</td><td>${Number(s.vendidos || 0)}</td>
-          <td>${Number(s.quantidade) <= 0 ? '<span style="color:#b04545;font-weight:700">Sem estoque</span>' : Number(s.quantidade) <= 2 ? '<span style="color:#a16b1e;font-weight:700">Baixo</span>' : '<span style="color:#27775d;font-weight:700">Disponível</span>'}</td>
+          <td>${esc(p.sku || '—')}</td>
+          <td>${esc(s.numero)}</td><td>${qty}</td><td>${Number(s.vendidos || 0)}</td>
+          <td>${status}</td>
         </tr>`);
       });
-      tbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="5" class="table-empty">Nenhuma numeração cadastrada.</td></tr>';
+      tbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="6" class="table-empty">Nenhuma numeração cadastrada.</td></tr>';
     }
 
     function fillProductSelect() {
       const sel = document.getElementById('stockProduct');
+      if (!sel) return;
       sel.innerHTML = '<option value="">— Selecione —</option>' + products.map(p => `<option value="${esc(p.id)}">${esc(p.marca)} ${esc(p.modelo)} ${p.cor ? '· ' + esc(p.cor) : ''}</option>`).join('');
     }
 
@@ -401,14 +419,25 @@
     document.getElementById('productForm').addEventListener('submit', async e => {
       e.preventDefault();
       const id = document.getElementById('editId').value;
+      const marca = document.getElementById('productBrand').value.trim();
+      const modelo = document.getElementById('productModel').value.trim();
+      const cor = document.getElementById('productColor').value.trim();
+      const skuInput = document.getElementById('productSku').value.trim();
+      const sku = skuInput || generateSku(marca, modelo, cor);
+
+      // Verifica SKU duplicado
+      const dup = products.find(p => String(p.sku).toUpperCase() === sku.toUpperCase() && String(p.id) !== String(id));
+      if (dup) { notify('SKU já existe: ' + sku, true); return; }
+
       const data = {
         id: id || uuid(),
-        marca: document.getElementById('productBrand').value.trim(),
-        modelo: document.getElementById('productModel').value.trim(),
-        cor: document.getElementById('productColor').value.trim(),
+        sku,
+        marca, modelo, cor,
         genero: document.getElementById('productGender').value,
+        colecao: document.getElementById('productCollection').value.trim(),
         custo: Number(document.getElementById('productCost').value || 0),
         preco_venda: Number(document.getElementById('productPrice').value || 0),
+        estoque_minimo: Number(document.getElementById('productMinStock').value || 0),
         criado_em: new Date().toISOString()
       };
       try {
@@ -426,12 +455,15 @@
     function editProduct(id) {
       const p = productById(id); if (!p) return;
       document.getElementById('editId').value = p.id;
+      document.getElementById('productSku').value = p.sku || '';
       document.getElementById('productBrand').value = p.marca || '';
       document.getElementById('productModel').value = p.modelo || '';
       document.getElementById('productColor').value = p.cor || '';
       document.getElementById('productGender').value = p.genero || '';
+      document.getElementById('productCollection').value = p.colecao || '';
       document.getElementById('productCost').value = p.custo || '';
       document.getElementById('productPrice').value = p.preco_venda || '';
+      document.getElementById('productMinStock').value = p.estoque_minimo || '';
       document.getElementById('formTitle').textContent = 'Editar produto';
       formPanel.hidden = false;
       showSection('products');
@@ -464,23 +496,16 @@
       const quantidade = Number(document.getElementById('stockQty').value || 0);
       if (!id_produto || !numero) { notify('Preencha produto e numeração.', true); return; }
       try {
-        // Se já existe combinação produto+numero, atualiza
         const existing = stock.find(s => String(s.id_produto) === String(id_produto) && String(s.numero) === numero);
         const data = {
+          id: existing ? existing.id : uuid(),
           id_produto, numero, quantidade,
           vendidos: existing ? Number(existing.vendidos || 0) : 0,
           atualizado_em: new Date().toISOString()
         };
         if (existing) {
-          // update usa o primeiro campo (id_produto) como chave — precisamos de um id único
-          // Solução: usar append + delete do antigo, ou usar chave composta.
-          // Vamos usar chave composta: id_produto|numero salvando como id_produto no update.
-          // Como o script usa a primeira coluna como id, criaremos uma coluna virtual.
-          // Alternativa simples: apagar linha antiga e inserir nova.
-          // Como não temos delete por chave composta, vamos apenas inserir nova e apagar antiga via update não é possível.
-          // Solução: chamar append; a duplicata será tratada como nova linha (aceitável por ora).
-          await apiPost({ action: 'append', sheet: 'Estoque', data });
-          notify('Estoque adicionado (linha duplicada, ver observação).');
+          await apiPost({ action: 'update', sheet: 'Estoque', data });
+          notify('Estoque atualizado.');
         } else {
           await apiPost({ action: 'append', sheet: 'Estoque', data });
           notify('Estoque adicionado.');
