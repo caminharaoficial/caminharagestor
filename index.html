@@ -159,7 +159,7 @@
           <div class="dashboard-grid">
             <section class="panel">
               <div class="panel-head"><div><h2>Últimos produtos</h2><div class="panel-desc">Cadastrados recentemente</div></div><button class="btn btn-light" data-go="products">Ver produtos</button></div>
-              <div class="table-wrap"><table><thead><tr><th>Produto</th><th>Marca</th><th>Preço</th><th>Estoque</th></tr></thead><tbody id="recentProducts"><tr><td class="table-empty" colspan="4">Carregando...</td></tr></tbody></table></div>
+            <div class="table-wrap"><table><thead><tr><th>SKU</th><th>Categoria</th><th>Marca</th><th>Modelo</th><th>Cor</th><th>Gênero</th><th>Coleção</th><th>Grade</th><th>Custo</th><th>Preço</th><th>Estoque</th><th>Ações</th></tr></thead><tbody id="productsTable"><tr><td colspan="12" class="table-empty">Carregando...</td></tr></tbody></table></div>
             </section>
             <section class="panel">
               <div class="panel-head"><div><h2>Conexão</h2><div class="panel-desc">Status com o Google Sheets</div></div></div>
@@ -182,11 +182,18 @@
               <input type="hidden" id="editId" />
               <div class="form-grid">
                 <div class="field"><label for="productSku">SKU (deixe vazio p/ gerar)</label><input id="productSku" maxlength="40" placeholder="Ex.: CAR-LYO-AZU"/></div>
-                <div class="field"><label for="productCollection">Coleção</label><input id="productCollection" maxlength="40" placeholder="Ex.: Verão 2026"/></div>
+                <div class="field"><label for="productCategory">Categoria *</label><select id="productCategory" required>
+                  <option value="">— Selecione —</option>
+                  <option>Sandália</option><option>Tênis</option><option>Sapato</option>
+                  <option>Chinelo</option><option>Bota</option><option>Papete</option>
+                  <option>Mocassim</option><option>Salto</option><option>Infantil</option><option>Outros</option>
+                </select></div>
                 <div class="field"><label for="productBrand">Marca *</label><input id="productBrand" required maxlength="60" placeholder="Ex.: CARTAGO"/></div>
                 <div class="field"><label for="productModel">Modelo *</label><input id="productModel" required maxlength="80" placeholder="Ex.: LYON"/></div>
                 <div class="field"><label for="productColor">Cor</label><input id="productColor" maxlength="60" placeholder="Ex.: AZUL/BEGE"/></div>
                 <div class="field"><label for="productGender">Gênero</label><select id="productGender"><option value="">—</option><option>FEMININO</option><option>MASCULINO</option><option>INFANTIL</option><option>UNISSEX</option></select></div>
+                <div class="field"><label for="productCollection">Coleção</label><input id="productCollection" maxlength="40" placeholder="Ex.: Verão 2026"/></div>
+                <div class="field"><label for="productGrade">Grade de numeração *</label><input id="productGrade" required placeholder="Ex.: 34,35,36,37,38,39,40"/></div>
                 <div class="field"><label for="productCost">Custo unitário (R$)</label><input id="productCost" type="number" min="0" step="0.01" placeholder="0,00"/></div>
                 <div class="field"><label for="productPrice">Preço de venda (R$) *</label><input id="productPrice" type="number" min="0" step="0.01" required placeholder="0,00"/></div>
                 <div class="field"><label for="productMinStock">Estoque mínimo (alerta por numeração)</label><input id="productMinStock" type="number" min="0" step="1" placeholder="Ex.: 1"/></div>
@@ -349,15 +356,17 @@
 
     function renderProducts() {
       const q = document.getElementById('productSearch').value.trim().toLowerCase();
-      const filtered = products.filter(p => [p.marca, p.modelo, p.cor, p.genero, p.sku, p.colecao].some(v => String(v || '').toLowerCase().includes(q)));
+      const filtered = products.filter(p => [p.marca, p.modelo, p.cor, p.genero, p.sku, p.colecao, p.categoria].some(v => String(v || '').toLowerCase().includes(q)));
       const tbody = document.getElementById('productsTable');
       tbody.innerHTML = filtered.length ? filtered.map(p => `<tr>
         <td><strong>${esc(p.sku || '—')}</strong></td>
+        <td>${esc(p.categoria || '—')}</td>
         <td>${esc(p.marca)}</td><td>${esc(p.modelo)}</td><td>${esc(p.cor || '—')}</td>
         <td>${esc(p.genero || '—')}</td><td>${esc(p.colecao || '—')}</td>
+        <td>${esc(p.grade || '—')}</td>
         <td>${money(p.custo)}</td><td>${money(p.preco_venda)}</td><td>${totalStock(p.id)}</td>
         <td><button class="btn btn-light" data-edit="${esc(p.id)}" style="padding:6px 9px">Editar</button> <button class="btn btn-danger" data-del="${esc(p.id)}" style="padding:6px 9px">Excluir</button></td>
-      </tr>`).join('') : `<tr><td colspan="10" class="table-empty">${q ? 'Sem resultados.' : 'Nenhum produto cadastrado.'}</td></tr>`;
+      </tr>`).join('') : `<tr><td colspan="12" class="table-empty">${q ? 'Sem resultados.' : 'Nenhum produto cadastrado.'}</td></tr>`;
       tbody.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => editProduct(b.dataset.edit));
       tbody.querySelectorAll('[data-del]').forEach(b => b.onclick = () => deleteProduct(b.dataset.del));
     }
@@ -424,29 +433,48 @@
       const cor = document.getElementById('productColor').value.trim();
       const skuInput = document.getElementById('productSku').value.trim();
       const sku = skuInput || generateSku(marca, modelo, cor);
+      const grade = document.getElementById('productGrade').value.trim();
 
-      // Verifica SKU duplicado
       const dup = products.find(p => String(p.sku).toUpperCase() === sku.toUpperCase() && String(p.id) !== String(id));
       if (dup) { notify('SKU já existe: ' + sku, true); return; }
 
       const data = {
         id: id || uuid(),
         sku,
+        categoria: document.getElementById('productCategory').value,
         marca, modelo, cor,
         genero: document.getElementById('productGender').value,
         colecao: document.getElementById('productCollection').value.trim(),
+        grade,
         custo: Number(document.getElementById('productCost').value || 0),
         preco_venda: Number(document.getElementById('productPrice').value || 0),
         estoque_minimo: Number(document.getElementById('productMinStock').value || 0),
         criado_em: new Date().toISOString()
       };
+
       try {
         if (id) {
           await apiPost({ action: 'update', sheet: 'Produtos', data });
           notify('Produto atualizado.');
         } else {
           await apiPost({ action: 'append', sheet: 'Produtos', data });
-          notify('Produto cadastrado.');
+
+          // Cria automaticamente as linhas de Estoque para cada número da grade
+          const numeros = grade.split(',').map(n => n.trim()).filter(Boolean);
+          for (const num of numeros) {
+            await apiPost({
+              action: 'append', sheet: 'Estoque',
+              data: {
+                id: uuid(),
+                id_produto: data.id,
+                numero: num,
+                quantidade: 0,
+                vendidos: 0,
+                atualizado_em: new Date().toISOString()
+              }
+            });
+          }
+          notify(`Produto cadastrado (${numeros.length} numeração(ões) criada(s)).`);
         }
         formPanel.hidden = true; resetForm(); await loadAll();
       } catch (err) { notify('Erro: ' + err.message, true); }
@@ -456,11 +484,13 @@
       const p = productById(id); if (!p) return;
       document.getElementById('editId').value = p.id;
       document.getElementById('productSku').value = p.sku || '';
+      document.getElementById('productCategory').value = p.categoria || '';
       document.getElementById('productBrand').value = p.marca || '';
       document.getElementById('productModel').value = p.modelo || '';
       document.getElementById('productColor').value = p.cor || '';
       document.getElementById('productGender').value = p.genero || '';
       document.getElementById('productCollection').value = p.colecao || '';
+      document.getElementById('productGrade').value = p.grade || '';
       document.getElementById('productCost').value = p.custo || '';
       document.getElementById('productPrice').value = p.preco_venda || '';
       document.getElementById('productMinStock').value = p.estoque_minimo || '';
