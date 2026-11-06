@@ -517,16 +517,16 @@
       const p = productById(id); if (!p) return;
       if (!confirm(`Excluir ${p.marca} ${p.modelo}?\n\nATENÇÃO: Todas as numerações de estoque deste produto também serão apagadas.`)) return;
       try {
-        // 1. Apaga o produto
+        // 1. Apaga o produto principal
         await apiPost({ action: 'delete', sheet: 'Produtos', id });
         
-        // 2. Apaga todas as linhas de estoque que pertencem a este produto
+        // 2. Apaga TODAS as linhas da aba Estoque que tenham esse ID de produto
         await apiPost({ action: 'deleteWhere', sheet: 'Estoque', coluna: 'id_produto', valor: id });
         
-        notify('Produto e estoques excluídos.');
+        notify('Produto e estoques excluídos com sucesso.');
         await loadAll();
       }
-      catch (err) { notify('Erro: ' + err.message, true); }
+      catch (err) { notify('Erro ao excluir: ' + err.message, true); }
     }
 
     document.getElementById('productSearch').addEventListener('input', renderProducts);
