@@ -226,7 +226,7 @@
               <div class="form-actions"><button class="btn btn-primary" type="submit">Salvar</button><button class="btn btn-light" type="button" id="cancelStockBtn">Cancelar</button></div>
             </form>
           </div>
-          <section class="panel"><div class="panel-head"><div><h2>Posição de estoque</h2><div class="panel-desc">Uma linha por numeração.</div></div></div><div class="table-wrap"><table><thead><tr><th>Produto</th><th>SKU</th><th>Numeração</th><th>Qtd.</th><th>Vendidos</th><th>Situação</th></tr></thead><tbody id="stockTable"><tr><td colspan="6" class="table-empty">Carregando...</td></tr></tbody></table></div></section>
+          <section class="panel"><div class="panel-head"><div><h2>Posição de estoque</h2><div class="panel-desc">Uma linha por numeração.</div></div></div><div class="table-wrap"><table><thead><tr><th>Produto</th><th>SKU da Variação</th><th>Numeração</th><th>Qtd.</th><th>Vendidos</th><th>Situação</th></tr></thead><tbody id="stockTable"><tr><td colspan="6" class="table-empty">Carregando...</td></tr></tbody></table></div></section>
         </section>
 
         <section class="section" id="orders">
@@ -390,7 +390,7 @@
         else if (qty <= min) status = '<span style="color:#a16b1e;font-weight:700">Baixo</span>';
         rows.push(`<tr>
           <td><strong>${esc(p.marca)} ${esc(p.modelo)}</strong></td>
-          <td>${esc(p.sku || '—')}</td>
+          <td><strong>${esc(s.sku_variacao || '—')}</strong></td>
           <td>${esc(s.numero)}</td><td>${qty}</td><td>${Number(s.vendidos || 0)}</td>
           <td>${status}</td>
         </tr>`);
@@ -473,6 +473,7 @@
               data: {
                 id: uuid(),
                 id_produto: data.id,
+                sku_variacao: `${sku}-${num}`, // <-- AQUI GERA O SKU FILHO
                 numero: num,
                 quantidade: 0,
                 vendidos: 0,
@@ -542,9 +543,13 @@
       if (!id_produto || !numero) { notify('Preencha produto e numeração.', true); return; }
       try {
         const existing = stock.find(s => String(s.id_produto) === String(id_produto) && String(s.numero) === numero);
+        const p = productById(id_produto);
+        const skuPai = p ? (p.sku || generateSku(p.marca, p.modelo, p.cor)) : 'SKU';
+        
         const data = {
           id: existing ? existing.id : uuid(),
           id_produto, numero, quantidade,
+          sku_variacao: existing ? existing.sku_variacao : `${skuPai}-${numero}`,
           vendidos: existing ? Number(existing.vendidos || 0) : 0,
           atualizado_em: new Date().toISOString()
         };
