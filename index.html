@@ -88,6 +88,17 @@
     .notice { background: #fff8eb; border: 1px solid #f0dfbd; border-radius: 10px; padding: 12px 14px; color: #785d2e; font-size: 11px; line-height: 1.6; margin-bottom: 18px; }
     .toast { position: fixed; bottom: 22px; right: 22px; background: var(--navy); color: #fff; padding: 13px 17px; border-radius: 10px; font-size: 12px; box-shadow: var(--shadow); display: none; z-index: 10; max-width: 340px; }
     .toast.show { display: block; }
+
+    /* Barra de progresso */
+    #progressBar {
+      position: fixed; top: 0; left: 0; height: 3px; background: var(--gold);
+      width: 0%; z-index: 9999; transition: width 0.3s ease, opacity 0.3s ease;
+      opacity: 0; box-shadow: 0 0 10px var(--gold);
+    }
+    #progressBar.active { opacity: 1; }
+    #progressBar.loading { width: 80%; }
+    #progressBar.done { width: 100%; opacity: 0; }
+
     @media (max-width: 1100px) { .metrics { grid-template-columns: repeat(2, minmax(0,1fr)); } .dashboard-grid { grid-template-columns: 1fr; } }
     @media (max-width: 760px) {
       .app { grid-template-columns: 1fr; }
@@ -106,6 +117,7 @@
   </style>
 </head>
 <body>
+  <div id="progressBar"></div>
   <div class="app">
     <aside class="sidebar" id="sidebar">
       <div class="brand">
@@ -275,6 +287,10 @@
     const money = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const uuid = () => (crypto?.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(36).slice(2,8));
+    // Controle da barra de progresso
+    const progressBar = document.getElementById('progressBar');
+    function startLoad() { progressBar.className = 'active loading'; }
+    function endLoad() { progressBar.className = 'active done'; setTimeout(() => { progressBar.className = ''; }, 300); }
 
     // Gera SKU a partir de marca+modelo+cor (ex: CAR-LYO-AZU)
     function generateSku(marca, modelo, cor) {
@@ -324,19 +340,22 @@
     }
 
     async function loadAll() {
+      startLoad(); // <--- ADICIONE ESTA LINHA
       try {
         setConnection(true);
         const [p, s, v] = await Promise.all([
           apiRead('Produtos'), apiRead('Estoque'), apiRead('Vendas')
         ]);
         products = p.filter(x => x.id);
-        stock = s.filter(x => x.id_produto); // Correção aqui: filtra pelo id_produto e não pelo id
+        stock = s.filter(x => x.id_produto);
         sales = v.filter(x => x.id);
         setConnection(true);
         renderAll();
       } catch (err) {
         setConnection(false, err.message);
         notify('Falha ao carregar: ' + err.message, true);
+      } finally {
+        endLoad(); // <--- ADICIONE ESTA LINHA
       }
     }
 
@@ -465,6 +484,7 @@
       };
 
       try {
+        startLoad();
         if (id) {
           await apiPost({ action: 'update', sheet: 'Produtos', data });
           notify('Produto atualizado.');
@@ -490,8 +510,15 @@
           notify(`Produto cadastrado (${numeros.length} numeração(ões) criada(s)).`);
         }
         formPanel.hidden = true; resetForm(); await loadAll();
-      } catch (err) { notify('Erro: ' + err.message, true); }
+      } catch (err) { 
+        notify('Erro: ' + err.message, true); 
+        endLoad(); // <-- GARANTE QUE A BARRA SUMA SE DER ERRO
+      }
     });
+
+    document.getElementById('refreshBtn').addEventListener('click', () => loadAll());
+    document.getElementById('reloadBtn').addEventListener('click', () => loadAll());
+    document.getElementById('reloadSettingsBtn').addEventListener('click', () => loadAll());
 
     function editProduct(id) {
       const p = productById(id); if (!p) return;
@@ -516,6 +543,8 @@
     async function deleteProduct(id) {
       const p = productById(id); if (!p) return;
       if (!confirm(`Excluir ${p.marca} ${p.modelo}?\n\nATENÇÃO: Todas as numerações de estoque deste produto também serão apagadas.`)) return;
+      
+      startLoad(); // <--- Adiciona barra
       try {
         // 1. Apaga o produto principal
         await apiPost({ action: 'delete', sheet: 'Produtos', id });
@@ -524,9 +553,12 @@
         await apiPost({ action: 'deleteWhere', sheet: 'Estoque', coluna: 'id_produto', valor: id });
         
         notify('Produto e estoques excluídos com sucesso.');
-        await loadAll();
+        await loadAll(); 
       }
-      catch (err) { notify('Erro ao excluir: ' + err.message, true); }
+      catch (err) { 
+        notify('Erro ao excluir: ' + err.message, true); 
+        endLoad(); // <--- Fecha barra se der erro
+      }
     }
 
     document.getElementById('productSearch').addEventListener('input', renderProducts);
@@ -547,10 +579,13 @@
       const numero = document.getElementById('stockNumber').value.trim();
       const quantidade = Number(document.getElementById('stockQty').value || 0);
       if (!id_produto || !numero) { notify('Preencha produto e numeração.', true); return; }
+      
+      startLoad(); // <-- BARRA DE CARREGAMENTO INICIADA
       try {
         const existing = stock.find(s => String(s.id_produto) === String(id_produto) && String(s.numero) === numero);
         const p = productById(id_produto);
         const skuPai = p ? (p.sku || generateSku(p.marca, p.modelo, p.cor)) : 'SKU';
+        
         
         const data = {
           id: existing ? existing.id : uuid(),
@@ -568,12 +603,11 @@
         }
         stockFormPanel.hidden = true;
         await loadAll();
-      } catch (err) { notify('Erro: ' + err.message, true); }
+      } catch (err) { 
+        notify('Erro: ' + err.message, true); 
+        endLoad(); // <-- ADICIONE AQUI
+      }
     });
-
-    document.getElementById('refreshBtn').addEventListener('click', () => loadAll());
-    document.getElementById('reloadBtn').addEventListener('click', () => loadAll());
-    document.getElementById('reloadSettingsBtn').addEventListener('click', () => loadAll());
 
     // ====== Start ======
 
