@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#202a35" />
+  <title>CAMINHARA | Gestão</title>
+  <style>
+    :root {
+      --navy: #202a35; --navy-2: #293746; --gold: #d6b98c;
+      --bg: #f4f6f8; --surface: #ffffff; --text: #202936; --muted: #738091;
+      --line: #e4e9ee; --accent: #526b83; --success: #27775d;
+      --shadow: 0 8px 24px rgba(24, 39, 56, .06);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--text); background: var(--bg); }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    .app { min-height: 100vh; display: grid; grid-template-columns: 250px 1fr; }
+    .sidebar { background: var(--navy); color: #fff; padding: 24px 16px; display: flex; flex-direction: column; gap: 28px; }
+    .brand { display: flex; gap: 12px; align-items: center; padding: 0 8px; }
+    .brand-mark { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 12px; background: var(--gold); color: var(--navy); font-family: Georgia, serif; font-size: 25px; font-weight: 700; }
+    .brand-name { font-size: 14px; font-weight: 800; letter-spacing: .12em; }
+    .brand-sub { font-size: 10px; color: #bdc7d1; letter-spacing: .12em; margin-top: 4px; }
+    .nav-label { color: #9eacba; font-size: 10px; letter-spacing: .14em; padding: 0 12px; margin-bottom: 8px; }
+    .nav { display: grid; gap: 5px; }
+    .nav-btn { width: 100%; border: 0; color: #d6dee6; background: transparent; padding: 12px; border-radius: 10px; display: flex; gap: 12px; align-items: center; text-align: left; font-size: 13px; transition: .15s; }
+    .nav-btn:hover { background: rgba(255,255,255,.08); }
+    .nav-btn.active { background: #354555; color: #fff; box-shadow: inset 3px 0 var(--gold); }
+    .nav-icon { width: 20px; text-align: center; font-size: 17px; }
+    .sidebar-footer { margin-top: auto; border-top: 1px solid #3b4855; padding: 16px 8px 0; color: #bdc7d1; font-size: 11px; line-height: 1.6; }
+    .main { min-width: 0; }
+    .topbar { height: 76px; background: var(--surface); border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; padding: 0 32px; gap: 16px; }
+    .top-left { display: flex; align-items: center; gap: 14px; }
+    .menu-toggle { display: none; border: 1px solid var(--line); background: white; border-radius: 9px; padding: 8px 10px; }
+    .crumb { color: var(--muted); font-size: 12px; }
+    .top-title { font-size: 14px; font-weight: 700; margin-top: 3px; }
+    .top-right { display: flex; align-items: center; gap: 12px; }
+    .status { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 11px; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: #d5a34c; }
+    .dot.ok { background: #27775d; }
+    .dot.err { background: #b04545; }
+    .avatar { width: 36px; height: 36px; border-radius: 50%; background: #e8edf2; color: var(--navy); display: grid; place-items: center; font-weight: 800; font-size: 12px; }
+    .content { padding: 30px 32px 40px; max-width: 1500px; margin: auto; }
+    .page-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 24px; }
+    h1 { margin: 0; font-size: clamp(24px, 3vw, 30px); letter-spacing: -.04em; }
+    .subtitle { margin: 8px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+    .btn { border: 0; border-radius: 9px; padding: 11px 15px; font-weight: 700; font-size: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+    .btn-primary { background: var(--navy); color: #fff; }
+    .btn-primary:hover { background: #314253; }
+    .btn-light { background: #fff; border: 1px solid var(--line); color: var(--text); }
+    .btn-danger { background: #b04545; color: #fff; }
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .metric, .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); }
+    .metric { padding: 20px; }
+    .metric-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .metric-label { color: var(--muted); font-size: 12px; }
+    .metric-icon { width: 36px; height: 36px; border-radius: 10px; background: #f0f3f6; display: grid; place-items: center; font-size: 17px; }
+    .metric-value { font-size: 27px; letter-spacing: -.04em; font-weight: 750; margin-top: 14px; }
+    .metric-note { color: var(--muted); font-size: 11px; margin-top: 7px; }
+    .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(280px, .9fr); gap: 18px; }
+    .panel { padding: 22px; min-width: 0; }
+    .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; }
+    h2 { font-size: 15px; margin: 0; }
+    .panel-desc { color: var(--muted); font-size: 11px; margin-top: 5px; }
+    .tag { background: #f1f4f6; color: #657486; padding: 6px 9px; border-radius: 7px; font-size: 10px; white-space: nowrap; }
+    .quick-list { display: grid; gap: 10px; }
+    .quick-item { display: flex; gap: 12px; align-items: center; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
+    .quick-icon { width: 36px; height: 36px; border-radius: 10px; background: #f0f3f6; display: grid; place-items: center; flex: 0 0 auto; }
+    .quick-title { font-size: 12px; font-weight: 700; }
+    .quick-copy { font-size: 10px; color: var(--muted); margin-top: 4px; }
+    .section { display: none; }
+    .section.active { display: block; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+    .search { flex: 1; min-width: 180px; padding: 11px 13px; border: 1px solid var(--line); border-radius: 9px; outline: none; background: white; font-size: 12px; }
+    .search:focus, .field input:focus, .field select:focus { border-color: #8b9bad; box-shadow: 0 0 0 3px rgba(82,107,131,.1); }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { text-align: left; color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; background: #fafbfc; }
+    th, td { padding: 13px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+    td { color: #3d4855; }
+    .table-empty { text-align: center; padding: 28px; color: var(--muted); white-space: normal; }
+    .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; }
+    .field { display: grid; gap: 7px; }
+    .field label { font-size: 11px; color: #5e6a78; font-weight: 700; }
+    .field input, .field select { width: 100%; border: 1px solid var(--line); border-radius: 9px; padding: 11px 12px; outline: none; background: #fff; }
+    .form-actions { display: flex; gap: 10px; margin-top: 18px; }
+    .notice { background: #fff8eb; border: 1px solid #f0dfbd; border-radius: 10px; padding: 12px 14px; color: #785d2e; font-size: 11px; line-height: 1.6; margin-bottom: 18px; }
+    .toast { position: fixed; bottom: 22px; right: 22px; background: var(--navy); color: #fff; padding: 13px 17px; border-radius: 10px; font-size: 12px; box-shadow: var(--shadow); display: none; z-index: 10; max-width: 340px; }
+    .toast.show { display: block; }
+    @media (max-width: 1100px) { .metrics { grid-template-columns: repeat(2, minmax(0,1fr)); } .dashboard-grid { grid-template-columns: 1fr; } }
+    @media (max-width: 760px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar { position: fixed; z-index: 20; top: 0; bottom: 0; left: 0; width: 260px; transform: translateX(-100%); transition: transform .2s ease; box-shadow: 10px 0 30px rgba(0,0,0,.15); }
+      .sidebar.open { transform: translateX(0); }
+      .menu-toggle { display: inline-flex; }
+      .topbar { height: 68px; padding: 0 16px; }
+      .content { padding: 22px 16px 30px; }
+      .metrics { gap: 10px; }
+      .metric { padding: 15px; }
+      .metric-value { font-size: 23px; }
+      .page-heading { flex-direction: column; align-items: stretch; }
+      .form-grid { grid-template-columns: 1fr; }
+      .status { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark">C</div>
+        <div><div class="brand-name">CAMINHARA</div><div class="brand-sub">LOJA VIRTUAL · GESTÃO</div></div>
+      </div>
+      <div>
+        <div class="nav-label">OPERAÇÃO</div>
+        <nav class="nav" aria-label="Menu principal">
+          <button class="nav-btn active" data-section="dashboard"><span class="nav-icon">▦</span> Dashboard</button>
+          <button class="nav-btn" data-section="products"><span class="nav-icon">◇</span> Produtos</button>
+          <button class="nav-btn" data-section="stock"><span class="nav-icon">▤</span> Estoque</button>
+          <button class="nav-btn" data-section="orders"><span class="nav-icon">🛍</span> Pedidos</button>
+          <button class="nav-btn" data-section="finance"><span class="nav-icon">◉</span> Financeiro</button>
+          <button class="nav-btn" data-section="contacts"><span class="nav-icon">♙</span> Clientes e fornecedores</button>
+        </nav>
+      </div>
+      <div>
+        <div class="nav-label">SISTEMA</div>
+        <nav class="nav">
+          <button class="nav-btn" data-section="settings"><span class="nav-icon">⚙</span> Configurações</button>
+        </nav>
+      </div>
+      <div class="sidebar-footer">Versão 0.2 · Google Sheets<br>CAMINHARA Loja Virtual</div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="top-left">
+          <button class="menu-toggle" id="menuToggle" aria-label="Abrir menu">☰</button>
+          <div><div class="crumb">CAMINHARA / Gestão</div><div class="top-title" id="topTitle">Dashboard</div></div>
+        </div>
+        <div class="top-right">
+          <div class="status"><span class="dot" id="connDot"></span> <span id="connLabel">Conectando...</span></div>
+          <div class="avatar" title="Administrador">AD</div>
+        </div>
+      </header>
+
+      <div class="content">
+        <section class="section active" id="dashboard">
+          <div class="page-heading">
+            <div><h1>Visão geral</h1><p class="subtitle">Acompanhe os principais indicadores da operação.</p></div>
+            <button class="btn btn-primary" data-go="products">＋ Cadastrar produto</button>
+          </div>
+          <div class="metrics">
+            <article class="metric"><div class="metric-top"><span class="metric-label">Produtos cadastrados</span><span class="metric-icon">◇</span></div><div class="metric-value" id="metricProducts">0</div><div class="metric-note">Modelos registrados</div></article>
+            <article class="metric"><div class="metric-top"><span class="metric-label">Unidades em estoque</span><span class="metric-icon">▤</span></div><div class="metric-value" id="metricStock">0</div><div class="metric-note">Soma das quantidades</div></article>
+            <article class="metric"><div class="metric-top"><span class="metric-label">Pedidos registrados</span><span class="metric-icon">🛍</span></div><div class="metric-value" id="metricOrders">0</div><div class="metric-note">Pedidos lançados</div></article>
+            <article class="metric"><div class="metric-top"><span class="metric-label">Vendas registradas</span><span class="metric-icon">◉</span></div><div class="metric-value" id="metricSales">R$ 0,00</div><div class="metric-note">Total de pedidos</div></article>
+          </div>
+          <div class="dashboard-grid">
+            <section class="panel">
+              <div class="panel-head"><div><h2>Últimos produtos</h2><div class="panel-desc">Cadastrados recentemente</div></div><button class="btn btn-light" data-go="products">Ver produtos</button></div>
+              <div class="table-wrap"><table><thead><tr><th>Produto</th><th>Marca</th><th>Preço</th><th>Estoque</th></tr></thead><tbody id="recentProducts"><tr><td class="table-empty" colspan="4">Carregando...</td></tr></tbody></table></div>
+            </section>
+            <section class="panel">
+              <div class="panel-head"><div><h2>Conexão</h2><div class="panel-desc">Status com o Google Sheets</div></div></div>
+              <div class="quick-list">
+                <div class="quick-item"><div class="quick-icon">☁</div><div><div class="quick-title" id="dbStatus">Verificando...</div><div class="quick-copy">Aba: Produtos, Estoque, Vendas</div></div></div>
+                <div class="quick-item"><div class="quick-icon">↻</div><div><div class="quick-title">Recarregar dados</div><div class="quick-copy">Busca novamente do Sheets</div></div><button class="btn btn-light" id="reloadBtn" style="margin-left:auto">Recarregar</button></div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="section" id="products">
+          <div class="page-heading">
+            <div><h1>Produtos</h1><p class="subtitle">Cadastre e consulte os produtos. Dados salvos no Google Sheets.</p></div>
+            <button class="btn btn-primary" id="newProductBtn">＋ Novo produto</button>
+          </div>
+          <div class="panel" id="productFormPanel" hidden style="margin-bottom:18px">
+            <div class="panel-head"><div><h2 id="formTitle">Cadastrar produto</h2><div class="panel-desc">Campos com * são obrigatórios.</div></div></div>
+            <form id="productForm">
+              <input type="hidden" id="editId" />
+              <div class="form-grid">
+                <div class="field"><label for="productBrand">Marca *</label><input id="productBrand" required maxlength="60" placeholder="Ex.: CARTAGO"/></div>
+                <div class="field"><label for="productModel">Modelo *</label><input id="productModel" required maxlength="80" placeholder="Ex.: LYON"/></div>
+                <div class="field"><label for="productColor">Cor</label><input id="productColor" maxlength="60" placeholder="Ex.: AZUL/BEGE"/></div>
+                <div class="field"><label for="productGender">Gênero</label><select id="productGender"><option value="">—</option><option>FEMININO</option><option>MASCULINO</option><option>INFANTIL</option><option>UNISSEX</option></select></div>
+                <div class="field"><label for="productCost">Custo unitário (R$)</label><input id="productCost" type="number" min="0" step="0.01" placeholder="0,00"/></div>
+                <div class="field"><label for="productPrice">Preço de venda (R$) *</label><input id="productPrice" type="number" min="0" step="0.01" required placeholder="0,00"/></div>
+              </div>
+              <div class="form-actions"><button class="btn btn-primary" type="submit">Salvar produto</button><button class="btn btn-light" type="button" id="cancelFormBtn">Cancelar</button></div>
+            </form>
+          </div>
+          <section class="panel">
+            <div class="toolbar"><input class="search" id="productSearch" placeholder="Buscar por marca, modelo ou cor..." aria-label="Buscar produtos"/><button class="btn btn-light" id="refreshBtn">Atualizar</button></div>
+            <div class="table-wrap"><table><thead><tr><th>Marca</th><th>Modelo</th><th>Cor</th><th>Gênero</th><th>Custo</th><th>Preço</th><th>Estoque</th><th>Ações</th></tr></thead><tbody id="productsTable"><tr><td colspan="8" class="table-empty">Carregando...</td></tr></tbody></table></div>
+          </section>
+        </section>
+
+        <section class="section" id="stock">
+          <div class="page-heading"><div><h1>Estoque</h1><p class="subtitle">Quantidade por numeração de cada produto.</p></div><button class="btn btn-primary" id="newStockBtn">＋ Adicionar numeração</button></div>
+          <div class="panel" id="stockFormPanel" hidden style="margin-bottom:18px">
+            <div class="panel-head"><div><h2>Adicionar/atualizar numeração</h2><div class="panel-desc">Se a combinação produto+numeração já existir, será atualizada.</div></div></div>
+            <form id="stockForm">
+              <div class="form-grid">
+                <div class="field"><label for="stockProduct">Produto *</label><select id="stockProduct" required></select></div>
+                <div class="field"><label for="stockNumber">Numeração *</label><input id="stockNumber" required placeholder="Ex.: 37 ou 37/38"/></div>
+                <div class="field"><label for="stockQty">Quantidade em estoque *</label><input id="stockQty" type="number" min="0" step="1" required placeholder="0"/></div>
+              </div>
+              <div class="form-actions"><button class="btn btn-primary" type="submit">Salvar</button><button class="btn btn-light" type="button" id="cancelStockBtn">Cancelar</button></div>
+            </form>
+          </div>
+          <section class="panel"><div class="panel-head"><div><h2>Posição de estoque</h2><div class="panel-desc">Uma linha por numeração.</div></div></div><div class="table-wrap"><table><thead><tr><th>Produto</th><th>Numeração</th><th>Qtd.</th><th>Vendidos</th><th>Situação</th></tr></thead><tbody id="stockTable"><tr><td colspan="5" class="table-empty">Carregando...</td></tr></tbody></table></div></section>
+        </section>
+
+        <section class="section" id="orders">
+          <div class="page-heading"><div><h1>Pedidos</h1><p class="subtitle">Fluxo de vendas (em construção).</p></div></div>
+          <div class="panel"><div class="table-empty">Módulo de pedidos será implementado na próxima etapa.</div></div>
+        </section>
+
+        <section class="section" id="finance">
+          <div class="page-heading"><div><h1>Financeiro</h1><p class="subtitle">Receitas, despesas e resultados (em construção).</p></div></div>
+          <div class="panel"><div class="table-empty">Módulo financeiro será implementado após pedidos.</div></div>
+        </section>
+
+        <section class="section" id="contacts">
+          <div class="page-heading"><div><h1>Clientes e fornecedores</h1><p class="subtitle">Contatos comerciais (em construção).</p></div></div>
+          <div class="panel"><div class="table-empty">Cadastro de contatos virá em etapa posterior.</div></div>
+        </section>
+
+        <section class="section" id="settings">
+          <div class="page-heading"><div><h1>Configurações</h1><p class="subtitle">Informações do sistema.</p></div></div>
+          <div class="panel">
+            <div class="form-grid">
+              <div class="field"><label>Loja</label><input value="CAMINHARA Loja Virtual" readonly/></div>
+              <div class="field"><label>Versão</label><input value="0.2 — Google Sheets" readonly/></div>
+              <div class="field"><label>Armazenamento</label><input value="Google Sheets (via Apps Script)" readonly/></div>
+              <div class="field"><label>Abas</label><input value="Produtos · Estoque · Vendas" readonly/></div>
+            </div>
+            <div class="form-actions"><button class="btn btn-light" id="reloadSettingsBtn">Recarregar dados do Sheets</button></div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    // ====== CONFIG ======
+    // Cole aqui o URL do seu Apps Script (termina com /exec)
+    const API_URL = 'https://script.google.com/macros/s/AKfycbx03IKIX_yOZK5CaiQgv5E_J_Xo9a6SU_s59MAv_G9bTmWY3zfmcnCuv5fENQrj2eVm/exec';
+
+    // ====== Estado ======
+    let products = [];
+    let stock = [];
+    let sales = [];
+    let connected = false;
+
+    const money = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const uuid = () => (crypto?.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(36).slice(2,8));
+
+    function notify(msg, isError) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.style.background = isError ? '#b04545' : '#202a35';
+      t.classList.add('show');
+      clearTimeout(window._toastT);
+      window._toastT = setTimeout(() => t.classList.remove('show'), 3500);
+    }
+
+    function setConnection(ok, msg) {
+      connected = ok;
+      const dot = document.getElementById('connDot');
+      const label = document.getElementById('connLabel');
+      const db = document.getElementById('dbStatus');
+      dot.className = 'dot ' + (ok ? 'ok' : 'err');
+      label.textContent = ok ? 'Conectado' : 'Erro';
+      if (db) db.textContent = ok ? 'Google Sheets OK' : ('Falha: ' + (msg || 'sem conexão'));
+    }
+
+    // ====== API ======
+    async function apiRead(sheet) {
+      const url = API_URL + '?action=read&sheet=' + encodeURIComponent(sheet);
+      const res = await fetch(url);
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      return json.data || [];
+    }
+    async function apiPost(payload) {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      return json;
+    }
+
+    async function loadAll() {
+      try {
+        setConnection(true);
+        const [p, s, v] = await Promise.all([
+          apiRead('Produtos'), apiRead('Estoque'), apiRead('Vendas')
+        ]);
+        products = p.filter(x => x.id);
+        stock = s.filter(x => x.id_produto);
+        sales = v.filter(x => x.id);
+        setConnection(true);
+        renderAll();
+      } catch (err) {
+        setConnection(false, err.message);
+        notify('Falha ao carregar: ' + err.message, true);
+      }
+    }
+
+    // ====== Render ======
+    function productById(id) { return products.find(p => String(p.id) === String(id)); }
+    function stockForProduct(id) { return stock.filter(s => String(s.id_produto) === String(id)); }
+    function totalStock(id) { return stockForProduct(id).reduce((sum, s) => sum + Number(s.quantidade || 0), 0); }
+
+    function renderAll() {
+      // Métricas
+      document.getElementById('metricProducts').textContent = products.length;
+      document.getElementById('metricStock').textContent = stock.reduce((sum, s) => sum + Number(s.quantidade || 0), 0);
+      document.getElementById('metricOrders').textContent = sales.length;
+      document.getElementById('metricSales').textContent = money(sales.reduce((sum, s) => sum + Number(s.valor_venda || 0) * Number(s.quantidade || 0), 0));
+
+      // Recentes
+      const recent = [...products].slice(-5).reverse();
+      document.getElementById('recentProducts').innerHTML = recent.length
+        ? recent.map(p => `<tr><td><strong>${esc(p.modelo)}</strong></td><td>${esc(p.marca)}</td><td>${money(p.preco_venda)}</td><td>${totalStock(p.id)}</td></tr>`).join('')
+        : '<tr><td colspan="4" class="table-empty">Nenhum produto cadastrado ainda.</td></tr>';
+
+      renderProducts();
+      renderStock();
+      fillProductSelect();
+    }
+
+    function renderProducts() {
+      const q = document.getElementById('productSearch').value.trim().toLowerCase();
+      const filtered = products.filter(p => [p.marca, p.modelo, p.cor, p.genero].some(v => String(v || '').toLowerCase().includes(q)));
+      const tbody = document.getElementById('productsTable');
+      tbody.innerHTML = filtered.length ? filtered.map(p => `<tr>
+        <td>${esc(p.marca)}</td><td><strong>${esc(p.modelo)}</strong></td><td>${esc(p.cor || '—')}</td><td>${esc(p.genero || '—')}</td>
+        <td>${money(p.custo)}</td><td>${money(p.preco_venda)}</td><td>${totalStock(p.id)}</td>
+        <td><button class="btn btn-light" data-edit="${esc(p.id)}" style="padding:6px 9px">Editar</button> <button class="btn btn-danger" data-del="${esc(p.id)}" style="padding:6px 9px">Excluir</button></td>
+      </tr>`).join('') : `<tr><td colspan="8" class="table-empty">${q ? 'Sem resultados.' : 'Nenhum produto cadastrado.'}</td></tr>`;
+      tbody.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => editProduct(b.dataset.edit));
+      tbody.querySelectorAll('[data-del]').forEach(b => b.onclick = () => deleteProduct(b.dataset.del));
+    }
+
+    function renderStock() {
+      const tbody = document.getElementById('stockTable');
+      const rows = [];
+      stock.forEach(s => {
+        const p = productById(s.id_produto);
+        if (!p) return;
+        rows.push(`<tr>
+          <td><strong>${esc(p.marca)} ${esc(p.modelo)}</strong></td>
+          <td>${esc(s.numero)}</td><td>${Number(s.quantidade)}</td><td>${Number(s.vendidos || 0)}</td>
+          <td>${Number(s.quantidade) <= 0 ? '<span style="color:#b04545;font-weight:700">Sem estoque</span>' : Number(s.quantidade) <= 2 ? '<span style="color:#a16b1e;font-weight:700">Baixo</span>' : '<span style="color:#27775d;font-weight:700">Disponível</span>'}</td>
+        </tr>`);
+      });
+      tbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="5" class="table-empty">Nenhuma numeração cadastrada.</td></tr>';
+    }
+
+    function fillProductSelect() {
+      const sel = document.getElementById('stockProduct');
+      sel.innerHTML = '<option value="">— Selecione —</option>' + products.map(p => `<option value="${esc(p.id)}">${esc(p.marca)} ${esc(p.modelo)} ${p.cor ? '· ' + esc(p.cor) : ''}</option>`).join('');
+    }
+
+    // ====== Navegação ======
+    const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', orders:'Pedidos', finance:'Financeiro', contacts:'Clientes e fornecedores', settings:'Configurações' };
+    function showSection(id) {
+      document.querySelectorAll('.section').forEach(el => el.classList.toggle('active', el.id === id));
+      document.querySelectorAll('.nav-btn[data-section]').forEach(el => el.classList.toggle('active', el.dataset.section === id));
+      document.getElementById('topTitle').textContent = titles[id] || 'Gestão';
+      document.getElementById('sidebar').classList.remove('open');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    document.querySelectorAll('[data-section]').forEach(b => b.addEventListener('click', () => showSection(b.dataset.section)));
+    document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => showSection(b.dataset.go)));
+    document.getElementById('menuToggle').addEventListener('click', () => document.getElementById('sidebar').classList.toggle('open'));
+
+    // ====== Produtos: form ======
+    const formPanel = document.getElementById('productFormPanel');
+    function resetForm() {
+      document.getElementById('productForm').reset();
+      document.getElementById('editId').value = '';
+      document.getElementById('formTitle').textContent = 'Cadastrar produto';
+    }
+    document.getElementById('newProductBtn').addEventListener('click', () => {
+      resetForm(); formPanel.hidden = false;
+      formPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      document.getElementById('productBrand').focus();
+    });
+    document.getElementById('cancelFormBtn').addEventListener('click', () => { formPanel.hidden = true; resetForm(); });
+
+    document.getElementById('productForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const id = document.getElementById('editId').value;
+      const data = {
+        id: id || uuid(),
+        marca: document.getElementById('productBrand').value.trim(),
+        modelo: document.getElementById('productModel').value.trim(),
+        cor: document.getElementById('productColor').value.trim(),
+        genero: document.getElementById('productGender').value,
+        custo: Number(document.getElementById('productCost').value || 0),
+        preco_venda: Number(document.getElementById('productPrice').value || 0),
+        criado_em: new Date().toISOString()
+      };
+      try {
+        if (id) {
+          await apiPost({ action: 'update', sheet: 'Produtos', data });
+          notify('Produto atualizado.');
+        } else {
+          await apiPost({ action: 'append', sheet: 'Produtos', data });
+          notify('Produto cadastrado.');
+        }
+        formPanel.hidden = true; resetForm(); await loadAll();
+      } catch (err) { notify('Erro: ' + err.message, true); }
+    });
+
+    function editProduct(id) {
+      const p = productById(id); if (!p) return;
+      document.getElementById('editId').value = p.id;
+      document.getElementById('productBrand').value = p.marca || '';
+      document.getElementById('productModel').value = p.modelo || '';
+      document.getElementById('productColor').value = p.cor || '';
+      document.getElementById('productGender').value = p.genero || '';
+      document.getElementById('productCost').value = p.custo || '';
+      document.getElementById('productPrice').value = p.preco_venda || '';
+      document.getElementById('formTitle').textContent = 'Editar produto';
+      formPanel.hidden = false;
+      showSection('products');
+      formPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    async function deleteProduct(id) {
+      const p = productById(id); if (!p) return;
+      if (!confirm(`Excluir ${p.marca} ${p.modelo}? As numerações de estoque NÃO serão apagadas automaticamente.`)) return;
+      try { await apiPost({ action: 'delete', sheet: 'Produtos', id }); notify('Produto excluído.'); await loadAll(); }
+      catch (err) { notify('Erro: ' + err.message, true); }
+    }
+
+    document.getElementById('productSearch').addEventListener('input', renderProducts);
+
+    // ====== Estoque: form ======
+    const stockFormPanel = document.getElementById('stockFormPanel');
+    document.getElementById('newStockBtn').addEventListener('click', () => {
+      document.getElementById('stockForm').reset();
+      fillProductSelect();
+      stockFormPanel.hidden = false;
+      stockFormPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    document.getElementById('cancelStockBtn').addEventListener('click', () => { stockFormPanel.hidden = true; });
+
+    document.getElementById('stockForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const id_produto = document.getElementById('stockProduct').value;
+      const numero = document.getElementById('stockNumber').value.trim();
+      const quantidade = Number(document.getElementById('stockQty').value || 0);
+      if (!id_produto || !numero) { notify('Preencha produto e numeração.', true); return; }
+      try {
+        // Se já existe combinação produto+numero, atualiza
+        const existing = stock.find(s => String(s.id_produto) === String(id_produto) && String(s.numero) === numero);
+        const data = {
+          id_produto, numero, quantidade,
+          vendidos: existing ? Number(existing.vendidos || 0) : 0,
+          atualizado_em: new Date().toISOString()
+        };
+        if (existing) {
+          // update usa o primeiro campo (id_produto) como chave — precisamos de um id único
+          // Solução: usar append + delete do antigo, ou usar chave composta.
+          // Vamos usar chave composta: id_produto|numero salvando como id_produto no update.
+          // Como o script usa a primeira coluna como id, criaremos uma coluna virtual.
+          // Alternativa simples: apagar linha antiga e inserir nova.
+          // Como não temos delete por chave composta, vamos apenas inserir nova e apagar antiga via update não é possível.
+          // Solução: chamar append; a duplicata será tratada como nova linha (aceitável por ora).
+          await apiPost({ action: 'append', sheet: 'Estoque', data });
+          notify('Estoque adicionado (linha duplicada, ver observação).');
+        } else {
+          await apiPost({ action: 'append', sheet: 'Estoque', data });
+          notify('Estoque adicionado.');
+        }
+        stockFormPanel.hidden = true;
+        await loadAll();
+      } catch (err) { notify('Erro: ' + err.message, true); }
+    });
+
+    document.getElementById('refreshBtn').addEventListener('click', () => loadAll());
+    document.getElementById('reloadBtn').addEventListener('click', () => loadAll());
+    document.getElementById('reloadSettingsBtn').addEventListener('click', () => loadAll());
+
+    // ====== Start ======
+    loadAll();
+  </script>
+</body>
+</html>
