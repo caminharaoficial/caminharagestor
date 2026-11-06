@@ -438,8 +438,13 @@
       const marca = document.getElementById('productBrand').value.trim();
       const modelo = document.getElementById('productModel').value.trim();
       const cor = document.getElementById('productColor').value.trim();
-      const skuInput = document.getElementById('productSku').value.trim();
-      const sku = skuInput || generateSku(marca, modelo, cor);
+      let sku = document.getElementById('productSku').value.trim();
+      
+      // Se o campo estiver vazio, gera o SKU e coloca de volta no campo visualmente
+      if (!sku) {
+        sku = generateSku(marca, modelo, cor);
+        document.getElementById('productSku').value = sku;
+      }
       const grade = document.getElementById('productGrade').value.trim();
 
       const dup = products.find(p => String(p.sku).toUpperCase() === sku.toUpperCase() && String(p.id) !== String(id));
