@@ -130,7 +130,8 @@
           <button class="nav-btn active" data-section="dashboard"><span class="nav-icon">▦</span> Dashboard</button>
           <button class="nav-btn" data-section="products"><span class="nav-icon">◇</span> Produtos</button>
           <button class="nav-btn" data-section="stock"><span class="nav-icon">▤</span> Estoque</button>
-          <button class="nav-btn" data-section="orders"><span class="nav-icon">🛍</span> Pedidos</button>
+<button class="nav-btn" data-section="sales"><span class="nav-icon">💵</span> Vendas</button>
+<button class="nav-btn" data-section="orders"><span class="nav-icon">🛍</span> Pedidos</button>
           <button class="nav-btn" data-section="finance"><span class="nav-icon">◉</span> Financeiro</button>
           <button class="nav-btn" data-section="contacts"><span class="nav-icon">♙</span> Clientes e fornecedores</button>
         </nav>
@@ -264,6 +265,64 @@
           </section>
         </section>
 
+
+        <!-- VENDAS -->
+        <section class="section" id="sales">
+          <div class="page-heading">
+            <div><h1>Vendas</h1><p class="subtitle">Registre as vendas concluídas.</p></div>
+            <button class="btn btn-primary" id="newOrderBtn">＋ Registrar Venda</button>
+          </div>
+
+          <div class="panel" id="orderFormPanel" style="margin-bottom:18px">
+            <div class="panel-head"><div><h2>Registrar nova venda</h2><div class="panel-desc">A baixa no estoque será automática.</div></div></div>
+            <form id="orderForm">
+              <div class="form-grid">
+                <div class="field"><label for="orderProduct">Produto *</label><select id="orderProduct" required></select></div>
+                <div class="field"><label for="orderNumber">Numeração *</label><select id="orderNumber" required></select></div>
+                <div class="field"><label for="orderQty">Quantidade *</label><input id="orderQty" type="number" min="1" step="1" value="1" required /></div>
+                <div class="field"><label for="orderPrice">Valor Total da Venda (R$) *</label><input id="orderPrice" type="number" min="0" step="0.01" required placeholder="0,00"/></div>
+                <div class="field"><label for="orderClient">Cliente</label><select id="orderClient"><option value="">— Consumidor Final (Sem cadastro) —</option></select></div>
+                <div class="field"><label for="orderNote">Observação</label><input id="orderNote" maxlength="100" placeholder="Ex.: Pago no Pix"/></div>
+                <div class="field"><label for="orderStatus">Status do Pagamento</label>
+                  <select id="orderStatus">
+                    <option value="OK">Recebido (OK)</option>
+                    <option value="Pendente">Pendente</option>
+                  </select>
+                </div>
+                <div class="field" style="display: flex; align-items: center; gap: 10px;">
+                  <input type="checkbox" id="orderBaixarEstoque" checked style="width: 20px; height: 20px;" />
+                  <label for="orderBaixarEstoque" style="margin: 0; cursor: pointer;">Dar baixa no estoque automaticamente</label>
+                </div>
+              </div>
+
+              <div style="margin-top: 18px; padding: 15px; border: 1px solid var(--line); border-radius: 10px; background: #fafbfc;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                  <h3 style="margin: 0; font-size: 13px;">Custos Extras desta Venda</h3>
+                  <button type="button" class="btn btn-light" id="addOrderCostBtn" style="padding: 6px 10px; font-size: 11px;">＋ Adicionar Custo</button>
+                </div>
+                <div id="orderCostsList"></div>
+              </div>
+
+              <div class="form-actions">
+                <button class="btn btn-primary" type="submit">Confirmar Venda</button>
+                <button class="btn btn-light" type="button" id="cancelOrderBtn">Cancelar</button>
+              </div>
+            </form>
+          </div>
+
+          <section class="panel">
+            <div class="panel-head"><div><h2>Histórico de Vendas</h2><div class="panel-desc">Últimas transações registradas.</div></div></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Data</th><th>Produto</th><th>Num.</th><th>Qtd.</th><th>Custo Prod.</th><th>Custos Extras</th><th>Venda</th><th>Lucro Líquido</th><th>Status</th><th>Ações</th></tr></thead>
+                <tbody id="ordersTable"><tr><td colspan="10" class="table-empty">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <!-- PEDIDOS -->
+ 
         <section class="section" id="orders">
           <div class="page-heading">
             <div><h1>Pedidos e Vendas</h1><p class="subtitle">Registre as saídas e acompanhe o faturamento.</p></div>
@@ -430,6 +489,7 @@
     let expenses = [];
     let clients = []; // <-- ADICIONE ESTA LINHA
      let orderCosts = [];
+    let requests = []; // <-- ADICIONE
     let connected = false;
 
     const money = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -493,11 +553,11 @@
       startLoad();
       try {
         setConnection(true);
-        const [p, s, v, d, c, oc] = await Promise.all([
-          apiRead('Produtos'), apiRead('Estoque'), apiRead('Vendas'), apiRead('Despesas'), apiRead('Clientes'), apiRead('Custos')
+        const [p, s, v, d, c, oc, r] = await Promise.all([
+          apiRead('Produtos'), apiRead('Estoque'), apiRead('Vendas'), apiRead('Despesas'), apiRead('Clientes'), apiRead('Custos'), apiRead('Pedidos')
         ]);
         // ...
-        orderCosts = oc.filter(x => x && x.id && String(x.id).trim() !== ''); // <-- ADICIONE
+        requests = r.filter(x => x && x.id && String(x.id).trim() !== ''); // <-- ADICIONE
         
         // Filtro à prova de falhas: só aceita se tiver ID
         products = p.filter(x => x && x.id && String(x.id).trim() !== '');
@@ -538,8 +598,10 @@
       fillOrderProducts();    
       renderExpenses();       // <-- ADICIONE ESTA LINHA
       updateNetProfit();      // <-- ADICIONE ESTA LINHA
-      renderClients();        // <-- ADICIONE ESTA LINHA
+      renderClients();        
       fillOrderClients();      
+      renderRequests();       // <-- ADICIONE
+      fillRequestProducts();  // <-- ADICIONE    
 }
 
     function updateNetProfit() {
@@ -729,7 +791,7 @@
     };
 
     // ====== Navegação ======
-    const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', orders:'Pedidos', finance:'Financeiro', contacts:'Clientes e fornecedores', settings:'Configurações' };
+const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sales:'Vendas', orders:'Pedidos', finance:'Financeiro', contacts:'Clientes e fornecedores', settings:'Configurações' };
     function showSection(id) {
       document.querySelectorAll('.section').forEach(el => el.classList.toggle('active', el.id === id));
       document.querySelectorAll('.nav-btn[data-section]').forEach(el => el.classList.toggle('active', el.dataset.section === id));
@@ -1404,6 +1466,175 @@
       sel.innerHTML = '<option value="">— Consumidor Final (Sem cadastro) —</option>' + 
         clients.map(c => `<option value="${esc(c.nome)}">${esc(c.nome)}</option>`).join('');
     }
+
+    // ====== Lógica de Pedidos ======
+    const requestFormPanel = document.getElementById('requestFormPanel');
+
+    document.getElementById('newRequestBtn')?.addEventListener('click', () => {
+      document.getElementById('requestForm').reset();
+      fillProductSelect(); // Reutiliza a função
+      fillRequestClients();
+      requestFormPanel.hidden = false;
+      requestFormPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    document.getElementById('cancelRequestBtn')?.addEventListener('click', () => { 
+      requestFormPanel.hidden = true; 
+    });
+
+    function fillRequestProducts() {
+      const sel = document.getElementById('reqProduct');
+      if (!sel) return;
+      sel.innerHTML = '<option value="">— Selecione —</option>' + products.map(p => `<option value="${esc(p.id)}">${esc(p.marca)} ${esc(p.modelo)}</option>`).join('');
+    }
+
+    function fillRequestClients() {
+      const sel = document.getElementById('reqClient');
+      if (!sel) return;
+      sel.innerHTML = '<option value="">— Consumidor Final —</option>' + clients.map(c => `<option value="${esc(c.nome)}">${esc(c.nome)}</option>`).join('');
+    }
+
+    document.getElementById('reqProduct')?.addEventListener('change', function() {
+      const idProd = this.value;
+      const numSelect = document.getElementById('reqNumber');
+      if (!idProd) { numSelect.innerHTML = '<option value="">—</option>'; return; }
+      
+      // Pega as numerações do estoque ou da grade
+      const p = productById(idProd);
+      const nums = stockForProduct(idProd).length > 0 ? stockForProduct(idProd) : p.grade.split(',').map(n => ({numero: n.trim()}));
+      
+      numSelect.innerHTML = '<option value="">— Selecione —</option>' + nums.map(s => `<option value="${esc(s.numero)}">${esc(s.numero)}</option>`).join('');
+    });
+
+    document.getElementById('requestForm')?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const cliente = document.getElementById('reqClient').value;
+      const id_produto = document.getElementById('reqProduct').value;
+      const numero = document.getElementById('reqNumber').value;
+      const qtd = Number(document.getElementById('reqQty').value);
+      const valor = Number(document.getElementById('reqPrice').value);
+      const obs = document.getElementById('reqNote').value;
+      const status = document.getElementById('reqStatus').value;
+
+      const p = productById(id_produto);
+
+      try {
+        startLoad();
+        await apiPost({
+          action: 'append', sheet: 'Pedidos',
+          data: {
+            id: uuid(),
+            cliente: cliente,
+            id_produto: id_produto,
+            sku_variacao: `${p.sku}-${numero}`,
+            numero: numero,
+            quantidade: qtd,
+            valor_total: valor,
+            data_pedido: new Date().toISOString(),
+            status_pedido: status,
+            observacao: obs
+          }
+        });
+        notify('Pedido registrado!');
+        requestFormPanel.hidden = true;
+        await loadAll();
+      } catch (err) {
+        notify('Erro ao registrar pedido: ' + err.message, true);
+        endLoad();
+      }
+    });
+
+    function renderRequests() {
+      const tbody = document.getElementById('requestsTable');
+      if (!tbody) return;
+
+      const sorted = [...requests].sort((a, b) => new Date(b.data_pedido) - new Date(a.data_pedido));
+      
+      tbody.innerHTML = sorted.length ? sorted.map(r => {
+        const p = productById(r.id_produto);
+        const dataStr = r.data_pedido ? new Date(r.data_pedido).toLocaleString('pt-BR') : '—';
+        return `<tr>
+          <td>${dataStr}</td>
+          <td>${esc(r.cliente || '—')}</td>
+          <td><strong>${p ? esc(p.marca) + ' ' + esc(p.modelo) : 'Excluído'}</strong><br><small>${esc(r.sku_variacao)}</small></td>
+          <td>${esc(r.numero)}</td>
+          <td>${r.quantidade}</td>
+          <td>${money(r.valor_total)}</td>
+          <td>${esc(r.status_pedido)}</td>
+          <td>
+            <button class="btn btn-primary" style="padding: 4px 8px; font-size: 10px;" onclick="faturarPedido('${esc(r.id)}')">Faturar</button>
+            <button class="btn btn-danger" style="padding: 4px 8px; font-size: 10px;" onclick="deleteRequest('${esc(r.id)}')">Excluir</button>
+          </td>
+        </tr>`;
+      }).join('') : '<tr><td colspan="8" class="table-empty">Nenhum pedido em aberto.</td></tr>';
+    }
+
+    // Botão de Faturar: Transforma o pedido em venda
+    window.faturarPedido = async function(idPedido) {
+      const pedido = requests.find(r => String(r.id) === String(idPedido));
+      if (!pedido) return;
+
+      if (!confirm(`Faturar o pedido de ${pedido.quantidade}x ${pedido.sku_variacao}?\n\nIsso vai baixar o estoque e registrar a venda.`)) return;
+
+      startLoad();
+      try {
+        // 1. Cria a venda
+        const p = productById(pedido.id_produto);
+        const custoUnitario = Number(p?.custo || 0);
+        const lucro = pedido.valor_total - (custoUnitario * pedido.quantidade);
+
+        await apiPost({
+          action: 'append', sheet: 'Vendas',
+          data: {
+            id: uuid(),
+            id_produto: pedido.id_produto,
+            sku_variacao: pedido.sku_variacao,
+            numero: pedido.numero,
+            quantidade: pedido.quantidade,
+            valor_venda: pedido.valor_total,
+            data_venda: new Date().toISOString(),
+            cliente: pedido.cliente,
+            observacao: pedido.observacao,
+            custo_unitario: custoUnitario,
+            lucro: lucro,
+            status_pagamento: 'OK'
+          }
+        });
+
+        // 2. Baixa no estoque (se existir)
+        const estoqueItem = stock.find(s => String(s.id_produto) === String(pedido.id_produto) && String(s.numero) === String(pedido.numero));
+        if (estoqueItem) {
+          const novaQtd = Number(estoqueItem.quantidade) - pedido.quantidade;
+          const novosVendidos = Number(estoqueItem.vendidos || 0) + pedido.quantidade;
+          await apiPost({
+            action: 'update', sheet: 'Estoque',
+            data: { ...estoqueItem, quantidade: Math.max(0, novaQtd), vendidos: novosVendidos, atualizado_em: new Date().toISOString() }
+          });
+        }
+
+        // 3. Remove o pedido da lista
+        await apiPost({ action: 'delete', sheet: 'Pedidos', id: idPedido });
+
+        notify('Pedido faturado com sucesso!');
+        await loadAll();
+      } catch (err) {
+        notify('Erro ao faturar: ' + err.message, true);
+        endLoad();
+      }
+    };
+
+    window.deleteRequest = async function(id) {
+      if (!confirm('Excluir este pedido?')) return;
+      startLoad();
+      try {
+        await apiPost({ action: 'delete', sheet: 'Pedidos', id: id });
+        notify('Pedido excluído.');
+        await loadAll();
+      } catch (err) {
+        notify('Erro ao excluir: ' + err.message, true);
+        endLoad();
+      }
+    };
 
     // ====== Start ======
     document.addEventListener('DOMContentLoaded', () => {
