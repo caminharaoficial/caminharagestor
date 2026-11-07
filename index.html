@@ -1060,7 +1060,7 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
       const idProd = this.value;
       const numSelect = document.getElementById('orderNumber');
       const priceInput = document.getElementById('orderPrice');
-      
+
       if (!idProd) {
         numSelect.innerHTML = '<option value="">— Escolha o produto primeiro —</option>';
         priceInput.value = '';
@@ -1070,17 +1070,15 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
       const prod = productById(idProd);
       if (prod) priceInput.value = prod.preco_venda;
 
-      // CORREÇÃO: Puxa as numerações do estoque OU da grade do produto
+      // Une estoque + grade
       const stockNums = stockForProduct(idProd).map(s => s.numero);
       const gradeNums = prod ? String(prod.grade || '').split(',').map(n => n.trim()).filter(Boolean) : [];
-      
-      // Une as duas listas sem duplicar
       const todasNums = [...new Set([...stockNums, ...gradeNums])];
 
       if (todasNums.length === 0) {
-        numSelect.innerHTML = '<option value="">— Produto sem grade cadastrada —</option>';
+        numSelect.innerHTML = '<option value="">— Produto sem grade —</option>';
       } else {
-        numSelect.innerHTML = '<option value="">— Selecione a Numeração —</option>' + 
+        numSelect.innerHTML = '<option value="">— Selecione a Numeração —</option>' +
           todasNums.map(n => {
             const emEstoque = stockForProduct(idProd).find(s => String(s.numero) === String(n));
             const qtd = emEstoque ? emEstoque.quantidade : 0;
@@ -1088,60 +1086,8 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
           }).join('');
       }
     });
-      const idProd = this.value;
-      const numSelect = document.getElementById('orderNumber');
-      const priceInput = document.getElementById('orderPrice');
-      
-      if (!idProd) {
-        numSelect.innerHTML = '<option value="">— Escolha o produto primeiro —</option>';
-        priceInput.value = '';
-        return;
-      }
 
-      // Pega o preço do produto
-      const prod = productById(idProd);
-      if (prod) priceInput.value = prod.preco_venda;
 
-      // Pega as numerações que têm estoque > 0
-      const nums = stockForProduct(idProd).filter(s => Number(s.quantidade) > 0);
-      
-      if (nums.length === 0) {
-        numSelect.innerHTML = '<option value="">— Sem estoque para este produto —</option>';
-      } else {
-        numSelect.innerHTML = '<option value="">— Selecione a Numeração —</option>' + nums.map(s => `<option value="${esc(s.numero)}">${esc(s.numero)} (${s.quantidade} disp.)</option>`).join('');
-      }
-    });
-
-    // Abrir/Fechar formulário
-    document.getElementById('newOrderBtn')?.addEventListener('click', () => {
-      document.getElementById('orderForm').reset();
-      fillOrderProducts();
-      document.getElementById('orderNumber').innerHTML = '<option value="">— Escolha o produto primeiro —</option>';
-      orderFormPanel.hidden = false;
-      orderFormPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-
-    document.getElementById('cancelOrderBtn')?.addEventListener('click', () => { 
-      orderFormPanel.hidden = true; 
-    });
-
-     // SUBMIT DA VENDA
-    // ====== Lógica de Custos Extras ======
-    let tempOrderCosts = [];
-    
-    document.getElementById('addOrderCostBtn')?.addEventListener('click', () => {
-      const list = document.getElementById('orderCostsList');
-      const div = document.createElement('div');
-      div.style.display = 'flex';
-      div.style.gap = '10px';
-      div.style.marginBottom = '10px';
-      div.innerHTML = `
-        <input type="text" class="order-cost-desc" placeholder="Ex: Uber, Correio" style="flex: 2; padding: 8px; border: 1px solid var(--line); border-radius: 6px;" required />
-        <input type="number" class="order-cost-val" placeholder="R$ 0,00" min="0" step="0.01" style="flex: 1; padding: 8px; border: 1px solid var(--line); border-radius: 6px;" required />
-        <button type="button" class="btn btn-danger" style="padding: 8px;" onclick="this.parentElement.remove()">X</button>
-      `;
-      list.appendChild(div);
-    });
 
     // SUBMIT DA VENDA (Atualizado com Custos e Opção de Estoque)
     document.getElementById('orderForm')?.addEventListener('submit', async e => {
