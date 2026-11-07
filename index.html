@@ -236,7 +236,13 @@
                 <div class="field"><label for="stockNumber">Numeração *</label><input id="stockNumber" required placeholder="Ex.: 37 ou 37/38"/></div>
                 <div class="field"><label for="stockQty">Quantidade em estoque *</label><input id="stockQty" type="number" min="0" step="1" required placeholder="0"/></div>
               </div>
-              <div class="form-actions"><button class="btn btn-primary" type="submit">Salvar</button><button class="btn btn-light" type="button" id="cancelStockBtn">        <section class="section" id="orders">
+              <div class="form-actions"><button class="btn btn-primary" type="submit">Salvar</button><button class="btn btn-light" type="button" id="cancelStockBtn">Cancelar</button></div>
+            </form>
+          </div>
+          <section class="panel"><div class="panel-head"><div><h2>Posição de estoque</h2><div class="panel-desc">Uma linha por numeração.</div></div></div><div class="table-wrap"><table><thead><tr><th>Produto</th><th>SKU da Variação</th><th>Numeração</th><th>Qtd.</th><th>Vendidos</th><th>Situação</th></tr></thead><tbody id="stockTable"><tr><td colspan="6" class="table-empty">Carregando...</td></tr></tbody></table></div></section>
+        </section>
+
+        <section class="section" id="orders">
           <div class="page-heading">
             <div><h1>Pedidos e Vendas</h1><p class="subtitle">Registre as saídas e acompanhe o faturamento.</p></div>
             <button class="btn btn-primary" id="newOrderBtn">＋ Registrar Venda</button>
@@ -274,12 +280,6 @@
               <table>
                 <thead><tr><th>Data</th><th>Produto</th><th>Num.</th><th>Qtd.</th><th>Custo</th><th>Venda</th><th>Lucro</th><th>Status</th><th>Ações</th></tr></thead>
                 <tbody id="ordersTable"><tr><td colspan="9" class="table-empty">Carregando...</td></tr></tbody>
-              </table>
-            </div>
-          </section>
-        </section>
-<thead><tr><th>Data</th><th>Produto</th><th>Num.</th><th>Qtd.</th><th>Custo</th><th>Venda</th><th>Lucro</th><th>Status</th><th>Ações</th></tr></thead>
-                <tbody id="ordersTable"><tr><td colspan="7" class="table-empty">Carregando...</td></tr></tbody>
               </table>
             </div>
           </section>
@@ -762,20 +762,38 @@
       orderFormPanel.hidden = true; 
     });
 
-    // SUBMIT DA VENDA
+     // SUBMIT DA VENDA
+    document.getElementById('orderForm')?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const id_produto = document.getElementById('orderProduct').value;
+      const numero = document.getElementById('orderNumber').value;
+      const qtdVendida = Number(document.getElementById('orderQty').value);
+      const valorTotal = Number(document.getElementById('orderPrice').value);
+      const cliente = document.getElementById('orderClient').value.trim();
+      const obs = document.getElementById('orderNote').value.trim();
+
+      if (!id_produto || !numero || qtdVendida <= 0) { 
+        notify('Preencha todos os campos corretamente.', true); 
+        return; 
+      }
+
+      const estoqueItem = stock.find(s => String(s.id_produto) === String(id_produto) && String(s.numero) === String(numero));
+      
+      if (!estoqueItem || Number(estoqueItem.quantidade) < qtdVendida) {
+        notify('Estoque insuficiente para esta numeração.', true);
+        return;
+      }
+
       const p = productById(id_produto);
       const skuVar = estoqueItem.sku_variacao || `${p.sku}-${numero}`;
       
-      // Cálculos da sua planilha
       const custoUnitario = Number(p.custo || 0);
-      const custoTotal = custoUnitario * qtdVendida;
-      const lucro = valorTotal - custoTotal;
+      const lucro = valorTotal - (custoUnitario * qtdVendida);
       const statusPagamento = document.getElementById('orderStatus').value;
 
       try {
         startLoad();
 
-        // 1. Salva a venda na aba Vendas (com os novos campos)
         await apiPost({
           action: 'append', sheet: 'Vendas',
           data: {
@@ -794,7 +812,6 @@
           }
         });
 
-        // 2. Desconta do estoque
         const novaQtd = Number(estoqueItem.quantidade) - qtdVendida;
         const novosVendidos = Number(estoqueItem.vendidos || 0) + qtdVendida;
         
@@ -811,29 +828,6 @@
         notify('Venda registrada e estoque atualizado!');
         orderFormPanel.hidden = true;
         await loadAll(); 
-        
-      } catch (err) {
-        notify('Erro ao registrar venda: ' + err.message, true);
-        endLoad();
-      }
-    });
-        // 2. Desconta do estoque (quantidade) e soma nos vendidos
-        const novaQtd = Number(estoqueItem.quantidade) - qtdVendida;
-        const novosVendidos = Number(estoqueItem.vendidos || 0) + qtdVendida;
-        
-        await apiPost({
-          action: 'update', sheet: 'Estoque',
-          data: {
-            ...estoqueItem, // mantém todos os outros dados iguais
-            quantidade: novaQtd,
-            vendidos: novosVendidos,
-            atualizado_em: new Date().toISOString()
-          }
-        });
-
-        notify('Venda registrada e estoque atualizado!');
-        orderFormPanel.hidden = true;
-        await loadAll(); // Recarrega tudo para atualizar o Dashboard e as tabelas
         
       } catch (err) {
         notify('Erro ao registrar venda: ' + err.message, true);
