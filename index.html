@@ -1175,11 +1175,12 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
         <input type="number" class="order-cost-val" placeholder="R$ 0,00" min="0" step="0.01" style="flex: 1; padding: 8px; border: 1px solid var(--line); border-radius: 6px;" />
         <button type="button" class="btn btn-danger" style="padding: 8px;">X</button>
       `;
-      div.querySelector('button').onclick = () => div.remove();
+div.querySelector('button').onclick = () => { div.remove(); calcularLucroVenda(); };
       list.appendChild(div);
     });
 
     document.getElementById('orderForm')?.addEventListener('submit', async e => {
+      if (editingSaleId) return; // edição tem listener próprio depois
       e.preventDefault();
       const id_produto = document.getElementById('orderProduct').value;
       const numero = document.getElementById('orderNumber').value;
@@ -1190,15 +1191,13 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
       const statusPagamento = document.getElementById('orderStatus').value;
       const baixarEstoque = document.getElementById('orderBaixarEstoque').checked;
 
-      if (!id_produto || !numero || qtdVendida <= 0) { 
-        notify('Preencha todos os campos corretamente.', true); 
-        return; 
+      if (!id_produto || !numero || qtdVendida <= 0) {
+        notify('Preencha todos os campos corretamente.', true);
+        return;
       }
 
       const estoqueItem = stock.find(s => String(s.id_produto) === String(id_produto) && String(s.numero) === String(numero));
-      
-      // Se for baixar do estoque, verifica se tem
-      // Aviso de estoque (não bloqueia mais)
+
       if (baixarEstoque && (!estoqueItem || Number(estoqueItem.quantidade) < qtdVendida)) {
         const confirmar = confirm(`Atenção: o estoque desta numeração é ${estoqueItem ? estoqueItem.quantidade : 0} mas você está vendendo ${qtdVendida}. Deseja continuar mesmo assim?`);
         if (!confirmar) return;
@@ -1207,8 +1206,8 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
       const p = productById(id_produto);
       const skuVar = (estoqueItem ? estoqueItem.sku_variacao : null) || `${p.sku}-${numero}`;
       const custoUnitario = Number(document.getElementById('orderCostUnit').value || 0);
-      
-      // Captura os custos extras
+
+      // Captura custos extras
       let somaCustosExtras = 0;
       const custosParaSalvar = [];
       document.querySelectorAll('#orderCostsList > div').forEach(div => {
@@ -1219,15 +1218,15 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
           custosParaSalvar.push({ descricao: desc, valor: val });
         }
       });
+      const custosString = custosParaSalvar.length ? JSON.stringify(custosParaSalvar) : '';
 
-      // Cálculo do Lucro: Venda - Custo do Produto - Custos Extras
       const lucroLiquido = valorTotal - (custoUnitario * qtdVendida) - somaCustosExtras;
       const vendaId = uuid();
 
       try {
         startLoad();
 
-        // 1. Salva a Venda Principal
+        // 1. Salva a Venda já com os custos embutidos
         await apiPost({
           action: 'append', sheet: 'Vendas',
           data: {
@@ -1241,47 +1240,37 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
             cliente: cliente,
             observacao: obs,
             custo_unitario: custoUnitario,
-            lucro: lucroLiquido, // Agora o lucro já vem descontado
-            status_pagamento: statusPagamento
+            lucro: lucroLiquido,
+            status_pagamento: statusPagamento,
+            custos_extras: custosString
           }
         });
 
-        // 2. Salva os Custos Extras (se houver)
-        for (const c of custosParaSalvar) {
-          await apiPost({
-            action: 'append', sheet: 'Custos',
-            data: {
-              id: uuid(),
-              id_venda: vendaId,
-              descricao: c.descricao,
-              valor: c.valor
-            }
-          });
-        }
-
-        // 3. Baixa no Estoque (se o usuário marcou)
+        // 2. Baixa no estoque
         if (baixarEstoque && estoqueItem) {
           const novaQtd = Number(estoqueItem.quantidade) - qtdVendida;
           const novosVendidos = Number(estoqueItem.vendidos || 0) + qtdVendida;
           await apiPost({
             action: 'update', sheet: 'Estoque',
             data: {
-              ...estoqueItem, quantidade: novaQtd, vendidos: novosVendidos,
+              ...estoqueItem,
+              quantidade: novaQtd,
+              vendidos: novosVendidos,
               atualizado_em: new Date().toISOString()
             }
           });
         }
 
         notify('Venda registrada com sucesso!');
-        document.getElementById('orderCostsList').innerHTML = ''; // Limpa custos
+        document.getElementById('orderCostsList').innerHTML = '';
         orderFormPanel.hidden = true;
-        await loadAll(); 
-        
+        await loadAll();
       } catch (err) {
         notify('Erro ao registrar venda: ' + err.message, true);
         endLoad();
       }
     });
+
     // Renderiza a tabela de histórico de vendas
     function renderOrders() {
       const tbody = document.getElementById('ordersTable');
@@ -1297,8 +1286,17 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
         const lucro = Number(v.lucro || 0);
         
         // Busca os custos extras desta venda
-        const custosDaVenda = orderCosts.filter(c => String(c.id_venda) === String(v.id));
-        const txtCustos = custosDaVenda.map(c => `${esc(c.descricao)}: ${money(c.valor)}`).join('<br>') || '—';
+let custosArr = [];
+if (v.custos_extras) {
+  try { custosArr = JSON.parse(v.custos_extras); } catch (e) { custosArr = []; }
+}
+if (!custosArr.length && typeof v.custos_extras === 'string' && v.custos_extras.includes(':')) {
+  custosArr = String(v.custos_extras).split('|').map(s => {
+    const [d, val] = s.split(':');
+    return { descricao: d, valor: Number(val) };
+  }).filter(c => c.descricao);
+}
+const txtCustos = custosArr.map(c => `${esc(c.descricao)}: ${money(c.valor)}`).join('<br>') || '—';
         
         const status = v.status_pagamento === 'OK' 
           ? '<span style="color:#27775d;font-weight:700;background:#e6f4ea;padding:4px 8px;border-radius:6px">OK</span>' 
@@ -1848,46 +1846,49 @@ tbody.querySelectorAll('[data-view-order]').forEach(b => b.onclick = () => viewO
       `).join('');
     }
 
-    window.viewOrder = function(id) {
-      const v = sales.find(x => String(x.id) === String(id));
-      if (!v) return;
-      detailKind = 'order'; detailId = id; detailTitle.textContent = 'Detalhes da Venda';
-      const p = productById(v.id_produto);
-      const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto excluído';
+window.viewOrder = function(id) {
+  const v = sales.find(x => String(x.id) === String(id));
+  if (!v) return;
+  detailKind = 'order'; detailId = id; detailTitle.textContent = 'Detalhes da Venda';
+  const p = productById(v.id_produto);
+  const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto excluído';
 
-let custosDaVenda = orderCosts.filter(c => String(c.id_venda).trim() === String(v.id).trim());
-// Plano B: se não achou pelo ID, tenta achar pelo valor
-if (custosDaVenda.length === 0 && Number(v.lucro) < (Number(v.valor_venda) - (Number(v.custo_unitario) * Number(v.quantidade)))) {
-  const dif = (Number(v.valor_venda) - (Number(v.custo_unitario) * Number(v.quantidade))) - Number(v.lucro);
-  custosDaVenda = orderCosts.filter(c => Math.abs(Number(c.valor) - dif) < 0.1);
-}
-      const lucroBruto = Number(v.valor_venda || 0) - (Number(v.custo_unitario || 0) * Number(v.quantidade || 0));
-      const diffExtra = lucroBruto - Number(v.lucro || 0);
+  // Custos vêm embutidos na própria linha da venda (JSON)
+  let custosArr = [];
+  if (v.custos_extras) {
+    try { custosArr = JSON.parse(v.custos_extras); } catch (e) { custosArr = []; }
+  }
+  // Fallback: legado (pipe) ou aba Custos antiga
+  if ((!custosArr || custosArr.length === 0) && typeof v.custos_extras === 'string' && v.custos_extras.includes(':')) {
+    custosArr = v.custos_extras.split('|').map(s => {
+      const [d, val] = s.split(':');
+      return { descricao: d, valor: Number(val) };
+    }).filter(c => c.descricao);
+  }
+  if ((!custosArr || custosArr.length === 0)) {
+    const antigos = orderCosts.filter(c => String(c.id_venda).trim() === String(v.id).trim());
+    if (antigos.length) custosArr = antigos.map(c => ({ descricao: c.descricao, valor: Number(c.valor) }));
+  }
 
-      let txtCustos;
-      if (custosDaVenda.length > 0) {
-        txtCustos = custosDaVenda.map(c => `• ${esc(c.descricao)}: ${money(c.valor)}`).join('<br>');
-      } else if (diffExtra > 0.01) {
-        txtCustos = `<span style="color:#a16b1e">${money(diffExtra)} (não sincronizado — clique em Recarregar)</span>`;
-      } else {
-        txtCustos = '<span style="color:#b04545">Nenhum custo extra</span>';
-      }
+  const txtCustos = custosArr.length
+    ? custosArr.map(c => `• ${esc(c.descricao)}: ${money(c.valor)}`).join('<br>')
+    : '<span style="color:#b04545">Nenhum custo extra</span>';
 
-      const rows = [
-        ['Data', v.data_venda ? new Date(v.data_venda).toLocaleString('pt-BR') : '—'],
-        ['Produto', nomeProd], ['SKU', esc(v.sku_variacao || '—')],
-        ['Numeração', esc(v.numero || '—')], ['Quantidade', v.quantidade || 0],
-        ['Cliente', esc(v.cliente || 'Consumidor Final')],
-        ['Custo Unitário', money(v.custo_unitario)],
-        ['Valor Total', `<span style="color:#27775d">${money(v.valor_venda)}</span>`],
-        ['Lucro Real', `<span style="color:#27775d">${money(v.lucro)}</span>`],
-        ['Status', v.status_pagamento === 'OK' ? 'Recebido' : 'Pendente'],
-        ['Observação', esc(v.observacao || '—')],
-        ['Custos Extras', txtCustos],
-      ];
-      detailBody.innerHTML = `<table style="width:100%; border-collapse:collapse;">${renderDetailRows(rows)}</table>`;
-      detailModal.style.display = 'flex';
-    };
+  const rows = [
+    ['Data', v.data_venda ? new Date(v.data_venda).toLocaleString('pt-BR') : '—'],
+    ['Produto', nomeProd], ['SKU', esc(v.sku_variacao || '—')],
+    ['Numeração', esc(v.numero || '—')], ['Quantidade', v.quantidade || 0],
+    ['Cliente', esc(v.cliente || 'Consumidor Final')],
+    ['Custo Unitário', money(v.custo_unitario)],
+    ['Valor Total', `<span style="color:#27775d">${money(v.valor_venda)}</span>`],
+    ['Lucro Real', `<span style="color:#27775d">${money(v.lucro)}</span>`],
+    ['Status', v.status_pagamento === 'OK' ? 'Recebido' : 'Pendente'],
+    ['Observação', esc(v.observacao || '—')],
+    ['Custos Extras', txtCustos],
+  ];
+  detailBody.innerHTML = `<table style="width:100%; border-collapse:collapse;">${renderDetailRows(rows)}</table>`;
+  detailModal.style.display = 'flex';
+};
 
     window.viewRequest = function(id) {
       const r = requests.find(x => String(x.id) === String(id));
@@ -1923,49 +1924,59 @@ if (custosDaVenda.length === 0 && Number(v.lucro) < (Number(v.valor_venda) - (Nu
     let editingSaleId = null;
     let editingRequestId = null;
 
-    function editarVendaExistente(v) {
-      editingSaleId = v.id;
-      showSection('sales');
-      orderFormPanel.hidden = false;
-      const selProd = document.getElementById('orderProduct');
-      selProd.value = v.id_produto;
-      selProd.dispatchEvent(new Event('change', { bubbles: true }));
-      document.getElementById('orderNumber').value = v.numero || '';
-      document.getElementById('orderQty').value = v.quantidade || 1;
-      document.getElementById('orderCostUnit').value = v.custo_unitario || 0;
-      document.getElementById('orderPrice').value = v.valor_venda || 0;
-      document.getElementById('orderNote').value = v.observacao || '';
-      document.getElementById('orderStatus').value = v.status_pagamento || 'OK';
-      const selCli = document.getElementById('orderClient');
-      if (v.cliente) {
-        const opt = Array.from(selCli.options).find(o => o.value === v.cliente);
-        if (!opt) { const n = new Option(v.cliente, v.cliente); selCli.add(n); }
-        selCli.value = v.cliente;
-      } else selCli.value = '';
+function editarVendaExistente(v) {
+  editingSaleId = v.id;
+  showSection('sales');
+  orderFormPanel.hidden = false;
+  const selProd = document.getElementById('orderProduct');
+  selProd.value = v.id_produto;
+  selProd.dispatchEvent(new Event('change', { bubbles: true }));
+  document.getElementById('orderNumber').value = v.numero || '';
+  document.getElementById('orderQty').value = v.quantidade || 1;
+  document.getElementById('orderCostUnit').value = v.custo_unitario || 0;
+  document.getElementById('orderPrice').value = v.valor_venda || 0;
+  document.getElementById('orderNote').value = v.observacao || '';
+  document.getElementById('orderStatus').value = v.status_pagamento || 'OK';
+  const selCli = document.getElementById('orderClient');
+  if (v.cliente) {
+    const opt = Array.from(selCli.options).find(o => o.value === v.cliente);
+    if (!opt) { const n = new Option(v.cliente, v.cliente); selCli.add(n); }
+    selCli.value = v.cliente;
+  } else selCli.value = '';
 
-      const lista = document.getElementById('orderCostsList');
-      lista.innerHTML = '';
-      
-      // Debug (opcional) - você pode ver isso no console F12
-      console.log('Editando venda id:', v.id, ' | Custos encontrados:', orderCosts.filter(c => String(c.id_venda).trim() === String(v.id).trim()));
-      
-let custosParaEditar = orderCosts.filter(c => String(c.id_venda).trim() === String(v.id).trim());
-if (custosParaEditar.length === 0 && Number(v.lucro) < (Number(v.valor_venda) - (Number(v.custo_unitario) * Number(v.quantidade)))) {
-  const dif = (Number(v.valor_venda) - (Number(v.custo_unitario) * Number(v.quantidade))) - Number(v.lucro);
-  custosParaEditar = orderCosts.filter(c => Math.abs(Number(c.valor) - dif) < 0.1);
-}
-custosParaEditar.forEach(c => {
-        const div = document.createElement('div');
-        div.style.display = 'flex'; div.style.gap = '10px'; div.style.marginBottom = '10px';
-        div.innerHTML = `<input type="text" class="order-cost-desc" value="${esc(c.descricao)}" style="flex:2; padding:8px; border:1px solid var(--line); border-radius:6px;" /><input type="number" class="order-cost-val" value="${Number(c.valor)}" min="0" step="0.01" style="flex:1; padding:8px; border:1px solid var(--line); border-radius:6px;" /><button type="button" class="btn btn-danger" style="padding:8px;">X</button>`;
-        div.querySelector('button').onclick = () => { div.remove(); calcularLucroVenda(); };
-        lista.appendChild(div);
-      });
-
-      calcularLucroVenda();
-      setTimeout(() => document.getElementById('orderFormPanel').scrollIntoView({ behavior:'smooth', block:'start' }), 50);
+  // Lê custos embutidos na venda
+  let custosArr = [];
+  if (v.custos_extras) {
+    try { custosArr = JSON.parse(v.custos_extras); } catch (e) {
+      // fallback pipe
+      custosArr = String(v.custos_extras).split('|').map(s => {
+        const [d, val] = s.split(':');
+        return { descricao: d, valor: Number(val) };
+      }).filter(c => c.descricao);
     }
+  }
+  if (!custosArr.length) {
+    custosArr = orderCosts
+      .filter(c => String(c.id_venda).trim() === String(v.id).trim())
+      .map(c => ({ descricao: c.descricao, valor: Number(c.valor) }));
+  }
 
+  const lista = document.getElementById('orderCostsList');
+  lista.innerHTML = '';
+  custosArr.forEach(c => {
+    const div = document.createElement('div');
+    div.style.display = 'flex'; div.style.gap = '10px'; div.style.marginBottom = '10px';
+    div.innerHTML = `
+      <input type="text" class="order-cost-desc" value="${esc(c.descricao)}" style="flex:2; padding:8px; border:1px solid var(--line); border-radius:6px;" />
+      <input type="number" class="order-cost-val" value="${Number(c.valor)}" min="0" step="0.01" style="flex:1; padding:8px; border:1px solid var(--line); border-radius:6px;" />
+      <button type="button" class="btn btn-danger" style="padding:8px;">X</button>`;
+    div.querySelector('button').onclick = () => { div.remove(); calcularLucroVenda(); };
+    lista.appendChild(div);
+  });
+
+  calcularLucroVenda();
+  setTimeout(() => document.getElementById('orderFormPanel').scrollIntoView({ behavior:'smooth', block:'start' }), 50);
+}
     function editarPedidoExistente(r) {
       editingRequestId = r.id;
       showSection('orders');
@@ -2002,10 +2013,11 @@ custosParaEditar.forEach(c => {
       }
     });
 
-    // Captura submit em modo edição
+    // ===== Submit em modo EDIÇÃO — Venda =====
     document.getElementById('orderForm').addEventListener('submit', async e => {
       if (!editingSaleId) return;
       e.preventDefault(); e.stopImmediatePropagation();
+
       const idVenda = editingSaleId;
       const vAntiga = sales.find(x => String(x.id) === String(idVenda));
       const id_produto = document.getElementById('orderProduct').value;
@@ -2016,28 +2028,46 @@ custosParaEditar.forEach(c => {
       const cliente = document.getElementById('orderClient').value.trim();
       const obs = document.getElementById('orderNote').value.trim();
       const status = document.getElementById('orderStatus').value;
+
       let extras = 0; const novosCustos = [];
       document.querySelectorAll('#orderCostsList > div').forEach(div => {
         const d = div.querySelector('.order-cost-desc').value.trim();
         const v = Number(div.querySelector('.order-cost-val').value);
         if (d && v > 0) { extras += v; novosCustos.push({ descricao: d, valor: v }); }
       });
+
       const lucro = total - (custo * qtd) - extras;
       const p = productById(id_produto);
+      const custosString = novosCustos.length ? JSON.stringify(novosCustos) : '';
+
       try {
         startLoad();
-        await apiPost({ action:'update', sheet:'Vendas', data: { id: idVenda, id_produto, sku_variacao: `${p.sku}-${numero}`, numero, quantidade: qtd, valor_venda: total, data_venda: vAntiga?.data_venda || new Date().toISOString(), cliente, observacao: obs, custo_unitario: custo, lucro, status_pagamento: status } });
-        await apiPost({ action:'deleteWhere', sheet:'Custos', coluna:'id_venda', valor: idVenda });
-        for (const c of novosCustos) await apiPost({ action:'append', sheet:'Custos', data: { id: uuid(), id_venda: idVenda, descricao: c.descricao, valor: c.valor } });
+        await apiPost({
+          action: 'update', sheet: 'Vendas',
+          data: {
+            id: idVenda, id_produto,
+            sku_variacao: `${p.sku}-${numero}`, numero,
+            quantidade: qtd, valor_venda: total,
+            data_venda: vAntiga?.data_venda || new Date().toISOString(),
+            cliente, observacao: obs, custo_unitario: custo, lucro,
+            status_pagamento: status,
+            custos_extras: custosString
+          }
+        });
         notify('Venda atualizada!');
         editingSaleId = null; orderFormPanel.hidden = true;
         await loadAll();
-      } catch (err) { notify('Erro ao atualizar: ' + err.message, true); endLoad(); }
+      } catch (err) {
+        notify('Erro ao atualizar: ' + err.message, true);
+        endLoad();
+      }
     }, true);
 
+    // ===== Submit em modo EDIÇÃO — Pedido =====
     document.getElementById('requestForm').addEventListener('submit', async e => {
       if (!editingRequestId) return;
       e.preventDefault(); e.stopImmediatePropagation();
+
       const idPed = editingRequestId;
       const antigo = requests.find(x => String(x.id) === String(idPed));
       const cliente = document.getElementById('reqClient').value;
@@ -2049,15 +2079,27 @@ custosParaEditar.forEach(c => {
       const obs = document.getElementById('reqNote').value;
       const status = document.getElementById('reqStatus').value;
       const p = productById(id_produto);
+
       try {
         startLoad();
-        await apiPost({ action:'update', sheet:'Pedidos', data: { id: idPed, cliente, id_produto, sku_variacao: `${p.sku}-${numero}`, numero, quantidade: qtd, valor_total: valor, custo_unitario: custo, data_pedido: antigo?.data_pedido || new Date().toISOString(), status_pedido: status, observacao: obs } });
+        await apiPost({
+          action: 'update', sheet: 'Pedidos',
+          data: {
+            id: idPed, cliente, id_produto,
+            sku_variacao: `${p.sku}-${numero}`, numero,
+            quantidade: qtd, valor_total: valor, custo_unitario: custo,
+            data_pedido: antigo?.data_pedido || new Date().toISOString(),
+            status_pedido: status, observacao: obs
+          }
+        });
         notify('Pedido atualizado!');
         editingRequestId = null; requestFormPanel.hidden = true;
         await loadAll();
-      } catch (err) { notify('Erro ao atualizar pedido: ' + err.message, true); endLoad(); }
+      } catch (err) {
+        notify('Erro ao atualizar pedido: ' + err.message, true);
+        endLoad();
+      }
     }, true);
-
     // ====== Start ======
     document.addEventListener('DOMContentLoaded', () => {
       loadAll();
