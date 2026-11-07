@@ -1643,7 +1643,6 @@ tbody.querySelectorAll('[data-view-order]').forEach(b => b.onclick = () => viewO
           <td>${r.quantidade}</td>
           <td>${money(r.valor_total)}</td>
           <td>${esc(r.status_pedido)}</td>
-          <td>
 <td>
   <button class="btn btn-light" style="padding: 4px 8px; font-size: 10px;" onclick="viewRequest('${esc(r.id)}')">Ver</button>
   <button class="btn btn-primary" style="padding: 4px 8px; font-size: 10px;" onclick="faturarPedido('${esc(r.id)}')">Faturar</button>
@@ -1834,14 +1833,10 @@ tbody.querySelectorAll('[data-view-order]').forEach(b => b.onclick = () => viewO
     const detailTitle = document.getElementById('detailTitle');
     const detailEditBtn = document.getElementById('detailEditBtn');
     const detailDeleteBtn = document.getElementById('detailDeleteBtn');
-    let detailKind = null; // 'order' ou 'request'
+    let detailKind = null;
     let detailId = null;
 
-    function fecharDetail() {
-      detailModal.style.display = 'none';
-      detailKind = null;
-      detailId = null;
-    }
+    function fecharDetail() { detailModal.style.display = 'none'; detailKind = null; detailId = null; }
     document.getElementById('detailClose')?.addEventListener('click', fecharDetail);
 
     function renderDetailRows(rows) {
@@ -1856,30 +1851,32 @@ tbody.querySelectorAll('[data-view-order]').forEach(b => b.onclick = () => viewO
     window.viewOrder = function(id) {
       const v = sales.find(x => String(x.id) === String(id));
       if (!v) return;
-      detailKind = 'order';
-      detailId = id;
-      detailTitle.textContent = 'Detalhes da Venda';
-      
+      detailKind = 'order'; detailId = id; detailTitle.textContent = 'Detalhes da Venda';
       const p = productById(v.id_produto);
       const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto excluído';
-      const custosDaVenda = orderCosts.filter(c => String(c.id_venda) === String(v.id));
-      const txtCustos = custosDaVenda.length
-        ? custosDaVenda.map(c => `• ${esc(c.descricao)}: ${money(c.valor)}`).join('<br>')
-        : '<span style="color:#b04545">Nenhum custo extra</span>';
-      const status = v.status_pagamento === 'OK' ? 'Recebido' : 'Pendente';
-      const dataStr = v.data_venda ? new Date(v.data_venda).toLocaleString('pt-BR') : '—';
+
+      let custosDaVenda = orderCosts.filter(c => String(c.id_venda).trim() === String(v.id).trim());
+      const lucroBruto = Number(v.valor_venda || 0) - (Number(v.custo_unitario || 0) * Number(v.quantidade || 0));
+      const diffExtra = lucroBruto - Number(v.lucro || 0);
+
+      let txtCustos;
+      if (custosDaVenda.length > 0) {
+        txtCustos = custosDaVenda.map(c => `• ${esc(c.descricao)}: ${money(c.valor)}`).join('<br>');
+      } else if (diffExtra > 0.01) {
+        txtCustos = `<span style="color:#a16b1e">${money(diffExtra)} (não sincronizado — clique em Recarregar)</span>`;
+      } else {
+        txtCustos = '<span style="color:#b04545">Nenhum custo extra</span>';
+      }
 
       const rows = [
-        ['Data', dataStr],
-        ['Produto', nomeProd],
-        ['SKU', esc(v.sku_variacao || '—')],
-        ['Numeração', esc(v.numero || '—')],
-        ['Quantidade', v.quantidade || 0],
+        ['Data', v.data_venda ? new Date(v.data_venda).toLocaleString('pt-BR') : '—'],
+        ['Produto', nomeProd], ['SKU', esc(v.sku_variacao || '—')],
+        ['Numeração', esc(v.numero || '—')], ['Quantidade', v.quantidade || 0],
         ['Cliente', esc(v.cliente || 'Consumidor Final')],
         ['Custo Unitário', money(v.custo_unitario)],
         ['Valor Total', `<span style="color:#27775d">${money(v.valor_venda)}</span>`],
         ['Lucro Real', `<span style="color:#27775d">${money(v.lucro)}</span>`],
-        ['Status Pagamento', status],
+        ['Status', v.status_pagamento === 'OK' ? 'Recebido' : 'Pendente'],
         ['Observação', esc(v.observacao || '—')],
         ['Custos Extras', txtCustos],
       ];
@@ -1890,112 +1887,113 @@ tbody.querySelectorAll('[data-view-order]').forEach(b => b.onclick = () => viewO
     window.viewRequest = function(id) {
       const r = requests.find(x => String(x.id) === String(id));
       if (!r) return;
-      detailKind = 'request';
-      detailId = id;
-      detailTitle.textContent = 'Detalhes do Pedido';
-
+      detailKind = 'request'; detailId = id; detailTitle.textContent = 'Detalhes do Pedido';
       const p = productById(r.id_produto);
       const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto excluído';
-      const dataStr = r.data_pedido ? new Date(r.data_pedido).toLocaleString('pt-BR') : '—';
       const custo = Number(r.custo_unitario || 0);
-      const lucro = r.valor_total - (custo * r.quantidade);
-
+      const lucro = Number(r.valor_total || 0) - (custo * Number(r.quantidade || 0));
       const rows = [
-        ['Data', dataStr],
+        ['Data', r.data_pedido ? new Date(r.data_pedido).toLocaleString('pt-BR') : '—'],
         ['Cliente', esc(r.cliente || 'Consumidor Final')],
-        ['Produto', nomeProd],
-        ['SKU', esc(r.sku_variacao || '—')],
-        ['Numeração', esc(r.numero || '—')],
-        ['Quantidade', r.quantidade || 0],
+        ['Produto', nomeProd], ['SKU', esc(r.sku_variacao || '—')],
+        ['Numeração', esc(r.numero || '—')], ['Quantidade', r.quantidade || 0],
         ['Custo Unitário', money(custo)],
         ['Valor Total', `<span style="color:#27775d">${money(r.valor_total)}</span>`],
         ['Lucro Real', `<span style="color:#27775d">${money(lucro)}</span>`],
-        ['Status Pedido', esc(r.status_pedido || '—')],
+        ['Status', esc(r.status_pedido || '—')],
         ['Observação', esc(r.observacao || '—')],
       ];
       detailBody.innerHTML = `<table style="width:100%; border-collapse:collapse;">${renderDetailRows(rows)}</table>`;
       detailModal.style.display = 'flex';
     };
 
-    detailEditBtn?.addEventListener('click', () => {
-      if (detailKind === 'order') {
-        fecharDetail();
-        // Preenche o formulário de venda com os dados existentes
-        const v = sales.find(x => String(x.id) === String(detailId));
-        if (!v) return;
-        // Aqui é edição simples: abre o form preenchido e reusa o submit da venda,
-        // mas o submit da venda faz append. Precisamos marcar edição.
-        editarVendaExistente(v);
-      } else if (detailKind === 'request') {
-        fecharDetail();
-        const r = requests.find(x => String(x.id) === String(detailId));
-        if (!r) return;
-        editarPedidoExistente(r);
-      }
-    });
-
     detailDeleteBtn?.addEventListener('click', () => {
-      if (detailKind === 'order') {
-        const id = detailId;
-        fecharDetail();
-        deleteOrder(id);
-      } else if (detailKind === 'request') {
-        const id = detailId;
-        fecharDetail();
-        deleteRequest(id);
-      }
+      const k = detailKind, id = detailId;
+      fecharDetail();
+      if (k === 'order') deleteOrder(id);
+      if (k === 'request') deleteRequest(id);
     });
 
-    // ====== Edição de Venda (reabre o form preenchido e salva como update) ======
+    // Edição
     let editingSaleId = null;
+    let editingRequestId = null;
 
     function editarVendaExistente(v) {
       editingSaleId = v.id;
       showSection('sales');
       orderFormPanel.hidden = false;
-      document.getElementById('orderProduct').value = v.id_produto;
-      // Dispara o change pra carregar numerações
-      document.getElementById('orderProduct').dispatchEvent(new Event('change'));
-      setTimeout(() => {
-        document.getElementById('orderNumber').value = v.numero || '';
-        document.getElementById('orderQty').value = v.quantidade || 1;
-        document.getElementById('orderCostUnit').value = v.custo_unitario || 0;
-        document.getElementById('orderPrice').value = v.valor_venda || 0;
-        document.getElementById('orderClient').value = v.cliente || '';
-        document.getElementById('orderNote').value = v.observacao || '';
-        document.getElementById('orderStatus').value = v.status_pagamento || 'OK';
-        calcularLucroVenda();
-        // Limpa custos anteriores e recarrega
-        document.getElementById('orderCostsList').innerHTML = '';
-        const custosDaVenda = orderCosts.filter(c => String(c.id_venda) === String(v.id));
-        custosDaVenda.forEach(c => {
-          const div = document.createElement('div');
-          div.style.display = 'flex'; div.style.gap = '10px'; div.style.marginBottom = '10px';
-          div.innerHTML = `
-            <input type="text" class="order-cost-desc" value="${esc(c.descricao)}" style="flex:2; padding:8px; border:1px solid var(--line); border-radius:6px;" />
-            <input type="number" class="order-cost-val" value="${Number(c.valor)}" min="0" step="0.01" style="flex:1; padding:8px; border:1px solid var(--line); border-radius:6px;" />
-            <button type="button" class="btn btn-danger" style="padding:8px;">X</button>
-          `;
-          div.querySelector('button').onclick = () => { div.remove(); calcularLucroVenda(); };
-          document.getElementById('orderCostsList').appendChild(div);
-        });
-        calcularLucroVenda();
-      }, 100);
+      const selProd = document.getElementById('orderProduct');
+      selProd.value = v.id_produto;
+      selProd.dispatchEvent(new Event('change', { bubbles: true }));
+      document.getElementById('orderNumber').value = v.numero || '';
+      document.getElementById('orderQty').value = v.quantidade || 1;
+      document.getElementById('orderCostUnit').value = v.custo_unitario || 0;
+      document.getElementById('orderPrice').value = v.valor_venda || 0;
+      document.getElementById('orderNote').value = v.observacao || '';
+      document.getElementById('orderStatus').value = v.status_pagamento || 'OK';
+      const selCli = document.getElementById('orderClient');
+      if (v.cliente) {
+        const opt = Array.from(selCli.options).find(o => o.value === v.cliente);
+        if (!opt) { const n = new Option(v.cliente, v.cliente); selCli.add(n); }
+        selCli.value = v.cliente;
+      } else selCli.value = '';
+
+      const lista = document.getElementById('orderCostsList');
+      lista.innerHTML = '';
+      orderCosts.filter(c => String(c.id_venda).trim() === String(v.id).trim()).forEach(c => {
+        const div = document.createElement('div');
+        div.style.display = 'flex'; div.style.gap = '10px'; div.style.marginBottom = '10px';
+        div.innerHTML = `<input type="text" class="order-cost-desc" value="${esc(c.descricao)}" style="flex:2; padding:8px; border:1px solid var(--line); border-radius:6px;" /><input type="number" class="order-cost-val" value="${Number(c.valor)}" min="0" step="0.01" style="flex:1; padding:8px; border:1px solid var(--line); border-radius:6px;" /><button type="button" class="btn btn-danger" style="padding:8px;">X</button>`;
+        div.querySelector('button').onclick = () => { div.remove(); calcularLucroVenda(); };
+        lista.appendChild(div);
+      });
+
+      calcularLucroVenda();
+      setTimeout(() => document.getElementById('orderFormPanel').scrollIntoView({ behavior:'smooth', block:'start' }), 50);
     }
 
-    // Quando salvar uma venda que está sendo editada, usa update em vez de append
-    // Vamos interceptar antes do listener original. Adicionamos um listener extra
-    // que roda ANTES se detectar editingSaleId, salva como update e retorna.
-    // Estratégia: sobrescrever o comportamento com um listener capturante.
+    function editarPedidoExistente(r) {
+      editingRequestId = r.id;
+      showSection('orders');
+      requestFormPanel.hidden = false;
+      const selProd = document.getElementById('reqProduct');
+      selProd.value = r.id_produto;
+      selProd.dispatchEvent(new Event('change', { bubbles: true }));
+      document.getElementById('reqNumber').value = r.numero || '';
+      document.getElementById('reqQty').value = r.quantidade || 1;
+      document.getElementById('reqCostUnit').value = r.custo_unitario || 0;
+      document.getElementById('reqPrice').value = r.valor_total || 0;
+      document.getElementById('reqNote').value = r.observacao || '';
+      document.getElementById('reqStatus').value = r.status_pedido || 'Em preparo';
+      const selCli = document.getElementById('reqClient');
+      if (r.cliente) {
+        const opt = Array.from(selCli.options).find(o => o.value === r.cliente);
+        if (!opt) { const n = new Option(r.cliente, r.cliente); selCli.add(n); }
+        selCli.value = r.cliente;
+      } else selCli.value = '';
+      calcularLucroPedido();
+      setTimeout(() => document.getElementById('requestFormPanel').scrollIntoView({ behavior:'smooth', block:'start' }), 50);
+    }
+
+    detailEditBtn?.addEventListener('click', () => {
+      const k = detailKind, id = detailId;
+      fecharDetail();
+      if (k === 'order') {
+        const v = sales.find(x => String(x.id) === String(id));
+        if (v) editarVendaExistente(v);
+      }
+      if (k === 'request') {
+        const r = requests.find(x => String(x.id) === String(id));
+        if (r) editarPedidoExistente(r);
+      }
+    });
+
+    // Captura submit em modo edição
     document.getElementById('orderForm').addEventListener('submit', async e => {
-      if (!editingSaleId) return; // deixa o listener original rodar
-      e.preventDefault();
-      e.stopImmediatePropagation();
-
+      if (!editingSaleId) return;
+      e.preventDefault(); e.stopImmediatePropagation();
       const idVenda = editingSaleId;
-      const vendaAntiga = sales.find(x => String(x.id) === String(idVenda));
-      if (!vendaAntiga) { editingSaleId = null; notify('Venda original não encontrada.', true); return; }
-
+      const vAntiga = sales.find(x => String(x.id) === String(idVenda));
       const id_produto = document.getElementById('orderProduct').value;
       const numero = document.getElementById('orderNumber').value;
       const qtd = Number(document.getElementById('orderQty').value);
@@ -2004,79 +2002,30 @@ tbody.querySelectorAll('[data-view-order]').forEach(b => b.onclick = () => viewO
       const cliente = document.getElementById('orderClient').value.trim();
       const obs = document.getElementById('orderNote').value.trim();
       const status = document.getElementById('orderStatus').value;
-
-      let extras = 0;
-      const custosNovos = [];
+      let extras = 0; const novosCustos = [];
       document.querySelectorAll('#orderCostsList > div').forEach(div => {
-        const desc = div.querySelector('.order-cost-desc').value.trim();
-        const val = Number(div.querySelector('.order-cost-val').value);
-        if (desc && val > 0) { extras += val; custosNovos.push({ descricao: desc, valor: val }); }
+        const d = div.querySelector('.order-cost-desc').value.trim();
+        const v = Number(div.querySelector('.order-cost-val').value);
+        if (d && v > 0) { extras += v; novosCustos.push({ descricao: d, valor: v }); }
       });
       const lucro = total - (custo * qtd) - extras;
       const p = productById(id_produto);
-      const skuVar = `${p.sku}-${numero}`;
-
       try {
         startLoad();
-        // Update da venda
-        await apiPost({
-          action: 'update', sheet: 'Vendas',
-          data: {
-            id: idVenda,
-            id_produto, sku_variacao: skuVar, numero,
-            quantidade: qtd, valor_venda: total,
-            data_venda: vendaAntiga.data_venda,
-            cliente, observacao: obs,
-            custo_unitario: custo, lucro,
-            status_pagamento: status
-          }
-        });
-        // Apaga custos antigos e recria
-        await apiPost({ action: 'deleteWhere', sheet: 'Custos', coluna: 'id_venda', valor: idVenda });
-        for (const c of custosNovos) {
-          await apiPost({ action: 'append', sheet: 'Custos',
-            data: { id: uuid(), id_venda: idVenda, descricao: c.descricao, valor: c.valor } });
-        }
+        await apiPost({ action:'update', sheet:'Vendas', data: { id: idVenda, id_produto, sku_variacao: `${p.sku}-${numero}`, numero, quantidade: qtd, valor_venda: total, data_venda: vAntiga?.data_venda || new Date().toISOString(), cliente, observacao: obs, custo_unitario: custo, lucro, status_pagamento: status } });
+        await apiPost({ action:'deleteWhere', sheet:'Custos', coluna:'id_venda', valor: idVenda });
+        for (const c of novosCustos) await apiPost({ action:'append', sheet:'Custos', data: { id: uuid(), id_venda: idVenda, descricao: c.descricao, valor: c.valor } });
         notify('Venda atualizada!');
-        editingSaleId = null;
-        orderFormPanel.hidden = true;
+        editingSaleId = null; orderFormPanel.hidden = true;
         await loadAll();
-      } catch (err) {
-        notify('Erro ao atualizar venda: ' + err.message, true);
-        endLoad();
-      }
+      } catch (err) { notify('Erro ao atualizar: ' + err.message, true); endLoad(); }
     }, true);
-
-    // ====== Edição de Pedido ======
-    let editingRequestId = null;
-
-    function editarPedidoExistente(r) {
-      editingRequestId = r.id;
-      showSection('orders');
-      requestFormPanel.hidden = false;
-      document.getElementById('reqProduct').value = r.id_produto;
-      document.getElementById('reqProduct').dispatchEvent(new Event('change'));
-      setTimeout(() => {
-        document.getElementById('reqNumber').value = r.numero || '';
-        document.getElementById('reqQty').value = r.quantidade || 1;
-        document.getElementById('reqCostUnit').value = r.custo_unitario || 0;
-        document.getElementById('reqPrice').value = r.valor_total || 0;
-        document.getElementById('reqClient').value = r.cliente || '';
-        document.getElementById('reqNote').value = r.observacao || '';
-        document.getElementById('reqStatus').value = r.status_pedido || 'Em preparo';
-        calcularLucroPedido();
-      }, 100);
-    }
 
     document.getElementById('requestForm').addEventListener('submit', async e => {
       if (!editingRequestId) return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-
-      const idPedido = editingRequestId;
-      const pedidoAntigo = requests.find(x => String(x.id) === String(idPedido));
-      if (!pedidoAntigo) { editingRequestId = null; notify('Pedido original não encontrado.', true); return; }
-
+      e.preventDefault(); e.stopImmediatePropagation();
+      const idPed = editingRequestId;
+      const antigo = requests.find(x => String(x.id) === String(idPed));
       const cliente = document.getElementById('reqClient').value;
       const id_produto = document.getElementById('reqProduct').value;
       const numero = document.getElementById('reqNumber').value;
@@ -2086,29 +2035,13 @@ tbody.querySelectorAll('[data-view-order]').forEach(b => b.onclick = () => viewO
       const obs = document.getElementById('reqNote').value;
       const status = document.getElementById('reqStatus').value;
       const p = productById(id_produto);
-
       try {
         startLoad();
-        await apiPost({
-          action: 'update', sheet: 'Pedidos',
-          data: {
-            id: idPedido,
-            cliente, id_produto,
-            sku_variacao: `${p.sku}-${numero}`,
-            numero, quantidade: qtd,
-            valor_total: valor, custo_unitario: custo,
-            data_pedido: pedidoAntigo.data_pedido,
-            status_pedido: status, observacao: obs
-          }
-        });
+        await apiPost({ action:'update', sheet:'Pedidos', data: { id: idPed, cliente, id_produto, sku_variacao: `${p.sku}-${numero}`, numero, quantidade: qtd, valor_total: valor, custo_unitario: custo, data_pedido: antigo?.data_pedido || new Date().toISOString(), status_pedido: status, observacao: obs } });
         notify('Pedido atualizado!');
-        editingRequestId = null;
-        requestFormPanel.hidden = true;
+        editingRequestId = null; requestFormPanel.hidden = true;
         await loadAll();
-      } catch (err) {
-        notify('Erro ao atualizar pedido: ' + err.message, true);
-        endLoad();
-      }
+      } catch (err) { notify('Erro ao atualizar pedido: ' + err.message, true); endLoad(); }
     }, true);
 
     // ====== Start ======
