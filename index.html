@@ -274,7 +274,7 @@
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script>
+    <script>
     // ====== CONFIG ======
     const API_URL = 'https://script.google.com/macros/s/AKfycbx03IKIX_yOZK5CaiQgv5E_J_Xo9a6SU_s59MAv_G9bTmWY3zfmcnCuv5fENQrj2eVm/exec';
 
@@ -287,6 +287,7 @@
     const money = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const uuid = () => (crypto?.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(36).slice(2,8));
+    
     // Controle da barra de progresso
     const progressBar = document.getElementById('progressBar');
     function startLoad() { progressBar.className = 'active loading'; }
@@ -322,12 +323,13 @@
 
     // ====== API ======
     async function apiRead(sheet) {
-      const url = API_URL + '?action=read&sheet=' + encodeURIComponent(sheet);
-      const res = await fetch(url);
+      const url = API_URL + '?action=read&sheet=' + encodeURIComponent(sheet) + '&t=' + Date.now(); // Escudo contra cache
+      const res = await fetch(url, { cache: 'no-store' }); // Escudo contra cache
       const json = await res.json();
       if (json.error) throw new Error(json.error);
       return json.data || [];
     }
+    
     async function apiPost(payload) {
       const res = await fetch(API_URL, {
         method: 'POST',
@@ -340,22 +342,23 @@
     }
 
     async function loadAll() {
-      startLoad(); // <--- ADICIONE ESTA LINHA
+      startLoad();
       try {
         setConnection(true);
         const [p, s, v] = await Promise.all([
           apiRead('Produtos'), apiRead('Estoque'), apiRead('Vendas')
         ]);
-        products = p.filter(x => x.id);
-        stock = s.filter(x => x.id_produto);
-        sales = v.filter(x => x.id);
+        // Filtro à prova de falhas: só aceita se tiver ID
+        products = p.filter(x => x && x.id && String(x.id).trim() !== '');
+        stock = s.filter(x => x && x.id_produto && String(x.id_produto).trim() !== '');
+        sales = v.filter(x => x && x.id && String(x.id).trim() !== '');
         setConnection(true);
         renderAll();
       } catch (err) {
         setConnection(false, err.message);
         notify('Falha ao carregar: ' + err.message, true);
       } finally {
-        endLoad(); // <--- ADICIONE ESTA LINHA
+        endLoad();
       }
     }
 
@@ -451,32 +454,39 @@
     });
     document.getElementById('cancelFormBtn').addEventListener('click', () => { formPanel.hidden = true; resetForm(); });
 
+    // =========================================================================
+    // AQUI ESTÁ A CORREÇÃO DO ENVIO (SUBMIT) PARA NÃO PERDER O SKU E CATEGORIA
+    // =========================================================================
     document.getElementById('productForm').addEventListener('submit', async e => {
       e.preventDefault();
       const id = document.getElementById('editId').value;
       const marca = document.getElementById('productBrand').value.trim();
       const modelo = document.getElementById('productModel').value.trim();
       const cor = document.getElementById('productColor').value.trim();
-      let sku = document.getElementById('productSku').value.trim();
+      const categoria = document.getElementById('productCategory').value;
       
-      // Se o campo estiver vazio, gera o SKU e coloca de volta no campo visualmente
+      let sku = document.getElementById('productSku').value.trim();
       if (!sku) {
         sku = generateSku(marca, modelo, cor);
         document.getElementById('productSku').value = sku;
       }
+      
       const grade = document.getElementById('productGrade').value.trim();
 
       const dup = products.find(p => String(p.sku).toUpperCase() === sku.toUpperCase() && String(p.id) !== String(id));
       if (dup) { notify('SKU já existe: ' + sku, true); return; }
 
+      // Monta o objeto EXATAMENTE com as chaves que o Apps Script espera
       const data = {
         id: id || uuid(),
-        sku,
-        categoria: document.getElementById('productCategory').value,
-        marca, modelo, cor,
+        sku: sku,
+        categoria: categoria,
+        marca: marca, 
+        modelo: modelo, 
+        cor: cor,
         genero: document.getElementById('productGender').value,
         colecao: document.getElementById('productCollection').value.trim(),
-        grade,
+        grade: grade,
         custo: Number(document.getElementById('productCost').value || 0),
         preco_venda: Number(document.getElementById('productPrice').value || 0),
         estoque_minimo: Number(document.getElementById('productMinStock').value || 0),
@@ -491,7 +501,6 @@
         } else {
           await apiPost({ action: 'append', sheet: 'Produtos', data });
 
-          // Cria automaticamente as linhas de Estoque para cada número da grade
           const numeros = grade.split(',').map(n => n.trim()).filter(Boolean);
           for (const num of numeros) {
             await apiPost({
@@ -499,7 +508,7 @@
               data: {
                 id: uuid(),
                 id_produto: data.id,
-                sku_variacao: `${sku}-${num}`, // <-- AQUI GERA O SKU FILHO
+                sku_variacao: `${sku}-${num}`,
                 numero: num,
                 quantidade: 0,
                 vendidos: 0,
@@ -512,7 +521,7 @@
         formPanel.hidden = true; resetForm(); await loadAll();
       } catch (err) { 
         notify('Erro: ' + err.message, true); 
-        endLoad(); // <-- GARANTE QUE A BARRA SUMA SE DER ERRO
+        endLoad();
       }
     });
 
@@ -544,20 +553,16 @@
       const p = productById(id); if (!p) return;
       if (!confirm(`Excluir ${p.marca} ${p.modelo}?\n\nATENÇÃO: Todas as numerações de estoque deste produto também serão apagadas.`)) return;
       
-      startLoad(); // <--- Adiciona barra
+      startLoad();
       try {
-        // 1. Apaga o produto principal
         await apiPost({ action: 'delete', sheet: 'Produtos', id });
-        
-        // 2. Apaga TODAS as linhas da aba Estoque que tenham esse ID de produto
         await apiPost({ action: 'deleteWhere', sheet: 'Estoque', coluna: 'id_produto', valor: id });
-        
         notify('Produto e estoques excluídos com sucesso.');
         await loadAll(); 
       }
       catch (err) { 
         notify('Erro ao excluir: ' + err.message, true); 
-        endLoad(); // <--- Fecha barra se der erro
+        endLoad();
       }
     }
 
@@ -580,12 +585,11 @@
       const quantidade = Number(document.getElementById('stockQty').value || 0);
       if (!id_produto || !numero) { notify('Preencha produto e numeração.', true); return; }
       
-      startLoad(); // <-- BARRA DE CARREGAMENTO INICIADA
+      startLoad();
       try {
         const existing = stock.find(s => String(s.id_produto) === String(id_produto) && String(s.numero) === numero);
         const p = productById(id_produto);
         const skuPai = p ? (p.sku || generateSku(p.marca, p.modelo, p.cor)) : 'SKU';
-        
         
         const data = {
           id: existing ? existing.id : uuid(),
@@ -605,11 +609,9 @@
         await loadAll();
       } catch (err) { 
         notify('Erro: ' + err.message, true); 
-        endLoad(); // <-- ADICIONE AQUI
+        endLoad();
       }
     });
-
-    // ====== Start ======
 
     // ====== Limpar estoques órfãos ======
     document.getElementById('cleanOrphansBtn').addEventListener('click', async () => {
@@ -631,9 +633,8 @@
       }
     });
 
-    // ====== Gerar Estoque Faltante (COLE O CÓDIGO 3 AQUI) ======
+    // ====== Gerar Estoque Faltante ======
     document.getElementById('fixOrphansBtn').addEventListener('click', async () => {
-      // Encontra produtos que não têm NENHUMA linha na tabela de estoque
       const orfaos = products.filter(p => stockForProduct(p.id).length === 0);
       
       if (orfaos.length === 0) {
@@ -646,7 +647,7 @@
       let count = 0;
       try {
         for (const p of orfaos) {
-          const grade = p.grade || '37,38,39,40'; // Se o produto antigo não tiver grade, usa uma padrão
+          const grade = p.grade || '37,38,39,40';
           const numeros = grade.split(',').map(n => n.trim()).filter(Boolean);
           
           for (const num of numeros) {
@@ -674,6 +675,7 @@
 
     // ====== Start ======
     loadAll();
+
   </script>
 </body>
 </html>
