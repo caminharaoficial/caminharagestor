@@ -283,6 +283,9 @@
 
                 <div class="field"><label for="orderCostUnit">Custo Unitário (R$) *</label><input id="orderCostUnit" type="number" min="0" step="0.01" required placeholder="0,00"/></div>
                 <div class="field"><label for="orderPrice">Valor Total (R$) *</label><input id="orderPrice" type="number" min="0" step="0.01" required placeholder="0,00"/></div>
+                <div class="field"><label>Lucro Real</label>
+                  <input id="orderLucroReal" readonly style="background:#e6f4ea; color:#27775d; font-weight:700;" value="R$ 0,00"/>
+                </div>
                 <div class="field">
                   <label for="orderClient">Cliente</label>
                   <div style="display:flex; gap:6px;">
@@ -369,6 +372,9 @@
                 <div class="field"><label for="reqQty">Qtd *</label><input id="reqQty" type="number" min="1" value="1" required/></div>
                 <div class="field"><label for="reqCostUnit">Custo Unitário (R$) *</label><input id="reqCostUnit" type="number" min="0" step="0.01" required/></div>
                 <div class="field"><label for="reqPrice">Valor Total (R$) *</label><input id="reqPrice" type="number" min="0" step="0.01" required/></div>
+                <div class="field"><label>Lucro Real</label>
+                  <input id="reqLucroReal" readonly style="background:#e6f4ea; color:#27775d; font-weight:700;" value="R$ 0,00"/>
+                </div>
                 <div class="field"><label for="reqPayment">Forma de Pagamento</label>
                   <select id="reqPayment">
                     <option value="Dinheiro">Dinheiro</option>
@@ -1752,6 +1758,55 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
         if (sel) sel.value = nome;
       } catch (err) { notify('Erro: ' + err.message, true); endLoad(); }
     });
+
+    // ====== Lucro Real em tempo real ======
+    function calcularLucroVenda() {
+      const qtd = Number(document.getElementById('orderQty')?.value || 0);
+      const custo = Number(document.getElementById('orderCostUnit')?.value || 0);
+      const total = Number(document.getElementById('orderPrice')?.value || 0);
+      let extras = 0;
+      document.querySelectorAll('#orderCostsList > div').forEach(div => {
+        const val = Number(div.querySelector('.order-cost-val')?.value || 0);
+        if (val > 0) extras += val;
+      });
+      const lucro = total - (custo * qtd) - extras;
+      const el = document.getElementById('orderLucroReal');
+      if (el) {
+        el.value = money(lucro);
+        el.style.color = lucro >= 0 ? '#27775d' : '#b04545';
+        el.style.background = lucro >= 0 ? '#e6f4ea' : '#fce8e8';
+      }
+    }
+
+    function calcularLucroPedido() {
+      const qtd = Number(document.getElementById('reqQty')?.value || 0);
+      const custo = Number(document.getElementById('reqCostUnit')?.value || 0);
+      const total = Number(document.getElementById('reqPrice')?.value || 0);
+      const lucro = total - (custo * qtd);
+      const el = document.getElementById('reqLucroReal');
+      if (el) {
+        el.value = money(lucro);
+        el.style.color = lucro >= 0 ? '#27775d' : '#b04545';
+        el.style.background = lucro >= 0 ? '#e6f4ea' : '#fce8e8';
+      }
+    }
+
+    // Eventos Vendas
+    ['orderQty','orderCostUnit','orderPrice'].forEach(id => {
+      document.getElementById(id)?.addEventListener('input', calcularLucroVenda);
+    });
+    document.getElementById('orderCostsList')?.addEventListener('input', calcularLucroVenda);
+    // Também atualiza ao adicionar/remover custo extra
+    document.getElementById('addOrderCostBtn')?.addEventListener('click', () => setTimeout(calcularLucroVenda, 50));
+
+    // Eventos Pedidos
+    ['reqQty','reqCostUnit','reqPrice'].forEach(id => {
+      document.getElementById(id)?.addEventListener('input', calcularLucroPedido);
+    });
+    // Atualiza quando escolhe o produto (o custo é preenchido automaticamente)
+    document.getElementById('reqProduct')?.addEventListener('change', () => setTimeout(calcularLucroPedido, 50));
+    // Atualiza quando escolhe o produto na venda também
+    document.getElementById('orderProduct')?.addEventListener('change', () => setTimeout(calcularLucroVenda, 50));
 
     // ====== Start ======
     document.addEventListener('DOMContentLoaded', () => {
