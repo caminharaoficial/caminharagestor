@@ -243,8 +243,40 @@
         </section>
 
         <section class="section" id="orders">
-          <div class="page-heading"><div><h1>Pedidos</h1><p class="subtitle">Fluxo de vendas (em construção).</p></div></div>
-          <div class="panel"><div class="table-empty">Módulo de pedidos será implementado na próxima etapa.</div></div>
+          <div class="page-heading">
+            <div><h1>Pedidos e Vendas</h1><p class="subtitle">Registre as saídas e acompanhe o faturamento.</p></div>
+            <button class="btn btn-primary" id="newOrderBtn">＋ Registrar Venda</button>
+          </div>
+
+          <!-- Formulário de Nova Venda -->
+          <div class="panel" id="orderFormPanel" hidden style="margin-bottom:18px">
+            <div class="panel-head"><div><h2>Registrar nova venda</h2><div class="panel-desc">A baixa no estoque será automática.</div></div></div>
+            <form id="orderForm">
+              <div class="form-grid">
+                <div class="field"><label for="orderProduct">Produto *</label><select id="orderProduct" required></select></div>
+                <div class="field"><label for="orderNumber">Numeração *</label><select id="orderNumber" required></select></div>
+                <div class="field"><label for="orderQty">Quantidade *</label><input id="orderQty" type="number" min="1" step="1" value="1" required /></div>
+                <div class="field"><label for="orderPrice">Valor Total da Venda (R$) *</label><input id="orderPrice" type="number" min="0" step="0.01" required placeholder="0,00"/></div>
+                <div class="field"><label for="orderClient">Nome do Cliente</label><input id="orderClient" maxlength="80" placeholder="Ex.: Maria Silva"/></div>
+                <div class="field"><label for="orderNote">Observação</label><input id="orderNote" maxlength="100" placeholder="Ex.: Pago no Pix"/></div>
+              </div>
+              <div class="form-actions">
+                <button class="btn btn-primary" type="submit">Confirmar Venda</button>
+                <button class="btn btn-light" type="button" id="cancelOrderBtn">Cancelar</button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Histórico de Vendas -->
+          <section class="panel">
+            <div class="panel-head"><div><h2>Histórico de Vendas</h2><div class="panel-desc">Últimas transações registradas.</div></div></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Data</th><th>Produto</th><th>Num.</th><th>Qtd.</th><th>Valor Total</th><th>Cliente</th><th>Ações</th></tr></thead>
+                <tbody id="ordersTable"><tr><td colspan="7" class="table-empty">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </section>
         </section>
 
         <section class="section" id="finance">
@@ -371,7 +403,7 @@
       document.getElementById('metricProducts').textContent = products.length;
       document.getElementById('metricStock').textContent = stock.reduce((sum, s) => sum + Number(s.quantidade || 0), 0);
       document.getElementById('metricOrders').textContent = sales.length;
-      document.getElementById('metricSales').textContent = money(sales.reduce((sum, s) => sum + Number(s.valor_venda || 0) * Number(s.quantidade || 0), 0));
+      document.getElementById('metricSales').textContent = money(sales.reduce((sum, s) => sum + Number(s.valor_venda || 0), 0));
 
       const recent = [...products].slice(-5).reverse();
       document.getElementById('recentProducts').innerHTML = recent.length
@@ -381,6 +413,8 @@
       renderProducts();
       renderStock();
       fillProductSelect();
+      renderOrders();         // <--- ADICIONE ESTA LINHA
+      fillOrderProducts();    // <--- ADICIONE ESTA LINHA
     }
 
     function renderProducts() {
@@ -672,6 +706,188 @@
         notify('Erro ao gerar: ' + err.message, true);
       }
     });
+
+    // ====== Vendas (Pedidos) ======
+    const orderFormPanel = document.getElementById('orderFormPanel');
+    
+    // Preenche o select de produtos na tela de vendas
+    function fillOrderProducts() {
+      const sel = document.getElementById('orderProduct');
+      if (!sel) return;
+      sel.innerHTML = '<option value="">— Selecione o Produto —</option>' + products.map(p => `<option value="${esc(p.id)}" data-price="${p.preco_venda}">${esc(p.marca)} ${esc(p.modelo)} ${p.cor ? '· ' + esc(p.cor) : ''}</option>`).join('');
+    }
+
+    // Atualiza as numerações disponíveis quando o produto é escolhido
+    document.getElementById('orderProduct')?.addEventListener('change', function() {
+      const idProd = this.value;
+      const numSelect = document.getElementById('orderNumber');
+      const priceInput = document.getElementById('orderPrice');
+      
+      if (!idProd) {
+        numSelect.innerHTML = '<option value="">— Escolha o produto primeiro —</option>';
+        priceInput.value = '';
+        return;
+      }
+
+      // Pega o preço do produto
+      const prod = productById(idProd);
+      if (prod) priceInput.value = prod.preco_venda;
+
+      // Pega as numerações que têm estoque > 0
+      const nums = stockForProduct(idProd).filter(s => Number(s.quantidade) > 0);
+      
+      if (nums.length === 0) {
+        numSelect.innerHTML = '<option value="">— Sem estoque para este produto —</option>';
+      } else {
+        numSelect.innerHTML = '<option value="">— Selecione a Numeração —</option>' + nums.map(s => `<option value="${esc(s.numero)}">${esc(s.numero)} (${s.quantidade} disp.)</option>`).join('');
+      }
+    });
+
+    // Abrir/Fechar formulário
+    document.getElementById('newOrderBtn')?.addEventListener('click', () => {
+      document.getElementById('orderForm').reset();
+      fillOrderProducts();
+      document.getElementById('orderNumber').innerHTML = '<option value="">— Escolha o produto primeiro —</option>';
+      orderFormPanel.hidden = false;
+      orderFormPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    document.getElementById('cancelOrderBtn')?.addEventListener('click', () => { 
+      orderFormPanel.hidden = true; 
+    });
+
+    // SUBMIT DA VENDA
+    document.getElementById('orderForm')?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const id_produto = document.getElementById('orderProduct').value;
+      const numero = document.getElementById('orderNumber').value;
+      const qtdVendida = Number(document.getElementById('orderQty').value);
+      const valorTotal = Number(document.getElementById('orderPrice').value);
+      const cliente = document.getElementById('orderClient').value.trim();
+      const obs = document.getElementById('orderNote').value.trim();
+
+      if (!id_produto || !numero || qtdVendida <= 0) { 
+        notify('Preencha todos os campos corretamente.', true); 
+        return; 
+      }
+
+      // Encontra o item no estoque para descontar
+      const estoqueItem = stock.find(s => String(s.id_produto) === String(id_produto) && String(s.numero) === String(numero));
+      
+      if (!estoqueItem || Number(estoqueItem.quantidade) < qtdVendida) {
+        notify('Estoque insuficiente para esta numeração.', true);
+        return;
+      }
+
+      const p = productById(id_produto);
+      const skuVar = estoqueItem.sku_variacao || `${p.sku}-${numero}`;
+      
+      try {
+        startLoad();
+
+        // 1. Salva a venda na aba Vendas
+        await apiPost({
+          action: 'append', sheet: 'Vendas',
+          data: {
+            id: uuid(),
+            id_produto: id_produto,
+            sku_variacao: skuVar,
+            numero: numero,
+            quantidade: qtdVendida,
+            valor_venda: valorTotal,
+            data_venda: new Date().toISOString(),
+            cliente: cliente,
+            observacao: obs
+          }
+        });
+
+        // 2. Desconta do estoque (quantidade) e soma nos vendidos
+        const novaQtd = Number(estoqueItem.quantidade) - qtdVendida;
+        const novosVendidos = Number(estoqueItem.vendidos || 0) + qtdVendida;
+        
+        await apiPost({
+          action: 'update', sheet: 'Estoque',
+          data: {
+            ...estoqueItem, // mantém todos os outros dados iguais
+            quantidade: novaQtd,
+            vendidos: novosVendidos,
+            atualizado_em: new Date().toISOString()
+          }
+        });
+
+        notify('Venda registrada e estoque atualizado!');
+        orderFormPanel.hidden = true;
+        await loadAll(); // Recarrega tudo para atualizar o Dashboard e as tabelas
+        
+      } catch (err) {
+        notify('Erro ao registrar venda: ' + err.message, true);
+        endLoad();
+      }
+    });
+
+    // Renderiza a tabela de histórico de vendas
+    function renderOrders() {
+      const tbody = document.getElementById('ordersTable');
+      if (!tbody) return;
+      
+      // Ordena da mais recente para a mais antiga
+      const sorted = [...sales].sort((a, b) => new Date(b.data_venda) - new Date(a.data_venda));
+      
+      tbody.innerHTML = sorted.length ? sorted.map(v => {
+        const p = productById(v.id_produto);
+        const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto Excluído';
+        const dataStr = v.data_venda ? new Date(v.data_venda).toLocaleString('pt-BR') : '—';
+        
+        return `<tr>
+          <td>${dataStr}</td>
+          <td><strong>${nomeProd}</strong><br><small style="color:#738091">${esc(v.sku_variacao)}</small></td>
+          <td>${esc(v.numero)}</td>
+          <td>${v.quantidade}</td>
+          <td><strong>${money(v.valor_venda)}</strong></td>
+          <td>${esc(v.cliente || '—')}</td>
+          <td><button class="btn btn-danger" data-del-order="${esc(v.id)}" style="padding:6px 9px">Excluir</button></td>
+        </tr>`;
+      }).join('') : '<tr><td colspan="7" class="table-empty">Nenhuma venda registrada ainda.</td></tr>';
+
+      // Lógica para excluir venda (devolve ao estoque)
+      tbody.querySelectorAll('[data-del-order]').forEach(b => b.onclick = () => deleteOrder(b.dataset.delOrder));
+    }
+
+    async function deleteOrder(idVenda) {
+      const venda = sales.find(v => String(v.id) === String(idVenda));
+      if (!venda) return;
+
+      if (!confirm(`Excluir esta venda de ${venda.quantidade}x ${venda.sku_variacao}?\n\nO estoque será DEVOLVIDO automaticamente.`)) return;
+
+      startLoad();
+      try {
+        // 1. Apaga a venda
+        await apiPost({ action: 'delete', sheet: 'Vendas', id: idVenda });
+        
+        // 2. Devolve ao estoque
+        const estoqueItem = stock.find(s => String(s.id_produto) === String(venda.id_produto) && String(s.numero) === String(venda.numero));
+        if (estoqueItem) {
+          const qtdDevolvida = Number(estoqueItem.quantidade) + Number(venda.quantidade);
+          const vendidosAtualizados = Math.max(0, Number(estoqueItem.vendidos) - Number(venda.quantidade));
+          
+          await apiPost({
+            action: 'update', sheet: 'Estoque',
+            data: {
+              ...estoqueItem,
+              quantidade: qtdDevolvida,
+              vendidos: vendidosAtualizados,
+              atualizado_em: new Date().toISOString()
+            }
+          });
+        }
+        
+        notify('Venda excluída e estoque devolvido.');
+        await loadAll();
+      } catch (err) {
+        notify('Erro ao excluir venda: ' + err.message, true);
+        endLoad();
+      }
+    }
 
     // ====== Start ======
     loadAll();
