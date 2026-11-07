@@ -188,7 +188,7 @@
             <div><h1>Produtos</h1><p class="subtitle">Cadastre e consulte os produtos. Dados salvos no Google Sheets.</p></div>
             <button class="btn btn-primary" id="newProductBtn">＋ Novo produto</button>
           </div>
-          <div class="panel" id="productFormPanel" hidden style="margin-bottom:18px">
+<div class="panel" id="productFormPanel" style="margin-bottom:18px">
             <div class="panel-head"><div><h2 id="formTitle">Cadastrar produto</h2><div class="panel-desc">Campos com * são obrigatórios.</div></div></div>
             <form id="productForm">
               <input type="hidden" id="editId" />
@@ -249,7 +249,7 @@
           </div>
 
           <!-- Formulário de Nova Venda -->
-          <div class="panel" id="orderFormPanel" hidden style="margin-bottom:18px">
+<div class="panel" id="orderFormPanel" style="margin-bottom:18px">
             <div class="panel-head"><div><h2>Registrar nova venda</h2><div class="panel-desc">A baixa no estoque será automática.</div></div></div>
             <form id="orderForm">
               <div class="form-grid">
@@ -891,7 +891,9 @@
 
 
     // ====== Start ======
-    window.addEventListener('load', loadAll);
+    document.addEventListener('DOMContentLoaded', () => {
+      loadAll();
+    });
 
   </script>
 </body>
