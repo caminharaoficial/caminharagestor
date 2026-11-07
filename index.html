@@ -343,7 +343,7 @@
               <div class="field"><label>Loja</label><input value="CAMINHARA Loja Virtual" readonly/></div>
               <div class="field"><label>Versão</label><input value="0.2 — Google Sheets" readonly/></div>
               <div class="field"><label>Armazenamento</label><input value="Google Sheets (via Apps Script)" readonly/></div>
-              <div class="field"><label>Abas</label><input value="Produtos · Estoque · Vendas" readonly/></div>
+              <div class="field"><label>Abas</label><input value="Produtos · Estoque · Vendas · Despesas" readonly/></div>
             </div>
             <div class="form-actions"><button class="btn btn-light" id="reloadSettingsBtn">Recarregar dados do Sheets</button></div>
           </div>
@@ -361,6 +361,7 @@
     let products = [];
     let stock = [];
     let sales = [];
+    let expenses = [];     // <-- ADICIONE ESTA LINHA AQUI
     let connected = false;
 
     const money = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
