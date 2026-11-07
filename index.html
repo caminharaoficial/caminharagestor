@@ -775,10 +775,10 @@
         if (id) {
           await apiPost({ action: 'update', sheet: 'Produtos', data });
           
-          // CORREÇÃO: Se editou o produto, recria a grade no estoque para não faltar numeração nova
           const numeros = grade.split(',').map(n => n.trim()).filter(Boolean);
           const existingStock = stockForProduct(id);
           
+          // 1. Adiciona as numerações novas que ainda não existem
           for (const num of numeros) {
             const hasNum = existingStock.find(s => String(s.numero) === String(num));
             if (!hasNum) {
@@ -792,6 +792,16 @@
               });
             }
           }
+          
+          // 2. CORREÇÃO: Apaga as numerações que foram removidas da grade
+          for (const item of existingStock) {
+            const stillInGrade = numeros.includes(String(item.numero));
+            // Se o número não está mais na grade E não tem vendas, apaga
+            if (!stillInGrade && Number(item.vendidos || 0) === 0) {
+              await apiPost({ action: 'delete', sheet: 'Estoque', id: item.id });
+            }
+          }
+          
           notify('Produto atualizado e grade conferida.');
         } else {
           await apiPost({ action: 'append', sheet: 'Produtos', data });
