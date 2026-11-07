@@ -257,7 +257,7 @@
                 <div class="field"><label for="orderNumber">Numeração *</label><select id="orderNumber" required></select></div>
                 <div class="field"><label for="orderQty">Quantidade *</label><input id="orderQty" type="number" min="1" step="1" value="1" required /></div>
                 <div class="field"><label for="orderPrice">Valor Total da Venda (R$) *</label><input id="orderPrice" type="number" min="0" step="0.01" required placeholder="0,00"/></div>
-                <div class="field"><label for="orderClient">Nome do Cliente</label><input id="orderClient" maxlength="80" placeholder="Ex.: Maria Silva"/></div>
+<div class="field"><label for="orderClient">Cliente</label><select id="orderClient"><option value="">— Consumidor Final (Sem cadastro) —</option></select></div>
                 <div class="field"><label for="orderNote">Observação</label><input id="orderNote" maxlength="100" placeholder="Ex.: Pago no Pix"/></div>
                 <div class="field"><label for="orderStatus">Status do Pagamento</label>
                   <select id="orderStatus">
@@ -332,8 +332,36 @@
         </section>
 
         <section class="section" id="contacts">
-          <div class="page-heading"><div><h1>Clientes e fornecedores</h1><p class="subtitle">Contatos comerciais (em construção).</p></div></div>
-          <div class="panel"><div class="table-empty">Cadastro de contatos virá em etapa posterior.</div></div>
+          <div class="page-heading">
+            <div><h1>Clientes</h1><p class="subtitle">Cadastro e histórico de clientes.</p></div>
+            <button class="btn btn-primary" id="newClientBtn">＋ Novo Cliente</button>
+          </div>
+
+          <div class="panel" id="clientFormPanel" style="margin-bottom:18px">
+            <div class="panel-head"><div><h2>Cadastrar Cliente</h2><div class="panel-desc">Nome e WhatsApp são obrigatórios.</div></div></div>
+            <form id="clientForm">
+              <div class="form-grid">
+                <div class="field"><label for="clientName">Nome Completo *</label><input id="clientName" required maxlength="100" placeholder="Ex.: Maria Silva"/></div>
+                <div class="field"><label for="clientWhatsapp">WhatsApp *</label><input id="clientWhatsapp" required maxlength="20" placeholder="Ex.: 11 99999-9999"/></div>
+                <div class="field"><label for="clientCpf">CPF</label><input id="clientCpf" maxlength="14" placeholder="Ex.: 123.456.789-00"/></div>
+                <div class="field"><label for="clientCity">Cidade</label><input id="clientCity" maxlength="60" placeholder="Ex.: São Paulo"/></div>
+              </div>
+              <div class="form-actions">
+                <button class="btn btn-primary" type="submit">Salvar Cliente</button>
+                <button class="btn btn-light" type="button" id="cancelClientBtn">Cancelar</button>
+              </div>
+            </form>
+          </div>
+
+          <section class="panel">
+            <div class="panel-head"><div><h2>Lista de Clientes</h2><div class="panel-desc">Contatos cadastrados.</div></div></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Nome</th><th>WhatsApp</th><th>CPF</th><th>Cidade</th><th>Ações</th></tr></thead>
+                <tbody id="clientsTable"><tr><td colspan="5" class="table-empty">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </section>
         </section>
 
         <section class="section" id="settings">
@@ -361,7 +389,8 @@
     let products = [];
     let stock = [];
     let sales = [];
-    let expenses = [];     // <-- ADICIONE ESTA LINHA AQUI
+    let expenses = [];
+    let clients = []; // <-- ADICIONE ESTA LINHA
     let connected = false;
 
     const money = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -425,8 +454,8 @@
       startLoad();
       try {
         setConnection(true);
-        const [p, s, v, d] = await Promise.all([
-          apiRead('Produtos'), apiRead('Estoque'), apiRead('Vendas'), apiRead('Despesas')
+        const [p, s, v, d, c] = await Promise.all([
+          apiRead('Produtos'), apiRead('Estoque'), apiRead('Vendas'), apiRead('Despesas'), apiRead('Clientes')
         ]);
         
         // Filtro à prova de falhas: só aceita se tiver ID
@@ -434,6 +463,7 @@
         stock = s.filter(x => x && x.id_produto && String(x.id_produto).trim() !== '');
         sales = v.filter(x => x && x.id && String(x.id).trim() !== '');
         expenses = d.filter(x => x && x.id && String(x.id).trim() !== '');
+        clients = c.filter(x => x && x.id && String(x.id).trim() !== ''); // <-- ADICIONE ESTA LINHA
         
         setConnection(true);
         renderAll();
@@ -467,7 +497,9 @@
       fillOrderProducts();    
       renderExpenses();       // <-- ADICIONE ESTA LINHA
       updateNetProfit();      // <-- ADICIONE ESTA LINHA
-    }
+      renderClients();        // <-- ADICIONE ESTA LINHA
+      fillOrderClients();      
+}
 
     function updateNetProfit() {
       const lucroBruto = sales.reduce((sum, s) => sum + Number(s.lucro || 0), 0);
@@ -1048,6 +1080,90 @@
         notify('Erro ao excluir despesa: ' + err.message, true);
         endLoad();
       }
+    }
+
+    // ====== Clientes ======
+    const clientFormPanel = document.getElementById('clientFormPanel');
+
+    document.getElementById('newClientBtn')?.addEventListener('click', () => {
+      document.getElementById('clientForm').reset();
+      clientFormPanel.hidden = false;
+      clientFormPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    document.getElementById('cancelClientBtn')?.addEventListener('click', () => { 
+      clientFormPanel.hidden = true; 
+    });
+
+    document.getElementById('clientForm')?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const nome = document.getElementById('clientName').value.trim();
+      const whatsapp = document.getElementById('clientWhatsapp').value.trim();
+      const cpf = document.getElementById('clientCpf').value.trim();
+      const cidade = document.getElementById('clientCity').value.trim();
+
+      if (!nome || !whatsapp) { notify('Preencha nome e WhatsApp.', true); return; }
+
+      try {
+        startLoad();
+        await apiPost({
+          action: 'append', sheet: 'Clientes',
+          data: {
+            id: uuid(),
+            nome: nome,
+            whatsapp: whatsapp,
+            cpf: cpf,
+            cidade: cidade,
+            data_cadastro: new Date().toISOString()
+          }
+        });
+        notify('Cliente cadastrado!');
+        clientFormPanel.hidden = true;
+        await loadAll(); 
+      } catch (err) {
+        notify('Erro ao cadastrar cliente: ' + err.message, true);
+        endLoad();
+      }
+    });
+
+    function renderClients() {
+      const tbody = document.getElementById('clientsTable');
+      if (!tbody) return;
+      
+      const sorted = [...clients].sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
+      
+      tbody.innerHTML = sorted.length ? sorted.map(c => `
+        <tr>
+          <td><strong>${esc(c.nome)}</strong></td>
+          <td>${esc(c.whatsapp)}</td>
+          <td>${esc(c.cpf || '—')}</td>
+          <td>${esc(c.cidade || '—')}</td>
+          <td><button class="btn btn-danger" data-del-client="${esc(c.id)}" style="padding:6px 9px">Excluir</button></td>
+        </tr>
+      `).join('') : '<tr><td colspan="5" class="table-empty">Nenhum cliente cadastrado.</td></tr>';
+
+      tbody.querySelectorAll('[data-del-client]').forEach(b => b.onclick = () => deleteClient(b.dataset.delClient));
+    }
+
+    async function deleteClient(id) {
+      if (!confirm('Excluir este cliente permanentemente?')) return;
+      startLoad();
+      try {
+        await apiPost({ action: 'delete', sheet: 'Clientes', id });
+        notify('Cliente excluído.');
+        await loadAll();
+      } catch (err) {
+        notify('Erro ao excluir cliente: ' + err.message, true);
+        endLoad();
+      }
+    }
+
+    // Preenche a lista de clientes no formulário de venda
+    function fillOrderClients() {
+      const sel = document.getElementById('orderClient');
+      if (!sel) return;
+      sel.innerHTML = '<option value="">— Consumidor Final (Sem cadastro) —</option>' + 
+        clients.map(c => `<option value="${esc(c.nome)}">${esc(c.nome)}</option>`).join('');
     }
 
     // ====== Start ======
