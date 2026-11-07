@@ -454,7 +454,6 @@
       document.getElementById('metricProducts').textContent = products.length;
       document.getElementById('metricStock').textContent = stock.reduce((sum, s) => sum + Number(s.quantidade || 0), 0);
       document.getElementById('metricOrders').textContent = sales.length;
-      document.getElementById('metricSales').textContent = money(sales.reduce((sum, s) => sum + Number(s.valor_venda || 0), 0));
 
       const recent = [...products].slice(-5).reverse();
       document.getElementById('recentProducts').innerHTML = recent.length
