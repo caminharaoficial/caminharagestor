@@ -531,30 +531,110 @@
 
     function renderStock() {
       const tbody = document.getElementById('stockTable');
-      const rows = [];
-      stock.forEach(s => {
-        const p = productById(s.id_produto);
-        if (!p) return;
-        const min = Number(p.estoque_minimo || 0);
-        const qty = Number(s.quantidade);
-        let status = '<span style="color:#27775d;font-weight:700">Disponível</span>';
-        if (qty <= 0) status = '<span style="color:#b04545;font-weight:700">Sem estoque</span>';
-        else if (qty <= min) status = '<span style="color:#a16b1e;font-weight:700">Baixo</span>';
-        rows.push(`<tr>
-          <td><strong>${esc(p.marca)} ${esc(p.modelo)}</strong></td>
-          <td><strong>${esc(s.sku_variacao || '—')}</strong></td>
-          <td>${esc(s.numero)}</td><td>${qty}</td><td>${Number(s.vendidos || 0)}</td>
-          <td>${status}</td>
-        </tr>`);
+      if (!tbody) return;
+
+      const q = document.getElementById('stockSearch').value.trim().toLowerCase();
+      
+      // Filtra os produtos pela busca
+      const filtered = products.filter(p => 
+        [p.marca, p.modelo, p.cor, p.sku].some(v => String(v || '').toLowerCase().includes(q))
+      );
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="table-empty">Nenhum produto encontrado.</td></tr>';
+        return;
+      }
+
+      let html = '';
+      
+      filtered.forEach(p => {
+        const variacoes = stockForProduct(p.id);
+        const totalQtd = variacoes.reduce((sum, s) => sum + Number(s.quantidade || 0), 0);
+        const totalVendidos = variacoes.reduce((sum, s) => sum + Number(s.vendidos || 0), 0);
+        const grade = variacoes.map(v => v.numero).join(', ') || 'Sem grade';
+        
+        // Linha Principal (Produto Pai)
+        html += `
+          <tr style="background-color: #f8fafc; cursor: pointer;" class="stock-parent" data-id="${esc(p.id)}">
+            <td><button class="btn btn-light" style="padding: 2px 8px; font-size: 14px;">+</button></td>
+            <td>
+              <strong>${esc(p.marca)} ${esc(p.modelo)}</strong> <br>
+              <small style="color: #738091">${esc(p.sku || '—')}</small>
+            </td>
+            <td>${esc(grade)}</td>
+            <td><strong style="color:#27775d">${totalQtd} un.</strong> (${totalVendidos} vendidos)</td>
+          </tr>
+        `;
+
+        // Linhas Filhas (Numerações)
+        if (variacoes.length > 0) {
+          html += `<tr class="stock-children" id="children-${esc(p.id)}" style="display: none; background-color: #fff;"><td colspan="4" style="padding: 0;">
+            <table style="margin: 0; background: #fafbfc;">
+              <thead>
+                <tr>
+                  <th style="padding-left: 50px;">Numeração</th>
+                  <th>SKU Variação</th>
+                  <th>Qtd. Atual</th>
+                  <th>Vendidos</th>
+                  <th>Ação</th>
+                </tr>
+              </thead>
+              <tbody>
+          `;
+          
+          variacoes.forEach(v => {
+            const min = Number(p.estoque_minimo || 0);
+            const qty = Number(v.quantidade);
+            let status = '<span style="color:#27775d;font-weight:700">Disponível</span>';
+            if (qty <= 0) status = '<span style="color:#b04545;font-weight:700">Sem estoque</span>';
+            else if (qty <= min) status = '<span style="color:#a16b1e;font-weight:700">Baixo</span>';
+
+            html += `<tr>
+              <td style="padding-left: 50px;"><strong>${esc(v.numero)}</strong></td>
+              <td><small>${esc(v.sku_variacao || '—')}</small></td>
+              <td>${qty} un. ${status}</td>
+              <td>${Number(v.vendidos || 0)}</td>
+              <td><button class="btn btn-light" style="padding: 4px 8px; font-size: 10px;" onclick="editStockItem('${esc(v.id)}')">Editar Qtd</button></td>
+            </tr>`;
+          });
+          
+          html += `</tbody></table></td></tr>`;
+        }
       });
-      tbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="6" class="table-empty">Nenhuma numeração cadastrada.</td></tr>';
+
+      tbody.innerHTML = html;
+
+      // Adiciona o evento de abrir/fechar (sanfona)
+      tbody.querySelectorAll('.stock-parent').forEach(row => {
+        row.addEventListener('click', () => {
+          const id = row.dataset.id;
+          const children = document.getElementById(`children-${id}`);
+          const btn = row.querySelector('button');
+          if (children) {
+            const isHidden = children.style.display === 'none';
+            children.style.display = isHidden ? 'table-row' : 'none';
+            btn.textContent = isHidden ? '-' : '+';
+          }
+        });
+      });
     }
 
-    function fillProductSelect() {
-      const sel = document.getElementById('stockProduct');
-      if (!sel) return;
-      sel.innerHTML = '<option value="">— Selecione —</option>' + products.map(p => `<option value="${esc(p.id)}">${esc(p.marca)} ${esc(p.modelo)} ${p.cor ? '· ' + esc(p.cor) : ''}</option>`).join('');
-    }
+    // Função para editar uma numeração específica direto da sanfona
+    window.editStockItem = function(stockId) {
+      const item = stock.find(s => String(s.id) === String(stockId));
+      if (!item) return;
+      
+      const p = productById(item.id_produto);
+      if (!p) return;
+
+      // Abre o formulário lá em cima já preenchido
+      document.getElementById('stockProduct').value = item.id_produto;
+      document.getElementById('stockNumber').value = item.numero;
+      document.getElementById('stockQty').value = item.quantidade;
+      
+      stockFormPanel.hidden = false;
+      stockFormPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
 
     // ====== Navegação ======
     const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', orders:'Pedidos', finance:'Financeiro', contacts:'Clientes e fornecedores', settings:'Configurações' };
@@ -605,14 +685,9 @@
       const dup = products.find(p => String(p.sku).toUpperCase() === sku.toUpperCase() && String(p.id) !== String(id));
       if (dup) { notify('SKU já existe: ' + sku, true); return; }
 
-      // Monta o objeto EXATAMENTE com as chaves que o Apps Script espera
       const data = {
         id: id || uuid(),
-        sku: sku,
-        categoria: categoria,
-        marca: marca, 
-        modelo: modelo, 
-        cor: cor,
+        sku: sku, categoria: categoria, marca: marca, modelo: modelo, cor: cor,
         genero: document.getElementById('productGender').value,
         colecao: document.getElementById('productCollection').value.trim(),
         grade: grade,
@@ -626,21 +701,34 @@
         startLoad();
         if (id) {
           await apiPost({ action: 'update', sheet: 'Produtos', data });
-          notify('Produto atualizado.');
+          
+          // CORREÇÃO: Se editou o produto, recria a grade no estoque para não faltar numeração nova
+          const numeros = grade.split(',').map(n => n.trim()).filter(Boolean);
+          const existingStock = stockForProduct(id);
+          
+          for (const num of numeros) {
+            const hasNum = existingStock.find(s => String(s.numero) === String(num));
+            if (!hasNum) {
+              await apiPost({
+                action: 'append', sheet: 'Estoque',
+                data: {
+                  id: uuid(), id_produto: data.id, sku_variacao: `${sku}-${num}`,
+                  numero: num, quantidade: 0, vendidos: 0,
+                  atualizado_em: new Date().toISOString()
+                }
+              });
+            }
+          }
+          notify('Produto atualizado e grade conferida.');
         } else {
           await apiPost({ action: 'append', sheet: 'Produtos', data });
-
           const numeros = grade.split(',').map(n => n.trim()).filter(Boolean);
           for (const num of numeros) {
             await apiPost({
               action: 'append', sheet: 'Estoque',
               data: {
-                id: uuid(),
-                id_produto: data.id,
-                sku_variacao: `${sku}-${num}`,
-                numero: num,
-                quantidade: 0,
-                vendidos: 0,
+                id: uuid(), id_produto: data.id, sku_variacao: `${sku}-${num}`,
+                numero: num, quantidade: 0, vendidos: 0,
                 atualizado_em: new Date().toISOString()
               }
             });
@@ -696,6 +784,7 @@
     }
 
     document.getElementById('productSearch').addEventListener('input', renderProducts);
+    document.getElementById('stockSearch')?.addEventListener('input', renderStock); // <-- ADICIONE
 
     // ====== Estoque: form ======
     const stockFormPanel = document.getElementById('stockFormPanel');
