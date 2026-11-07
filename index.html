@@ -166,7 +166,7 @@
             <article class="metric"><div class="metric-top"><span class="metric-label">Produtos cadastrados</span><span class="metric-icon">◇</span></div><div class="metric-value" id="metricProducts">0</div><div class="metric-note">Modelos registrados</div></article>
             <article class="metric"><div class="metric-top"><span class="metric-label">Unidades em estoque</span><span class="metric-icon">▤</span></div><div class="metric-value" id="metricStock">0</div><div class="metric-note">Soma das quantidades</div></article>
             <article class="metric"><div class="metric-top"><span class="metric-label">Pedidos registrados</span><span class="metric-icon">🛍</span></div><div class="metric-value" id="metricOrders">0</div><div class="metric-note">Pedidos lançados</div></article>
-            <article class="metric"><div class="metric-top"><span class="metric-label">Vendas registradas</span><span class="metric-icon">◉</span></div><div class="metric-value" id="metricSales">R$ 0,00</div><div class="metric-note">Total de pedidos</div></article>
+            <article class="metric"><div class="metric-top"><span class="metric-label">Lucro Líquido</span><span class="metric-icon">◉</span></div><div class="metric-value" id="metricNetProfit">R$ 0,00</div><div class="metric-note">Vendas - Custos - Despesas</div></article>
           </div>
           <div class="dashboard-grid">
             <section class="panel">
@@ -286,8 +286,49 @@
         </section>
 
         <section class="section" id="finance">
-          <div class="page-heading"><div><h1>Financeiro</h1><p class="subtitle">Receitas, despesas e resultados (em construção).</p></div></div>
-          <div class="panel"><div class="table-empty">Módulo financeiro será implementado após pedidos.</div></div>
+          <div class="page-heading">
+            <div><h1>Financeiro</h1><p class="subtitle">Controle de despesas e lucro líquido.</p></div>
+            <button class="btn btn-primary" id="newExpenseBtn">＋ Nova Despesa</button>
+          </div>
+
+          <!-- Formulário de Nova Despesa -->
+          <div class="panel" id="expenseFormPanel" style="margin-bottom:18px">
+            <div class="panel-head"><div><h2>Registrar despesa</h2><div class="panel-desc">Aluguel, energia, compras, etc.</div></div></div>
+            <form id="expenseForm">
+              <div class="form-grid">
+                <div class="field"><label for="expenseDesc">Descrição *</label><input id="expenseDesc" required maxlength="100" placeholder="Ex.: Conta de Luz"/></div>
+                <div class="field"><label for="expenseCategory">Categoria *</label><select id="expenseCategory" required>
+                  <option value="">— Selecione —</option>
+                  <option>Aluguel</option><option>Energia</option><option>Água</option>
+                  <option>Internet</option><option>Salários</option><option>Compra de Mercadoria</option>
+                  <option>Marketing</option><option>Impostos</option><option>Outros</option>
+                </select></div>
+                <div class="field"><label for="expenseValue">Valor (R$) *</label><input id="expenseValue" type="number" min="0" step="0.01" required placeholder="0,00"/></div>
+                <div class="field"><label for="expenseDate">Data de Vencimento</label><input id="expenseDate" type="date"/></div>
+                <div class="field"><label for="expenseStatus">Status</label>
+                  <select id="expenseStatus">
+                    <option value="Pago">Pago</option>
+                    <option value="Pendente">Pendente</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-actions">
+                <button class="btn btn-primary" type="submit">Salvar Despesa</button>
+                <button class="btn btn-light" type="button" id="cancelExpenseBtn">Cancelar</button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Histórico de Despesas -->
+          <section class="panel">
+            <div class="panel-head"><div><h2>Histórico de Despesas</h2><div class="panel-desc">Gastos registrados.</div></div></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Valor</th><th>Status</th><th>Ações</th></tr></thead>
+                <tbody id="expensesTable"><tr><td colspan="6" class="table-empty">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </section>
         </section>
 
         <section class="section" id="contacts">
@@ -383,13 +424,16 @@
       startLoad();
       try {
         setConnection(true);
-        const [p, s, v] = await Promise.all([
-          apiRead('Produtos'), apiRead('Estoque'), apiRead('Vendas')
+        const [p, s, v, d] = await Promise.all([
+          apiRead('Produtos'), apiRead('Estoque'), apiRead('Vendas'), apiRead('Despesas')
         ]);
+        
         // Filtro à prova de falhas: só aceita se tiver ID
         products = p.filter(x => x && x.id && String(x.id).trim() !== '');
         stock = s.filter(x => x && x.id_produto && String(x.id_produto).trim() !== '');
         sales = v.filter(x => x && x.id && String(x.id).trim() !== '');
+        expenses = d.filter(x => x && x.id && String(x.id).trim() !== '');
+        
         setConnection(true);
         renderAll();
       } catch (err) {
@@ -419,8 +463,21 @@
       renderProducts();
       renderStock();
       fillProductSelect();
-      renderOrders();         // <--- ADICIONE ESTA LINHA
-      fillOrderProducts();    // <--- ADICIONE ESTA LINHA
+      renderOrders();         
+      fillOrderProducts();    
+      renderExpenses();       // <-- ADICIONE ESTA LINHA
+      updateNetProfit();      // <-- ADICIONE ESTA LINHA
+    }
+
+    function updateNetProfit() {
+      const lucroBruto = sales.reduce((sum, s) => sum + Number(s.lucro || 0), 0);
+      const totalDespesas = expenses.reduce((sum, d) => sum + Number(d.valor || 0), 0);
+      const lucroLiquido = lucroBruto - totalDespesas;
+      const el = document.getElementById('metricNetProfit');
+      if (el) {
+        el.textContent = money(lucroLiquido);
+        el.style.color = lucroLiquido >= 0 ? '#27775d' : '#b04545';
+      }
     }
 
     function renderProducts() {
@@ -904,6 +961,94 @@
       }
     }
 
+    // ====== Despesas (Financeiro) ======
+    const expenseFormPanel = document.getElementById('expenseFormPanel');
+
+    // Abrir/Fechar formulário
+    document.getElementById('newExpenseBtn')?.addEventListener('click', () => {
+      document.getElementById('expenseForm').reset();
+      expenseFormPanel.hidden = false;
+      expenseFormPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    document.getElementById('cancelExpenseBtn')?.addEventListener('click', () => { 
+      expenseFormPanel.hidden = true; 
+    });
+
+    // SUBMIT DA DESPESA
+    document.getElementById('expenseForm')?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const desc = document.getElementById('expenseDesc').value.trim();
+      const cat = document.getElementById('expenseCategory').value;
+      const valor = Number(document.getElementById('expenseValue').value);
+      const dataVenc = document.getElementById('expenseDate').value || new Date().toISOString().split('T')[0];
+      const status = document.getElementById('expenseStatus').value;
+
+      if (!desc || !cat || valor <= 0) { 
+        notify('Preencha descrição, categoria e valor.', true); 
+        return; 
+      }
+
+      try {
+        startLoad();
+        await apiPost({
+          action: 'append', sheet: 'Despesas',
+          data: {
+            id: uuid(),
+            descricao: desc,
+            categoria: cat,
+            valor: valor,
+            data_vencimento: dataVenc,
+            status_pagamento: status
+          }
+        });
+        notify('Despesa registrada!');
+        expenseFormPanel.hidden = true;
+        await loadAll(); 
+      } catch (err) {
+        notify('Erro ao registrar despesa: ' + err.message, true);
+        endLoad();
+      }
+    });
+
+    // Renderiza a tabela de despesas
+    function renderExpenses() {
+      const tbody = document.getElementById('expensesTable');
+      if (!tbody) return;
+      
+      const sorted = [...expenses].sort((a, b) => new Date(b.data_vencimento) - new Date(a.data_vencimento));
+      
+      tbody.innerHTML = sorted.length ? sorted.map(d => {
+        const dataStr = d.data_vencimento ? new Date(d.data_vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
+        const statusBadge = d.status_pagamento === 'Pago'
+          ? '<span style="color:#27775d;font-weight:700;background:#e6f4ea;padding:4px 8px;border-radius:6px">Pago</span>'
+          : '<span style="color:#b04545;font-weight:700;background:#fce8e8;padding:4px 8px;border-radius:6px">Pendente</span>';
+        
+        return `<tr>
+          <td>${dataStr}</td>
+          <td><strong>${esc(d.descricao)}</strong></td>
+          <td>${esc(d.categoria)}</td>
+          <td><strong style="color:#b04545">${money(d.valor)}</strong></td>
+          <td>${statusBadge}</td>
+          <td><button class="btn btn-danger" data-del-expense="${esc(d.id)}" style="padding:6px 9px">Excluir</button></td>
+        </tr>`;
+      }).join('') : '<tr><td colspan="6" class="table-empty">Nenhuma despesa registrada.</td></tr>';
+
+      tbody.querySelectorAll('[data-del-expense]').forEach(b => b.onclick = () => deleteExpense(b.dataset.delExpense));
+    }
+
+    async function deleteExpense(id) {
+      if (!confirm('Excluir esta despesa permanentemente?')) return;
+      startLoad();
+      try {
+        await apiPost({ action: 'delete', sheet: 'Despesas', id });
+        notify('Despesa excluída.');
+        await loadAll();
+      } catch (err) {
+        notify('Erro ao excluir despesa: ' + err.message, true);
+        endLoad();
+      }
+    }
 
     // ====== Start ======
     document.addEventListener('DOMContentLoaded', () => {
