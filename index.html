@@ -1067,6 +1067,37 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
         return;
       }
 
+      const prod = productById(idProd);
+      if (prod) priceInput.value = prod.preco_venda;
+
+      // CORREÇÃO: Puxa as numerações do estoque OU da grade do produto
+      const stockNums = stockForProduct(idProd).map(s => s.numero);
+      const gradeNums = prod ? String(prod.grade || '').split(',').map(n => n.trim()).filter(Boolean) : [];
+      
+      // Une as duas listas sem duplicar
+      const todasNums = [...new Set([...stockNums, ...gradeNums])];
+
+      if (todasNums.length === 0) {
+        numSelect.innerHTML = '<option value="">— Produto sem grade cadastrada —</option>';
+      } else {
+        numSelect.innerHTML = '<option value="">— Selecione a Numeração —</option>' + 
+          todasNums.map(n => {
+            const emEstoque = stockForProduct(idProd).find(s => String(s.numero) === String(n));
+            const qtd = emEstoque ? emEstoque.quantidade : 0;
+            return `<option value="${esc(n)}">${esc(n)} (${qtd} em estoque)</option>`;
+          }).join('');
+      }
+    });
+      const idProd = this.value;
+      const numSelect = document.getElementById('orderNumber');
+      const priceInput = document.getElementById('orderPrice');
+      
+      if (!idProd) {
+        numSelect.innerHTML = '<option value="">— Escolha o produto primeiro —</option>';
+        priceInput.value = '';
+        return;
+      }
+
       // Pega o preço do produto
       const prod = productById(idProd);
       if (prod) priceInput.value = prod.preco_venda;
@@ -1132,9 +1163,10 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
       const estoqueItem = stock.find(s => String(s.id_produto) === String(id_produto) && String(s.numero) === String(numero));
       
       // Se for baixar do estoque, verifica se tem
+      // Aviso de estoque (não bloqueia mais)
       if (baixarEstoque && (!estoqueItem || Number(estoqueItem.quantidade) < qtdVendida)) {
-        notify('Estoque insuficiente para esta numeração.', true);
-        return;
+        const confirmar = confirm(`Atenção: o estoque desta numeração é ${estoqueItem ? estoqueItem.quantidade : 0} mas você está vendendo ${qtdVendida}. Deseja continuar mesmo assim?`);
+        if (!confirmar) return;
       }
 
       const p = productById(id_produto);
@@ -1499,9 +1531,12 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
       const numSelect = document.getElementById('reqNumber');
       if (!idProd) { numSelect.innerHTML = '<option value="">—</option>'; return; }
       
-      // Pega as numerações do estoque ou da grade
+      // CORREÇÃO: Sempre puxa da grade do produto (independente de ter estoque ou não)
       const p = productById(idProd);
-      const nums = stockForProduct(idProd).length > 0 ? stockForProduct(idProd) : p.grade.split(',').map(n => ({numero: n.trim()}));
+      const gradeNums = p ? String(p.grade || '').split(',').map(n => n.trim()).filter(Boolean) : [];
+      const stockNums = stockForProduct(idProd).map(s => s.numero);
+      const todasNums = [...new Set([...gradeNums, ...stockNums])];
+      const nums = todasNums.map(n => ({ numero: n }));
       
       numSelect.innerHTML = '<option value="">— Selecione —</option>' + nums.map(s => `<option value="${esc(s.numero)}">${esc(s.numero)}</option>`).join('');
     });
