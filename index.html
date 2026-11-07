@@ -641,6 +641,12 @@
     }
 
     // Função para editar uma numeração específica direto da sanfona
+    function fillProductSelect() {
+      const sel = document.getElementById('stockProduct');
+      if (!sel) return;
+      sel.innerHTML = '<option value="">— Selecione —</option>' + products.map(p => `<option value="${esc(p.id)}">${esc(p.marca)} ${esc(p.modelo)} ${p.cor ? '· ' + esc(p.cor) : ''}</option>`).join('');
+    }
+
     window.editStockItem = function(stockId) {
       const item = stock.find(s => String(s.id) === String(stockId));
       if (!item) return;
