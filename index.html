@@ -528,6 +528,20 @@
       </div>
     </div>
   </div>
+  <!-- Modal de detalhes de Venda / Pedido -->
+  <div id="detailModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:99998; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:#fff; border-radius:14px; padding:24px; width:600px; max-width:100%; max-height:90vh; overflow-y:auto;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h3 id="detailTitle" style="margin:0;">Detalhes</h3>
+        <button class="btn btn-light" type="button" id="detailClose">✕</button>
+      </div>
+      <div id="detailBody"></div>
+      <div class="form-actions" style="margin-top:20px;">
+        <button class="btn btn-primary" type="button" id="detailEditBtn">Editar</button>
+        <button class="btn btn-danger" type="button" id="detailDeleteBtn">Excluir</button>
+      </div>
+    </div>
+  </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script>
@@ -1300,11 +1314,15 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
           <td><strong>${money(v.valor_venda)}</strong></td>
           <td style="color:#27775d;font-weight:700">${money(lucro)}</td>
           <td>${status}</td>
-          <td><button class="btn btn-danger" data-del-order="${esc(v.id)}" style="padding:6px 9px">Excluir</button></td>
+<td>
+  <button class="btn btn-light" data-view-order="${esc(v.id)}" style="padding:6px 9px">Ver</button>
+  <button class="btn btn-danger" data-del-order="${esc(v.id)}" style="padding:6px 9px">Excluir</button>
+</td>
         </tr>`;
       }).join('') : '<tr><td colspan="10" class="table-empty">Nenhuma venda registrada ainda.</td></tr>';
 
       tbody.querySelectorAll('[data-del-order]').forEach(b => b.onclick = () => deleteOrder(b.dataset.delOrder));
+tbody.querySelectorAll('[data-view-order]').forEach(b => b.onclick = () => viewOrder(b.dataset.viewOrder));
     }
 
     async function deleteOrder(idVenda) {
@@ -1626,9 +1644,11 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
           <td>${money(r.valor_total)}</td>
           <td>${esc(r.status_pedido)}</td>
           <td>
-            <button class="btn btn-primary" style="padding: 4px 8px; font-size: 10px;" onclick="faturarPedido('${esc(r.id)}')">Faturar</button>
-            <button class="btn btn-danger" style="padding: 4px 8px; font-size: 10px;" onclick="deleteRequest('${esc(r.id)}')">Excluir</button>
-          </td>
+<td>
+  <button class="btn btn-light" style="padding: 4px 8px; font-size: 10px;" onclick="viewRequest('${esc(r.id)}')">Ver</button>
+  <button class="btn btn-primary" style="padding: 4px 8px; font-size: 10px;" onclick="faturarPedido('${esc(r.id)}')">Faturar</button>
+  <button class="btn btn-danger" style="padding: 4px 8px; font-size: 10px;" onclick="deleteRequest('${esc(r.id)}')">Excluir</button>
+</td>
         </tr>`;
       }).join('') : '<tr><td colspan="8" class="table-empty">Nenhum pedido em aberto.</td></tr>';
     }
@@ -1807,6 +1827,289 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
     document.getElementById('reqProduct')?.addEventListener('change', () => setTimeout(calcularLucroPedido, 50));
     // Atualiza quando escolhe o produto na venda também
     document.getElementById('orderProduct')?.addEventListener('change', () => setTimeout(calcularLucroVenda, 50));
+
+    // ====== Modal de detalhes ======
+    const detailModal = document.getElementById('detailModal');
+    const detailBody = document.getElementById('detailBody');
+    const detailTitle = document.getElementById('detailTitle');
+    const detailEditBtn = document.getElementById('detailEditBtn');
+    const detailDeleteBtn = document.getElementById('detailDeleteBtn');
+    let detailKind = null; // 'order' ou 'request'
+    let detailId = null;
+
+    function fecharDetail() {
+      detailModal.style.display = 'none';
+      detailKind = null;
+      detailId = null;
+    }
+    document.getElementById('detailClose')?.addEventListener('click', fecharDetail);
+
+    function renderDetailRows(rows) {
+      return rows.map(([label, value]) => `
+        <tr>
+          <td style="color:#738091; font-size:11px; text-transform:uppercase; padding:8px 0; width:150px;">${label}</td>
+          <td style="font-weight:600; padding:8px 0;">${value}</td>
+        </tr>
+      `).join('');
+    }
+
+    window.viewOrder = function(id) {
+      const v = sales.find(x => String(x.id) === String(id));
+      if (!v) return;
+      detailKind = 'order';
+      detailId = id;
+      detailTitle.textContent = 'Detalhes da Venda';
+      
+      const p = productById(v.id_produto);
+      const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto excluído';
+      const custosDaVenda = orderCosts.filter(c => String(c.id_venda) === String(v.id));
+      const txtCustos = custosDaVenda.length
+        ? custosDaVenda.map(c => `• ${esc(c.descricao)}: ${money(c.valor)}`).join('<br>')
+        : '<span style="color:#b04545">Nenhum custo extra</span>';
+      const status = v.status_pagamento === 'OK' ? 'Recebido' : 'Pendente';
+      const dataStr = v.data_venda ? new Date(v.data_venda).toLocaleString('pt-BR') : '—';
+
+      const rows = [
+        ['Data', dataStr],
+        ['Produto', nomeProd],
+        ['SKU', esc(v.sku_variacao || '—')],
+        ['Numeração', esc(v.numero || '—')],
+        ['Quantidade', v.quantidade || 0],
+        ['Cliente', esc(v.cliente || 'Consumidor Final')],
+        ['Custo Unitário', money(v.custo_unitario)],
+        ['Valor Total', `<span style="color:#27775d">${money(v.valor_venda)}</span>`],
+        ['Lucro Real', `<span style="color:#27775d">${money(v.lucro)}</span>`],
+        ['Status Pagamento', status],
+        ['Observação', esc(v.observacao || '—')],
+        ['Custos Extras', txtCustos],
+      ];
+      detailBody.innerHTML = `<table style="width:100%; border-collapse:collapse;">${renderDetailRows(rows)}</table>`;
+      detailModal.style.display = 'flex';
+    };
+
+    window.viewRequest = function(id) {
+      const r = requests.find(x => String(x.id) === String(id));
+      if (!r) return;
+      detailKind = 'request';
+      detailId = id;
+      detailTitle.textContent = 'Detalhes do Pedido';
+
+      const p = productById(r.id_produto);
+      const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto excluído';
+      const dataStr = r.data_pedido ? new Date(r.data_pedido).toLocaleString('pt-BR') : '—';
+      const custo = Number(r.custo_unitario || 0);
+      const lucro = r.valor_total - (custo * r.quantidade);
+
+      const rows = [
+        ['Data', dataStr],
+        ['Cliente', esc(r.cliente || 'Consumidor Final')],
+        ['Produto', nomeProd],
+        ['SKU', esc(r.sku_variacao || '—')],
+        ['Numeração', esc(r.numero || '—')],
+        ['Quantidade', r.quantidade || 0],
+        ['Custo Unitário', money(custo)],
+        ['Valor Total', `<span style="color:#27775d">${money(r.valor_total)}</span>`],
+        ['Lucro Real', `<span style="color:#27775d">${money(lucro)}</span>`],
+        ['Status Pedido', esc(r.status_pedido || '—')],
+        ['Observação', esc(r.observacao || '—')],
+      ];
+      detailBody.innerHTML = `<table style="width:100%; border-collapse:collapse;">${renderDetailRows(rows)}</table>`;
+      detailModal.style.display = 'flex';
+    };
+
+    detailEditBtn?.addEventListener('click', () => {
+      if (detailKind === 'order') {
+        fecharDetail();
+        // Preenche o formulário de venda com os dados existentes
+        const v = sales.find(x => String(x.id) === String(detailId));
+        if (!v) return;
+        // Aqui é edição simples: abre o form preenchido e reusa o submit da venda,
+        // mas o submit da venda faz append. Precisamos marcar edição.
+        editarVendaExistente(v);
+      } else if (detailKind === 'request') {
+        fecharDetail();
+        const r = requests.find(x => String(x.id) === String(detailId));
+        if (!r) return;
+        editarPedidoExistente(r);
+      }
+    });
+
+    detailDeleteBtn?.addEventListener('click', () => {
+      if (detailKind === 'order') {
+        const id = detailId;
+        fecharDetail();
+        deleteOrder(id);
+      } else if (detailKind === 'request') {
+        const id = detailId;
+        fecharDetail();
+        deleteRequest(id);
+      }
+    });
+
+    // ====== Edição de Venda (reabre o form preenchido e salva como update) ======
+    let editingSaleId = null;
+
+    function editarVendaExistente(v) {
+      editingSaleId = v.id;
+      showSection('sales');
+      orderFormPanel.hidden = false;
+      document.getElementById('orderProduct').value = v.id_produto;
+      // Dispara o change pra carregar numerações
+      document.getElementById('orderProduct').dispatchEvent(new Event('change'));
+      setTimeout(() => {
+        document.getElementById('orderNumber').value = v.numero || '';
+        document.getElementById('orderQty').value = v.quantidade || 1;
+        document.getElementById('orderCostUnit').value = v.custo_unitario || 0;
+        document.getElementById('orderPrice').value = v.valor_venda || 0;
+        document.getElementById('orderClient').value = v.cliente || '';
+        document.getElementById('orderNote').value = v.observacao || '';
+        document.getElementById('orderStatus').value = v.status_pagamento || 'OK';
+        calcularLucroVenda();
+        // Limpa custos anteriores e recarrega
+        document.getElementById('orderCostsList').innerHTML = '';
+        const custosDaVenda = orderCosts.filter(c => String(c.id_venda) === String(v.id));
+        custosDaVenda.forEach(c => {
+          const div = document.createElement('div');
+          div.style.display = 'flex'; div.style.gap = '10px'; div.style.marginBottom = '10px';
+          div.innerHTML = `
+            <input type="text" class="order-cost-desc" value="${esc(c.descricao)}" style="flex:2; padding:8px; border:1px solid var(--line); border-radius:6px;" />
+            <input type="number" class="order-cost-val" value="${Number(c.valor)}" min="0" step="0.01" style="flex:1; padding:8px; border:1px solid var(--line); border-radius:6px;" />
+            <button type="button" class="btn btn-danger" style="padding:8px;">X</button>
+          `;
+          div.querySelector('button').onclick = () => { div.remove(); calcularLucroVenda(); };
+          document.getElementById('orderCostsList').appendChild(div);
+        });
+        calcularLucroVenda();
+      }, 100);
+    }
+
+    // Quando salvar uma venda que está sendo editada, usa update em vez de append
+    // Vamos interceptar antes do listener original. Adicionamos um listener extra
+    // que roda ANTES se detectar editingSaleId, salva como update e retorna.
+    // Estratégia: sobrescrever o comportamento com um listener capturante.
+    document.getElementById('orderForm').addEventListener('submit', async e => {
+      if (!editingSaleId) return; // deixa o listener original rodar
+      e.preventDefault();
+      e.stopImmediatePropagation();
+
+      const idVenda = editingSaleId;
+      const vendaAntiga = sales.find(x => String(x.id) === String(idVenda));
+      if (!vendaAntiga) { editingSaleId = null; notify('Venda original não encontrada.', true); return; }
+
+      const id_produto = document.getElementById('orderProduct').value;
+      const numero = document.getElementById('orderNumber').value;
+      const qtd = Number(document.getElementById('orderQty').value);
+      const custo = Number(document.getElementById('orderCostUnit').value || 0);
+      const total = Number(document.getElementById('orderPrice').value);
+      const cliente = document.getElementById('orderClient').value.trim();
+      const obs = document.getElementById('orderNote').value.trim();
+      const status = document.getElementById('orderStatus').value;
+
+      let extras = 0;
+      const custosNovos = [];
+      document.querySelectorAll('#orderCostsList > div').forEach(div => {
+        const desc = div.querySelector('.order-cost-desc').value.trim();
+        const val = Number(div.querySelector('.order-cost-val').value);
+        if (desc && val > 0) { extras += val; custosNovos.push({ descricao: desc, valor: val }); }
+      });
+      const lucro = total - (custo * qtd) - extras;
+      const p = productById(id_produto);
+      const skuVar = `${p.sku}-${numero}`;
+
+      try {
+        startLoad();
+        // Update da venda
+        await apiPost({
+          action: 'update', sheet: 'Vendas',
+          data: {
+            id: idVenda,
+            id_produto, sku_variacao: skuVar, numero,
+            quantidade: qtd, valor_venda: total,
+            data_venda: vendaAntiga.data_venda,
+            cliente, observacao: obs,
+            custo_unitario: custo, lucro,
+            status_pagamento: status
+          }
+        });
+        // Apaga custos antigos e recria
+        await apiPost({ action: 'deleteWhere', sheet: 'Custos', coluna: 'id_venda', valor: idVenda });
+        for (const c of custosNovos) {
+          await apiPost({ action: 'append', sheet: 'Custos',
+            data: { id: uuid(), id_venda: idVenda, descricao: c.descricao, valor: c.valor } });
+        }
+        notify('Venda atualizada!');
+        editingSaleId = null;
+        orderFormPanel.hidden = true;
+        await loadAll();
+      } catch (err) {
+        notify('Erro ao atualizar venda: ' + err.message, true);
+        endLoad();
+      }
+    }, true);
+
+    // ====== Edição de Pedido ======
+    let editingRequestId = null;
+
+    function editarPedidoExistente(r) {
+      editingRequestId = r.id;
+      showSection('orders');
+      requestFormPanel.hidden = false;
+      document.getElementById('reqProduct').value = r.id_produto;
+      document.getElementById('reqProduct').dispatchEvent(new Event('change'));
+      setTimeout(() => {
+        document.getElementById('reqNumber').value = r.numero || '';
+        document.getElementById('reqQty').value = r.quantidade || 1;
+        document.getElementById('reqCostUnit').value = r.custo_unitario || 0;
+        document.getElementById('reqPrice').value = r.valor_total || 0;
+        document.getElementById('reqClient').value = r.cliente || '';
+        document.getElementById('reqNote').value = r.observacao || '';
+        document.getElementById('reqStatus').value = r.status_pedido || 'Em preparo';
+        calcularLucroPedido();
+      }, 100);
+    }
+
+    document.getElementById('requestForm').addEventListener('submit', async e => {
+      if (!editingRequestId) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+
+      const idPedido = editingRequestId;
+      const pedidoAntigo = requests.find(x => String(x.id) === String(idPedido));
+      if (!pedidoAntigo) { editingRequestId = null; notify('Pedido original não encontrado.', true); return; }
+
+      const cliente = document.getElementById('reqClient').value;
+      const id_produto = document.getElementById('reqProduct').value;
+      const numero = document.getElementById('reqNumber').value;
+      const qtd = Number(document.getElementById('reqQty').value);
+      const custo = Number(document.getElementById('reqCostUnit').value || 0);
+      const valor = Number(document.getElementById('reqPrice').value);
+      const obs = document.getElementById('reqNote').value;
+      const status = document.getElementById('reqStatus').value;
+      const p = productById(id_produto);
+
+      try {
+        startLoad();
+        await apiPost({
+          action: 'update', sheet: 'Pedidos',
+          data: {
+            id: idPedido,
+            cliente, id_produto,
+            sku_variacao: `${p.sku}-${numero}`,
+            numero, quantidade: qtd,
+            valor_total: valor, custo_unitario: custo,
+            data_pedido: pedidoAntigo.data_pedido,
+            status_pedido: status, observacao: obs
+          }
+        });
+        notify('Pedido atualizado!');
+        editingRequestId = null;
+        requestFormPanel.hidden = true;
+        await loadAll();
+      } catch (err) {
+        notify('Erro ao atualizar pedido: ' + err.message, true);
+        endLoad();
+      }
+    }, true);
 
     // ====== Start ======
     document.addEventListener('DOMContentLoaded', () => {
