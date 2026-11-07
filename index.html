@@ -600,7 +600,7 @@
                   <th>Ação</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody id="tbody-children-${esc(p.id)}">
           `;
           
           variacoes.forEach(v => {
@@ -613,9 +613,12 @@
             html += `<tr>
               <td style="padding-left: 50px;"><strong>${esc(v.numero)}</strong></td>
               <td><small>${esc(v.sku_variacao || '—')}</small></td>
-              <td>${qty} un. ${status}</td>
+              <td>
+                <input type="number" class="inline-stock-input" value="${qty}" min="0" step="1" data-id="${esc(v.id)}" style="width: 70px; padding: 6px; border: 1px solid #e4e9ee; border-radius: 6px; text-align: center; font-weight: 700;" />
+                <span style="margin-left: 8px;">${status}</span>
+              </td>
               <td>${Number(v.vendidos || 0)}</td>
-              <td><button class="btn btn-light" style="padding: 4px 8px; font-size: 10px;" onclick="editStockItem('${esc(v.id)}')">Editar Qtd</button></td>
+              <td><button class="btn btn-primary" style="padding: 6px 10px; font-size: 10px;" onclick="saveInlineStock('${esc(v.id)}', this)">Salvar</button></td>
             </tr>`;
           });
           
@@ -646,6 +649,48 @@
       if (!sel) return;
       sel.innerHTML = '<option value="">— Selecione —</option>' + products.map(p => `<option value="${esc(p.id)}">${esc(p.marca)} ${esc(p.modelo)} ${p.cor ? '· ' + esc(p.cor) : ''}</option>`).join('');
     }
+
+    // Função que salva a quantidade digitada diretamente na tabela
+    window.saveInlineStock = async function(stockId, btnElement) {
+      const input = document.querySelector(`input[data-id="${stockId}"]`);
+      if (!input) return;
+
+      const novaQtd = Number(input.value);
+      if (isNaN(novaQtd) || novaQtd < 0) {
+        notify('Quantidade inválida.', true);
+        return;
+      }
+
+      const item = stock.find(s => String(s.id) === String(stockId));
+      if (!item) return;
+
+      // Muda o texto do botão para dar feedback
+      const textoOriginal = btnElement.textContent;
+      btnElement.textContent = 'Salvando...';
+      btnElement.disabled = true;
+
+      try {
+        await apiPost({
+          action: 'update', sheet: 'Estoque',
+          data: {
+            ...item,
+            quantidade: novaQtd,
+            atualizado_em: new Date().toISOString()
+          }
+        });
+        notify('Estoque atualizado!');
+        await loadAll(); // Recarrega para atualizar os totais do topo (Produto Pai)
+      } catch (err) {
+        notify('Erro ao salvar: ' + err.message, true);
+        btnElement.textContent = textoOriginal;
+        btnElement.disabled = false;
+      }
+    };
+
+    // O editStockItem antigo continua aqui (caso você queira usar em outro lugar)
+    window.editStockItem = function(stockId) {
+      // ... (mantenha o código que já está aí)
+    };
 
     window.editStockItem = function(stockId) {
       const item = stock.find(s => String(s.id) === String(stockId));
