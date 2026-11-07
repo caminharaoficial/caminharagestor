@@ -279,7 +279,7 @@
                 <div class="field"><label for="orderNumber">Numeração *</label><select id="orderNumber" required></select></div>
                 <div class="field"><label for="orderQty">Quantidade *</label><input id="orderQty" type="number" min="1" step="1" value="1" required /></div>
                 <div class="field"><label for="orderPrice">Valor Total da Venda (R$) *</label><input id="orderPrice" type="number" min="0" step="0.01" required placeholder="0,00"/></div>
-<div class="field"><label for="orderClient">Cliente</label><select id="orderClient"><option value="">— Consumidor Final (Sem cadastro) —</option></select></div>
+                <div class="field"><label for="orderClient">Cliente</label><select id="orderClient"><option value="">— Consumidor Final (Sem cadastro) —</option></select></div>
                 <div class="field"><label for="orderNote">Observação</label><input id="orderNote" maxlength="100" placeholder="Ex.: Pago no Pix"/></div>
                 <div class="field"><label for="orderStatus">Status do Pagamento</label>
                   <select id="orderStatus">
@@ -287,7 +287,23 @@
                     <option value="Pendente">Pendente</option>
                   </select>
                 </div>
+                <div class="field" style="display: flex; align-items: center; gap: 10px;">
+                  <input type="checkbox" id="orderBaixarEstoque" checked style="width: 20px; height: 20px;" />
+                  <label for="orderBaixarEstoque" style="margin: 0; cursor: pointer;">Dar baixa no estoque automaticamente</label>
+                </div>
               </div>
+
+              <!-- Área de Custos Extras -->
+              <div style="margin-top: 18px; padding: 15px; border: 1px solid var(--line); border-radius: 10px; background: #fafbfc;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                  <h3 style="margin: 0; font-size: 13px;">Custos Extras desta Venda</h3>
+                  <button type="button" class="btn btn-light" id="addOrderCostBtn" style="padding: 6px 10px; font-size: 11px;">＋ Adicionar Custo</button>
+                </div>
+                <div id="orderCostsList">
+                  <!-- Os custos vão aparecer aqui -->
+                </div>
+              </div>
+
               <div class="form-actions">
                 <button class="btn btn-primary" type="submit">Confirmar Venda</button>
                 <button class="btn btn-light" type="button" id="cancelOrderBtn">Cancelar</button>
@@ -300,8 +316,8 @@
             <div class="panel-head"><div><h2>Histórico de Vendas</h2><div class="panel-desc">Últimas transações registradas.</div></div></div>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Data</th><th>Produto</th><th>Num.</th><th>Qtd.</th><th>Custo</th><th>Venda</th><th>Lucro</th><th>Status</th><th>Ações</th></tr></thead>
-                <tbody id="ordersTable"><tr><td colspan="9" class="table-empty">Carregando...</td></tr></tbody>
+<thead><tr><th>Data</th><th>Produto</th><th>Num.</th><th>Qtd.</th><th>Custo Prod.</th><th>Custos Extras</th><th>Venda</th><th>Lucro Líquido</th><th>Status</th><th>Ações</th></tr></thead>
+                <tbody id="ordersTable"><tr><td colspan="10" class="table-empty">Carregando...</td></tr></tbody>
               </table>
             </div>
           </section>
@@ -413,6 +429,7 @@
     let sales = [];
     let expenses = [];
     let clients = []; // <-- ADICIONE ESTA LINHA
+     let orderCosts = [];
     let connected = false;
 
     const money = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -476,9 +493,11 @@
       startLoad();
       try {
         setConnection(true);
-        const [p, s, v, d, c] = await Promise.all([
-          apiRead('Produtos'), apiRead('Estoque'), apiRead('Vendas'), apiRead('Despesas'), apiRead('Clientes')
+        const [p, s, v, d, c, oc] = await Promise.all([
+          apiRead('Produtos'), apiRead('Estoque'), apiRead('Vendas'), apiRead('Despesas'), apiRead('Clientes'), apiRead('Custos')
         ]);
+        // ...
+        orderCosts = oc.filter(x => x && x.id && String(x.id).trim() !== ''); // <-- ADICIONE
         
         // Filtro à prova de falhas: só aceita se tiver ID
         products = p.filter(x => x && x.id && String(x.id).trim() !== '');
@@ -775,10 +794,10 @@
         if (id) {
           await apiPost({ action: 'update', sheet: 'Produtos', data });
           
+          // CORREÇÃO: Se editou o produto, recria a grade no estoque para não faltar numeração nova
           const numeros = grade.split(',').map(n => n.trim()).filter(Boolean);
           const existingStock = stockForProduct(id);
           
-          // 1. Adiciona as numerações novas que ainda não existem
           for (const num of numeros) {
             const hasNum = existingStock.find(s => String(s.numero) === String(num));
             if (!hasNum) {
@@ -792,16 +811,6 @@
               });
             }
           }
-          
-          // 2. CORREÇÃO: Apaga as numerações que foram removidas da grade
-          for (const item of existingStock) {
-            const stillInGrade = numeros.includes(String(item.numero));
-            // Se o número não está mais na grade E não tem vendas, apaga
-            if (!stillInGrade && Number(item.vendidos || 0) === 0) {
-              await apiPost({ action: 'delete', sheet: 'Estoque', id: item.id });
-            }
-          }
-          
           notify('Produto atualizado e grade conferida.');
         } else {
           await apiPost({ action: 'append', sheet: 'Produtos', data });
@@ -1024,6 +1033,24 @@
     });
 
      // SUBMIT DA VENDA
+    // ====== Lógica de Custos Extras ======
+    let tempOrderCosts = [];
+    
+    document.getElementById('addOrderCostBtn')?.addEventListener('click', () => {
+      const list = document.getElementById('orderCostsList');
+      const div = document.createElement('div');
+      div.style.display = 'flex';
+      div.style.gap = '10px';
+      div.style.marginBottom = '10px';
+      div.innerHTML = `
+        <input type="text" class="order-cost-desc" placeholder="Ex: Uber, Correio" style="flex: 2; padding: 8px; border: 1px solid var(--line); border-radius: 6px;" required />
+        <input type="number" class="order-cost-val" placeholder="R$ 0,00" min="0" step="0.01" style="flex: 1; padding: 8px; border: 1px solid var(--line); border-radius: 6px;" required />
+        <button type="button" class="btn btn-danger" style="padding: 8px;" onclick="this.parentElement.remove()">X</button>
+      `;
+      list.appendChild(div);
+    });
+
+    // SUBMIT DA VENDA (Atualizado com Custos e Opção de Estoque)
     document.getElementById('orderForm')?.addEventListener('submit', async e => {
       e.preventDefault();
       const id_produto = document.getElementById('orderProduct').value;
@@ -1032,6 +1059,8 @@
       const valorTotal = Number(document.getElementById('orderPrice').value);
       const cliente = document.getElementById('orderClient').value.trim();
       const obs = document.getElementById('orderNote').value.trim();
+      const statusPagamento = document.getElementById('orderStatus').value;
+      const baixarEstoque = document.getElementById('orderBaixarEstoque').checked;
 
       if (!id_produto || !numero || qtdVendida <= 0) { 
         notify('Preencha todos os campos corretamente.', true); 
@@ -1040,25 +1069,40 @@
 
       const estoqueItem = stock.find(s => String(s.id_produto) === String(id_produto) && String(s.numero) === String(numero));
       
-      if (!estoqueItem || Number(estoqueItem.quantidade) < qtdVendida) {
+      // Se for baixar do estoque, verifica se tem
+      if (baixarEstoque && (!estoqueItem || Number(estoqueItem.quantidade) < qtdVendida)) {
         notify('Estoque insuficiente para esta numeração.', true);
         return;
       }
 
       const p = productById(id_produto);
-      const skuVar = estoqueItem.sku_variacao || `${p.sku}-${numero}`;
-      
+      const skuVar = (estoqueItem ? estoqueItem.sku_variacao : null) || `${p.sku}-${numero}`;
       const custoUnitario = Number(p.custo || 0);
-      const lucro = valorTotal - (custoUnitario * qtdVendida);
-      const statusPagamento = document.getElementById('orderStatus').value;
+      
+      // Captura os custos extras
+      let somaCustosExtras = 0;
+      const custosParaSalvar = [];
+      document.querySelectorAll('#orderCostsList > div').forEach(div => {
+        const desc = div.querySelector('.order-cost-desc').value.trim();
+        const val = Number(div.querySelector('.order-cost-val').value);
+        if (desc && val > 0) {
+          somaCustosExtras += val;
+          custosParaSalvar.push({ descricao: desc, valor: val });
+        }
+      });
+
+      // Cálculo do Lucro: Venda - Custo do Produto - Custos Extras
+      const lucroLiquido = valorTotal - (custoUnitario * qtdVendida) - somaCustosExtras;
+      const vendaId = uuid();
 
       try {
         startLoad();
 
+        // 1. Salva a Venda Principal
         await apiPost({
           action: 'append', sheet: 'Vendas',
           data: {
-            id: uuid(),
+            id: vendaId,
             id_produto: id_produto,
             sku_variacao: skuVar,
             numero: numero,
@@ -1068,25 +1112,39 @@
             cliente: cliente,
             observacao: obs,
             custo_unitario: custoUnitario,
-            lucro: lucro,
+            lucro: lucroLiquido, // Agora o lucro já vem descontado
             status_pagamento: statusPagamento
           }
         });
 
-        const novaQtd = Number(estoqueItem.quantidade) - qtdVendida;
-        const novosVendidos = Number(estoqueItem.vendidos || 0) + qtdVendida;
-        
-        await apiPost({
-          action: 'update', sheet: 'Estoque',
-          data: {
-            ...estoqueItem,
-            quantidade: novaQtd,
-            vendidos: novosVendidos,
-            atualizado_em: new Date().toISOString()
-          }
-        });
+        // 2. Salva os Custos Extras (se houver)
+        for (const c of custosParaSalvar) {
+          await apiPost({
+            action: 'append', sheet: 'Custos',
+            data: {
+              id: uuid(),
+              id_venda: vendaId,
+              descricao: c.descricao,
+              valor: c.valor
+            }
+          });
+        }
 
-        notify('Venda registrada e estoque atualizado!');
+        // 3. Baixa no Estoque (se o usuário marcou)
+        if (baixarEstoque && estoqueItem) {
+          const novaQtd = Number(estoqueItem.quantidade) - qtdVendida;
+          const novosVendidos = Number(estoqueItem.vendidos || 0) + qtdVendida;
+          await apiPost({
+            action: 'update', sheet: 'Estoque',
+            data: {
+              ...estoqueItem, quantidade: novaQtd, vendidos: novosVendidos,
+              atualizado_em: new Date().toISOString()
+            }
+          });
+        }
+
+        notify('Venda registrada com sucesso!');
+        document.getElementById('orderCostsList').innerHTML = ''; // Limpa custos
         orderFormPanel.hidden = true;
         await loadAll(); 
         
@@ -1095,7 +1153,6 @@
         endLoad();
       }
     });
-
     // Renderiza a tabela de histórico de vendas
     function renderOrders() {
       const tbody = document.getElementById('ordersTable');
@@ -1109,6 +1166,11 @@
         const dataStr = v.data_venda ? new Date(v.data_venda).toLocaleString('pt-BR') : '—';
         const custo = Number(v.custo_unitario || 0);
         const lucro = Number(v.lucro || 0);
+        
+        // Busca os custos extras desta venda
+        const custosDaVenda = orderCosts.filter(c => String(c.id_venda) === String(v.id));
+        const txtCustos = custosDaVenda.map(c => `${esc(c.descricao)}: ${money(c.valor)}`).join('<br>') || '—';
+        
         const status = v.status_pagamento === 'OK' 
           ? '<span style="color:#27775d;font-weight:700;background:#e6f4ea;padding:4px 8px;border-radius:6px">OK</span>' 
           : '<span style="color:#b04545;font-weight:700;background:#fce8e8;padding:4px 8px;border-radius:6px">Pendente</span>';
@@ -1119,12 +1181,13 @@
           <td>${esc(v.numero)}</td>
           <td>${v.quantidade}</td>
           <td>${money(custo)}</td>
+          <td><small>${txtCustos}</small></td>
           <td><strong>${money(v.valor_venda)}</strong></td>
           <td style="color:#27775d;font-weight:700">${money(lucro)}</td>
           <td>${status}</td>
           <td><button class="btn btn-danger" data-del-order="${esc(v.id)}" style="padding:6px 9px">Excluir</button></td>
         </tr>`;
-      }).join('') : '<tr><td colspan="9" class="table-empty">Nenhuma venda registrada ainda.</td></tr>';
+      }).join('') : '<tr><td colspan="10" class="table-empty">Nenhuma venda registrada ainda.</td></tr>';
 
       tbody.querySelectorAll('[data-del-order]').forEach(b => b.onclick = () => deleteOrder(b.dataset.delOrder));
     }
@@ -1140,7 +1203,10 @@
         // 1. Apaga a venda
         await apiPost({ action: 'delete', sheet: 'Vendas', id: idVenda });
         
-        // 2. Devolve ao estoque
+        // 2. Apaga os custos extras vinculados
+        await apiPost({ action: 'deleteWhere', sheet: 'Custos', coluna: 'id_venda', valor: idVenda });
+
+        // 3. Devolve ao estoque (sempre devolve se achou o item, por segurança)
         const estoqueItem = stock.find(s => String(s.id_produto) === String(venda.id_produto) && String(s.numero) === String(venda.numero));
         if (estoqueItem) {
           const qtdDevolvida = Number(estoqueItem.quantidade) + Number(venda.quantidade);
@@ -1157,13 +1223,14 @@
           });
         }
         
-        notify('Venda excluída e estoque devolvido.');
+        notify('Venda, custos e estoque atualizados.');
         await loadAll();
       } catch (err) {
         notify('Erro ao excluir venda: ' + err.message, true);
         endLoad();
       }
     }
+
 
     // ====== Despesas (Financeiro) ======
     const expenseFormPanel = document.getElementById('expenseFormPanel');
