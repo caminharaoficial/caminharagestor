@@ -280,29 +280,52 @@
                 <div class="field"><label for="orderProduct">Produto *</label><select id="orderProduct" required></select></div>
                 <div class="field"><label for="orderNumber">Numeração *</label><select id="orderNumber" required></select></div>
                 <div class="field"><label for="orderQty">Quantidade *</label><input id="orderQty" type="number" min="1" step="1" value="1" required /></div>
-                <div class="field"><label for="orderPrice">Valor Total da Venda (R$) *</label><input id="orderPrice" type="number" min="0" step="0.01" required placeholder="0,00"/></div>
-                <div class="field"><label for="orderClient">Cliente</label><select id="orderClient"><option value="">— Consumidor Final (Sem cadastro) —</option></select></div>
-                <div class="field"><label for="orderNote">Observação</label><input id="orderNote" maxlength="100" placeholder="Ex.: Pago no Pix"/></div>
-                <div class="field"><label for="orderStatus">Status do Pagamento</label>
-                  <select id="orderStatus">
-                    <option value="OK">Recebido (OK)</option>
-                    <option value="Pendente">Pendente</option>
+
+                <div class="field"><label for="orderCostUnit">Custo Unitário (R$) *</label><input id="orderCostUnit" type="number" min="0" step="0.01" required placeholder="0,00"/></div>
+                <div class="field"><label for="orderPrice">Valor Total (R$) *</label><input id="orderPrice" type="number" min="0" step="0.01" required placeholder="0,00"/></div>
+                <div class="field">
+                  <label for="orderClient">Cliente</label>
+                  <div style="display:flex; gap:6px;">
+                    <select id="orderClient" style="flex:1"><option value="">— Consumidor Final —</option></select>
+                    <button type="button" class="btn btn-light" id="quickAddClientBtn" style="white-space:nowrap;">＋ Novo</button>
+                  </div>
+                </div>
+                <div class="field"><label for="orderPayment">Forma de Pagamento</label>
+                  <select id="orderPayment">
+                    <option value="Dinheiro">Dinheiro</option>
+                    <option value="Pix">Pix</option>
+                    <option value="Cartão Débito">Cartão Débito</option>
+                    <option value="Cartão Crédito">Cartão Crédito</option>
+                    <option value="Boleto">Boleto</option>
                   </select>
                 </div>
-                <div class="field" style="display: flex; align-items: center; gap: 10px;">
-                  <input type="checkbox" id="orderBaixarEstoque" checked style="width: 20px; height: 20px;" />
-                  <label for="orderBaixarEstoque" style="margin: 0; cursor: pointer;">Dar baixa no estoque automaticamente</label>
+                <div class="field" id="orderParcelasField" style="display:none;"><label for="orderParcelas">Parcelas</label>
+                  <select id="orderParcelas">
+                    <option value="1">1x</option><option value="2">2x</option><option value="3">3x</option>
+                    <option value="4">4x</option><option value="5">5x</option><option value="6">6x</option>
+                    <option value="7">7x</option><option value="8">8x</option><option value="9">9x</option>
+                    <option value="10">10x</option><option value="11">11x</option><option value="12">12x</option>
+                  </select>
+                </div>
+                <div class="field" id="orderParcelaInfo" style="display:none;"><label>Valor por parcela</label>
+                  <input id="orderParcelaValor" readonly style="background:#f0f3f6;"/>
+                </div>
+                <div class="field"><label for="orderNote">Observação</label><input id="orderNote" maxlength="100"/></div>
+                <div class="field"><label for="orderStatus">Status Pagamento</label>
+                  <select id="orderStatus"><option value="OK">Recebido</option><option value="Pendente">Pendente</option></select>
+                </div>
+                <div class="field" style="display:flex; align-items:center; gap:10px;">
+                  <input type="checkbox" id="orderBaixarEstoque" checked style="width:20px; height:20px;" />
+                  <label for="orderBaixarEstoque" style="margin:0; cursor:pointer;">Baixar do estoque</label>
                 </div>
               </div>
-
-              <div style="margin-top: 18px; padding: 15px; border: 1px solid var(--line); border-radius: 10px; background: #fafbfc;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                  <h3 style="margin: 0; font-size: 13px;">Custos Extras desta Venda</h3>
-                  <button type="button" class="btn btn-light" id="addOrderCostBtn" style="padding: 6px 10px; font-size: 11px;">＋ Adicionar Custo</button>
+              <div style="margin-top:18px; padding:15px; border:1px solid var(--line); border-radius:10px; background:#fafbfc;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                  <h3 style="margin:0; font-size:13px;">Custos Extras</h3>
+                  <button type="button" class="btn btn-light" id="addOrderCostBtn" style="padding:6px 10px; font-size:11px;">＋ Adicionar</button>
                 </div>
                 <div id="orderCostsList"></div>
               </div>
-
               <div class="form-actions">
                 <button class="btn btn-primary" type="submit">Confirmar Venda</button>
                 <button class="btn btn-light" type="button" id="cancelOrderBtn">Cancelar</button>
@@ -325,58 +348,68 @@
  
         <section class="section" id="orders">
           <div class="page-heading">
-            <div><h1>Pedidos e Vendas</h1><p class="subtitle">Registre as saídas e acompanhe o faturamento.</p></div>
-            <button class="btn btn-primary" id="newOrderBtn">＋ Registrar Venda</button>
+            <div><h1>Pedidos</h1><p class="subtitle">Acompanhe as encomendas em andamento.</p></div>
+            <button class="btn btn-primary" id="newRequestBtn">＋ Novo Pedido</button>
           </div>
 
-          <!-- Formulário de Nova Venda -->
-          <div class="panel" id="orderFormPanel" style="margin-bottom:18px">
-            <div class="panel-head"><div><h2>Registrar nova venda</h2><div class="panel-desc">A baixa no estoque será automática.</div></div></div>
-            <form id="orderForm">
+          <!-- Formulário de Novo Pedido -->
+          <div class="panel" id="requestFormPanel" style="margin-bottom:18px">
+            <div class="panel-head"><div><h2>Registrar novo pedido</h2><div class="panel-desc">O estoque não é baixado até o faturamento.</div></div></div>
+             <form id="requestForm">
               <div class="form-grid">
-                <div class="field"><label for="orderProduct">Produto *</label><select id="orderProduct" required></select></div>
-                <div class="field"><label for="orderNumber">Numeração *</label><select id="orderNumber" required></select></div>
-                <div class="field"><label for="orderQty">Quantidade *</label><input id="orderQty" type="number" min="1" step="1" value="1" required /></div>
-                <div class="field"><label for="orderPrice">Valor Total da Venda (R$) *</label><input id="orderPrice" type="number" min="0" step="0.01" required placeholder="0,00"/></div>
-                <div class="field"><label for="orderClient">Cliente</label><select id="orderClient"><option value="">— Consumidor Final (Sem cadastro) —</option></select></div>
-                <div class="field"><label for="orderNote">Observação</label><input id="orderNote" maxlength="100" placeholder="Ex.: Pago no Pix"/></div>
-                <div class="field"><label for="orderStatus">Status do Pagamento</label>
-                  <select id="orderStatus">
-                    <option value="OK">Recebido (OK)</option>
-                    <option value="Pendente">Pendente</option>
+                <div class="field">
+                  <label for="reqClient">Cliente</label>
+                  <div style="display:flex; gap:6px;">
+                    <select id="reqClient" style="flex:1"><option value="">— Consumidor Final —</option></select>
+                    <button type="button" class="btn btn-light" id="quickAddReqClientBtn" style="white-space:nowrap;">＋ Novo</button>
+                  </div>
+                </div>
+                <div class="field"><label for="reqProduct">Produto *</label><select id="reqProduct" required></select></div>
+                <div class="field"><label for="reqNumber">Numeração *</label><select id="reqNumber" required></select></div>
+                <div class="field"><label for="reqQty">Qtd *</label><input id="reqQty" type="number" min="1" value="1" required/></div>
+                <div class="field"><label for="reqCostUnit">Custo Unitário (R$) *</label><input id="reqCostUnit" type="number" min="0" step="0.01" required/></div>
+                <div class="field"><label for="reqPrice">Valor Total (R$) *</label><input id="reqPrice" type="number" min="0" step="0.01" required/></div>
+                <div class="field"><label for="reqPayment">Forma de Pagamento</label>
+                  <select id="reqPayment">
+                    <option value="Dinheiro">Dinheiro</option>
+                    <option value="Pix">Pix</option>
+                    <option value="Cartão Débito">Cartão Débito</option>
+                    <option value="Cartão Crédito">Cartão Crédito</option>
+                    <option value="Boleto">Boleto</option>
                   </select>
                 </div>
-                <div class="field" style="display: flex; align-items: center; gap: 10px;">
-                  <input type="checkbox" id="orderBaixarEstoque" checked style="width: 20px; height: 20px;" />
-                  <label for="orderBaixarEstoque" style="margin: 0; cursor: pointer;">Dar baixa no estoque automaticamente</label>
+                <div class="field" id="reqParcelasField" style="display:none;"><label for="reqParcelas">Parcelas</label>
+                  <select id="reqParcelas">
+                    <option value="1">1x</option><option value="2">2x</option><option value="3">3x</option>
+                    <option value="4">4x</option><option value="5">5x</option><option value="6">6x</option>
+                    <option value="7">7x</option><option value="8">8x</option><option value="9">9x</option>
+                    <option value="10">10x</option><option value="11">11x</option><option value="12">12x</option>
+                  </select>
+                </div>
+                <div class="field" id="reqParcelaInfo" style="display:none;"><label>Valor por parcela</label>
+                  <input id="reqParcelaValor" readonly style="background:#f0f3f6;"/>
+                </div>
+                <div class="field"><label for="reqNote">Observação</label><input id="reqNote" maxlength="100"/></div>
+                <div class="field"><label for="reqStatus">Status Pedido</label>
+                  <select id="reqStatus">
+                    <option>Em preparo</option><option>Aguardando Fornecedor</option><option>Pronto para Retirada</option>
+                  </select>
                 </div>
               </div>
-
-              <!-- Área de Custos Extras -->
-              <div style="margin-top: 18px; padding: 15px; border: 1px solid var(--line); border-radius: 10px; background: #fafbfc;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                  <h3 style="margin: 0; font-size: 13px;">Custos Extras desta Venda</h3>
-                  <button type="button" class="btn btn-light" id="addOrderCostBtn" style="padding: 6px 10px; font-size: 11px;">＋ Adicionar Custo</button>
-                </div>
-                <div id="orderCostsList">
-                  <!-- Os custos vão aparecer aqui -->
-                </div>
-              </div>
-
               <div class="form-actions">
-                <button class="btn btn-primary" type="submit">Confirmar Venda</button>
-                <button class="btn btn-light" type="button" id="cancelOrderBtn">Cancelar</button>
+                <button class="btn btn-primary" type="submit">Salvar Pedido</button>
+                <button class="btn btn-light" type="button" id="cancelRequestBtn">Cancelar</button>
               </div>
             </form>
           </div>
 
-          <!-- Histórico de Vendas -->
+          <!-- Histórico de Pedidos -->
           <section class="panel">
-            <div class="panel-head"><div><h2>Histórico de Vendas</h2><div class="panel-desc">Últimas transações registradas.</div></div></div>
+            <div class="panel-head"><div><h2>Histórico de Pedidos</h2><div class="panel-desc">Encomendas em aberto.</div></div></div>
             <div class="table-wrap">
               <table>
-<thead><tr><th>Data</th><th>Produto</th><th>Num.</th><th>Qtd.</th><th>Custo Prod.</th><th>Custos Extras</th><th>Venda</th><th>Lucro Líquido</th><th>Status</th><th>Ações</th></tr></thead>
-                <tbody id="ordersTable"><tr><td colspan="10" class="table-empty">Carregando...</td></tr></tbody>
+<thead><tr><th>Data</th><th>Cliente</th><th>Produto</th><th>Num.</th><th>Qtd.</th><th>Valor</th><th>Status</th><th>Ações</th></tr></thead>
+                <tbody id="requestsTable"><tr><td colspan="8" class="table-empty">Carregando...</td></tr></tbody>
               </table>
             </div>
           </section>
@@ -475,6 +508,19 @@
         </section>
       </div>
     </main>
+  </div>
+  <div id="quickClientModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:99999; align-items:center; justify-content:center;">
+    <div style="background:#fff; border-radius:14px; padding:24px; width:420px; max-width:90%;">
+      <h3 style="margin-top:0;">Cadastro rápido de cliente</h3>
+      <div class="field" style="margin-bottom:12px;"><label>Nome *</label><input id="qcName" /></div>
+      <div class="field" style="margin-bottom:12px;"><label>WhatsApp *</label><input id="qcWhatsapp" /></div>
+      <div class="field" style="margin-bottom:12px;"><label>CPF</label><input id="qcCpf" /></div>
+      <div class="field" style="margin-bottom:12px;"><label>Cidade</label><input id="qcCidade" /></div>
+      <div class="form-actions">
+        <button class="btn btn-primary" type="button" id="qcSave">Salvar</button>
+        <button class="btn btn-light" type="button" id="qcCancel">Cancelar</button>
+      </div>
+    </div>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
@@ -1068,7 +1114,11 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
       }
 
       const prod = productById(idProd);
-      if (prod) priceInput.value = prod.preco_venda;
+      const costInput = document.getElementById('orderCostUnit');
+      if (prod) {
+        priceInput.value = prod.preco_venda;
+        if (costInput) costInput.value = prod.custo || 0;
+      }
 
       // Une estoque + grade
       const stockNums = stockForProduct(idProd).map(s => s.numero);
@@ -1090,6 +1140,25 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
 
 
     // SUBMIT DA VENDA (Atualizado com Custos e Opção de Estoque)
+    // Listener do botão Adicionar Custo
+    document.getElementById('addOrderCostBtn')?.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const list = document.getElementById('orderCostsList');
+      if (!list) return;
+      const div = document.createElement('div');
+      div.style.display = 'flex';
+      div.style.gap = '10px';
+      div.style.marginBottom = '10px';
+      div.innerHTML = `
+        <input type="text" class="order-cost-desc" placeholder="Ex: Uber, Correio" style="flex: 2; padding: 8px; border: 1px solid var(--line); border-radius: 6px;" />
+        <input type="number" class="order-cost-val" placeholder="R$ 0,00" min="0" step="0.01" style="flex: 1; padding: 8px; border: 1px solid var(--line); border-radius: 6px;" />
+        <button type="button" class="btn btn-danger" style="padding: 8px;">X</button>
+      `;
+      div.querySelector('button').onclick = () => div.remove();
+      list.appendChild(div);
+    });
+
     document.getElementById('orderForm')?.addEventListener('submit', async e => {
       e.preventDefault();
       const id_produto = document.getElementById('orderProduct').value;
@@ -1117,7 +1186,7 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
 
       const p = productById(id_produto);
       const skuVar = (estoqueItem ? estoqueItem.sku_variacao : null) || `${p.sku}-${numero}`;
-      const custoUnitario = Number(p.custo || 0);
+      const custoUnitario = Number(document.getElementById('orderCostUnit').value || 0);
       
       // Captura os custos extras
       let somaCustosExtras = 0;
@@ -1478,7 +1547,13 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
       if (!idProd) { numSelect.innerHTML = '<option value="">—</option>'; return; }
       
       // CORREÇÃO: Sempre puxa da grade do produto (independente de ter estoque ou não)
-      const p = productById(idProd);
+            const p = productById(idProd);
+      const priceInput = document.getElementById('reqPrice');
+      const costInput = document.getElementById('reqCostUnit');
+      if (p) {
+        if (priceInput) priceInput.value = p.preco_venda;
+        if (costInput) costInput.value = p.custo || 0;
+      }
       const gradeNums = p ? String(p.grade || '').split(',').map(n => n.trim()).filter(Boolean) : [];
       const stockNums = stockForProduct(idProd).map(s => s.numero);
       const todasNums = [...new Set([...gradeNums, ...stockNums])];
@@ -1494,6 +1569,7 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
       const numero = document.getElementById('reqNumber').value;
       const qtd = Number(document.getElementById('reqQty').value);
       const valor = Number(document.getElementById('reqPrice').value);
+      const custo = Number(document.getElementById('reqCostUnit').value || 0);
       const obs = document.getElementById('reqNote').value;
       const status = document.getElementById('reqStatus').value;
 
@@ -1511,6 +1587,7 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
             numero: numero,
             quantidade: qtd,
             valor_total: valor,
+            custo_unitario: custo,
             data_pedido: new Date().toISOString(),
             status_pedido: status,
             observacao: obs
@@ -1616,6 +1693,65 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
         endLoad();
       }
     };
+
+    // Parcelas — Vendas
+    document.getElementById('orderPayment')?.addEventListener('change', function() {
+      const show = this.value === 'Cartão Crédito';
+      document.getElementById('orderParcelasField').style.display = show ? 'grid' : 'none';
+      document.getElementById('orderParcelaInfo').style.display = show ? 'grid' : 'none';
+      if (show) atualizaParcelaVenda();
+    });
+    document.getElementById('orderParcelas')?.addEventListener('change', atualizaParcelaVenda);
+    document.getElementById('orderPrice')?.addEventListener('input', atualizaParcelaVenda);
+    function atualizaParcelaVenda() {
+      const total = Number(document.getElementById('orderPrice').value || 0);
+      const n = Number(document.getElementById('orderParcelas').value || 1);
+      document.getElementById('orderParcelaValor').value = money(n > 0 ? total / n : total) + ` (${n}x)`;
+    }
+
+    // Parcelas — Pedidos
+    document.getElementById('reqPayment')?.addEventListener('change', function() {
+      const show = this.value === 'Cartão Crédito';
+      document.getElementById('reqParcelasField').style.display = show ? 'grid' : 'none';
+      document.getElementById('reqParcelaInfo').style.display = show ? 'grid' : 'none';
+      if (show) atualizaParcelaReq();
+    });
+    document.getElementById('reqParcelas')?.addEventListener('change', atualizaParcelaReq);
+    document.getElementById('reqPrice')?.addEventListener('input', atualizaParcelaReq);
+    function atualizaParcelaReq() {
+      const total = Number(document.getElementById('reqPrice').value || 0);
+      const n = Number(document.getElementById('reqParcelas').value || 1);
+      document.getElementById('reqParcelaValor').value = money(n > 0 ? total / n : total) + ` (${n}x)`;
+    }
+
+    // Cliente rápido
+    const quickClientModal = document.getElementById('quickClientModal');
+    let quickClientTarget = null;
+    function abrirQuickClient(target) {
+      quickClientTarget = target;
+      ['qcName','qcWhatsapp','qcCpf','qcCidade'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+      if (quickClientModal) quickClientModal.style.display = 'flex';
+    }
+    document.getElementById('quickAddClientBtn')?.addEventListener('click', () => abrirQuickClient('order'));
+    document.getElementById('quickAddReqClientBtn')?.addEventListener('click', () => abrirQuickClient('request'));
+    document.getElementById('qcCancel')?.addEventListener('click', () => { if (quickClientModal) quickClientModal.style.display = 'none'; });
+    document.getElementById('qcSave')?.addEventListener('click', async () => {
+      const nome = document.getElementById('qcName').value.trim();
+      const whatsapp = document.getElementById('qcWhatsapp').value.trim();
+      const cpf = document.getElementById('qcCpf').value.trim();
+      const cidade = document.getElementById('qcCidade').value.trim();
+      if (!nome || !whatsapp) { notify('Nome e WhatsApp obrigatórios.', true); return; }
+      try {
+        startLoad();
+        await apiPost({ action: 'append', sheet: 'Clientes', data: { id: uuid(), nome, whatsapp, cpf, cidade, data_cadastro: new Date().toISOString() } });
+        notify('Cliente cadastrado!');
+        quickClientModal.style.display = 'none';
+        await loadAll();
+        const selId = quickClientTarget === 'order' ? 'orderClient' : 'reqClient';
+        const sel = document.getElementById(selId);
+        if (sel) sel.value = nome;
+      } catch (err) { notify('Erro: ' + err.message, true); endLoad(); }
+    });
 
     // ====== Start ======
     document.addEventListener('DOMContentLoaded', () => {
