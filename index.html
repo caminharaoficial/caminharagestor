@@ -228,6 +228,7 @@
               <button class="btn btn-primary" id="newStockBtn">＋ Adicionar numeração</button>
             </div>
           </div>
+          
           <div class="panel" id="stockFormPanel" hidden style="margin-bottom:18px">
             <div class="panel-head"><div><h2>Adicionar/atualizar numeração</h2><div class="panel-desc">Se a combinação produto+numeração já existir, será atualizada.</div></div></div>
             <form id="stockForm">
@@ -239,7 +240,27 @@
               <div class="form-actions"><button class="btn btn-primary" type="submit">Salvar</button><button class="btn btn-light" type="button" id="cancelStockBtn">Cancelar</button></div>
             </form>
           </div>
-          <section class="panel"><div class="panel-head"><div><h2>Posição de estoque</h2><div class="panel-desc">Uma linha por numeração.</div></div></div><div class="table-wrap"><table><thead><tr><th>Produto</th><th>SKU da Variação</th><th>Numeração</th><th>Qtd.</th><th>Vendidos</th><th>Situação</th></tr></thead><tbody id="stockTable"><tr><td colspan="6" class="table-empty">Carregando...</td></tr></tbody></table></div></section>
+
+          <section class="panel">
+            <div class="toolbar">
+              <input class="search" id="stockSearch" placeholder="Buscar por marca ou modelo..." aria-label="Buscar estoque"/>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width: 40px;"></th>
+                    <th>Produto / SKU Pai</th>
+                    <th>Grade Completa</th>
+                    <th>Estoque Total</th>
+                  </tr>
+                </thead>
+                <tbody id="stockTable">
+                  <tr><td colspan="4" class="table-empty">Carregando...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
         </section>
 
         <section class="section" id="orders">
