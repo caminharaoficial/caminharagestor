@@ -2281,59 +2281,61 @@ window.viewRequest = function(id) {
     let editingSaleId = null;
     let editingRequestId = null;
 
-function editarVendaExistente(v) {
-  editingSaleId = v.id;
-  showSection('sales');
-  orderFormPanel.hidden = false;
-  const selProd = document.getElementById('orderProduct');
-  selProd.value = v.id_produto;
-  selProd.dispatchEvent(new Event('change', { bubbles: true }));
-  document.getElementById('orderNumber').value = v.numero || '';
-  document.getElementById('orderQty').value = v.quantidade || 1;
-  document.getElementById('orderCostUnit').value = v.custo_unitario || 0;
-  document.getElementById('orderPrice').value = v.valor_venda || 0;
-  document.getElementById('orderNote').value = v.observacao || '';
-  document.getElementById('orderStatus').value = v.status_pagamento || 'OK';
-  const selCli = document.getElementById('orderClient');
-  if (v.cliente) {
-    const opt = Array.from(selCli.options).find(o => o.value === v.cliente);
-    if (!opt) { const n = new Option(v.cliente, v.cliente); selCli.add(n); }
-    selCli.value = v.cliente;
-  } else selCli.value = '';
+    function editarVendaExistente(v) {
+      editingSaleId = v.id;
+      showSection('sales');
+      orderFormPanel.hidden = false;
+      const selProd = document.getElementById('orderProduct');
+      selProd.value = v.id_produto;
+      selProd.dispatchEvent(new Event('change', { bubbles: true }));
+      document.getElementById('orderNumber').value = v.numero || '';
+      document.getElementById('orderQty').value = v.quantidade || 1;
+      document.getElementById('orderCostUnit').value = v.custo_unitario || 0;
+      document.getElementById('orderPrice').value = v.valor_venda || 0;
+      document.getElementById('orderNote').value = v.observacao || '';
+      document.getElementById('orderStatus').value = v.status_pagamento || 'OK';
+      const selCli = document.getElementById('orderClient');
+      if (v.cliente) {
+        const opt = Array.from(selCli.options).find(o => o.value === v.cliente);
+        if (!opt) { const n = new Option(v.cliente, v.cliente); selCli.add(n); }
+        selCli.value = v.cliente;
+      } else selCli.value = '';
 
-  // Lê custos embutidos na venda
-  let custosArr = [];
-  if (v.custos_extras) {
-    try { custosArr = JSON.parse(v.custos_extras); } catch (e) {
-      // fallback pipe
-      custosArr = String(v.custos_extras).split('|').map(s => {
-        const [d, val] = s.split(':');
-        return { descricao: d, valor: Number(val) };
-      }).filter(c => c.descricao);
+      // Lê custos embutidos na venda
+      let custosArr = [];
+      if (v.custos_extras) {
+        try { custosArr = JSON.parse(v.custos_extras); } catch (e) {
+          // fallback pipe
+          custosArr = String(v.custos_extras).split('|').map(s => {
+            const [d, val] = s.split(':');
+            return { descricao: d, valor: Number(val) };
+          }).filter(c => c.descricao);
+        }
+      }
+      if (!custosArr.length) {
+        custosArr = orderCosts
+          .filter(c => String(c.id_venda).trim() === String(v.id).trim())
+          .map(c => ({ descricao: c.descricao, valor: Number(c.valor) }));
+      }
+
+      const lista = document.getElementById('orderCostsList');
+      lista.innerHTML = '';
+      custosArr.forEach(c => {
+        const div = document.createElement('div');
+        div.style.display = 'flex'; div.style.gap = '10px'; div.style.marginBottom = '10px';
+        div.innerHTML = `
+          <input type="text" class="order-cost-desc" value="${esc(c.descricao)}" style="flex:2; padding:8px; border:1px solid var(--line); border-radius:6px;" />
+          <input type="number" class="order-cost-val" value="${Number(c.valor)}" min="0" step="0.01" style="flex:1; padding:8px; border:1px solid var(--line); border-radius:6px;" />
+          <button type="button" class="btn btn-danger" style="padding:8px;">X</button>`;
+        div.querySelector('button').onclick = () => { div.remove(); calcularLucroVenda(); };
+        lista.appendChild(div);
+      });
+
+      calcularLucroVenda();
+      setTimeout(() => document.getElementById('orderFormPanel').scrollIntoView({ behavior:'smooth', block:'start' }), 50);
     }
-  }
-  if (!custosArr.length) {
-    custosArr = orderCosts
-      .filter(c => String(c.id_venda).trim() === String(v.id).trim())
-      .map(c => ({ descricao: c.descricao, valor: Number(c.valor) }));
-  }
 
-  const lista = document.getElementById('orderCostsList');
-  lista.innerHTML = '';
-  custosArr.forEach(c => {
-    const div = document.createElement('div');
-    div.style.display = 'flex'; div.style.gap = '10px'; div.style.marginBottom = '10px';
-    div.innerHTML = `
-      <input type="text" class="order-cost-desc" value="${esc(c.descricao)}" style="flex:2; padding:8px; border:1px solid var(--line); border-radius:6px;" />
-<input type="number" class="order-cost-val" value="${Number(c.valor)}" min="0" step="0.01" style="flex:1; padding:8px; border:1px solid var(--line); border-radius:6px;" />
-      <button type="button" class="btn btn-danger" style="padding:8px;">X</button>`;
-    div.querySelector('button').onclick = () => { div.remove(); calcularLucroVenda(); };
-    lista.appendChild(div);
-  });
 
-  calcularLucroVenda();
-  setTimeout(() => document.getElementById('orderFormPanel').scrollIntoView({ behavior:'smooth', block:'start' }), 50);
-}
     function editarPedidoExistente(r) {
       editingRequestId = r.id;
       showSection('orders');
