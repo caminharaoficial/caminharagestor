@@ -744,12 +744,15 @@
       const cardEl = document.getElementById('lowStockCard');
       if (!alertEl || !titleEl) return;
 
-      // Produto é "baixo" quando a soma das quantidades em Estoque <= estoque_minimo
-      // (e estoque_minimo > 0, senão todo produto zerado viraria alerta)
+      // Agora verifica numeração por numeração
       const baixos = products.filter(p => {
-        const min = Number(p.estoque_minimo || 0);
-        if (min <= 0) return false;
-        return totalStock(p.id) <= min;
+        const variacoes = stockForProduct(p.id);
+        // Verifica se alguma numeração está abaixo ou igual ao mínimo dela
+        return variacoes.some(v => {
+          const min = Number(v.estoque_minimo || 0);
+          if (min <= 0) return false;
+          return Number(v.quantidade) <= min;
+        });
       });
 
       if (baixos.length === 0) {
@@ -863,6 +866,7 @@
                   <th style="padding-left: 50px;">Numeração</th>
                   <th>SKU Variação</th>
                   <th>Qtd. Atual</th>
+                  <th>Estoque Mínimo</th>
                   <th>Vendidos</th>
                   <th>Ação</th>
                 </tr>
@@ -883,6 +887,9 @@
               <td>
                 <input type="number" class="inline-stock-input" value="${qty}" min="0" step="1" data-id="${esc(v.id)}" data-prod-id="${esc(p.id)}" style="width: 70px; padding: 6px; border: 1px solid #e4e9ee; border-radius: 6px; text-align: center; font-weight: 700;" />
                 <span style="margin-left: 8px;">${status}</span>
+              </td>
+              <td>
+                <input type="number" class="inline-min-input" value="${Number(v.estoque_minimo || 0)}" min="0" step="1" data-id="${esc(v.id)}" data-prod-id="${esc(p.id)}" style="width: 70px; padding: 6px; border: 1px solid #e4e9ee; border-radius: 6px; text-align: center;" />
               </td>
               <td>${Number(v.vendidos || 0)}</td>
               <td></td>
@@ -912,7 +919,6 @@
 
     // Salva todas as quantidades de um produto de uma vez
     window.saveAllStock = async function(prodId, btnElement) {
-      // Encontra todos os inputs que pertencem a este produto
       const inputs = document.querySelectorAll(`input[data-prod-id="${prodId}"]`);
       if (inputs.length === 0) return;
 
@@ -922,26 +928,34 @@
 
       try {
         startLoad();
-        for (const input of inputs) {
-          const stockId = input.dataset.id;
-          const novaQtd = Number(input.value);
-          const item = stock.find(s => String(s.id) === String(stockId));
-          if (!item) continue;
+        // Pega todas as numerações deste produto
+        const variacoes = stockForProduct(prodId);
+        
+        for (const item of variacoes) {
+          // Busca os inputs específicos desta numeração
+          const inputQtd = document.querySelector(`.inline-stock-input[data-id="${item.id}"]`);
+          const inputMin = document.querySelector(`.inline-min-input[data-id="${item.id}"]`);
+          
+          if (!inputQtd || !inputMin) continue;
 
-          if (item.quantidade !== novaQtd) {
+          const novaQtd = Number(inputQtd.value);
+          const novoMin = Number(inputMin.value);
+
+          if (Number(item.quantidade) !== novaQtd || Number(item.estoque_minimo || 0) !== novoMin) {
             await apiPost({
               action: 'update', sheet: 'Estoque',
               data: {
                 ...item,
                 vendedor: usuarioLogado?.nome || 'Sistema',
                 quantidade: novaQtd,
+                estoque_minimo: novoMin,
                 atualizado_em: new Date().toISOString()
               }
             });
           }
         }
         notify('Estoque atualizado com sucesso!');
-        await loadAll(); // Recarrega a tela para atualizar os totais
+        await loadAll();
       } catch (err) {
         notify('Erro ao salvar estoque: ' + err.message, true);
         btnElement.textContent = textoOriginal;
