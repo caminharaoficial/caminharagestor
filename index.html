@@ -1161,6 +1161,14 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
 
     // SUBMIT DA VENDA (Atualizado com Custos e Opção de Estoque)
     // Listener do botão Adicionar Custo
+    document.getElementById('cancelOrderBtn')?.addEventListener('click', () => {
+      document.getElementById('orderForm').reset();
+      document.getElementById('orderCostsList').innerHTML = '';
+      editingSaleId = null;
+      orderFormPanel.hidden = true;
+      calcularLucroVenda();
+    });
+
     document.getElementById('addOrderCostBtn')?.addEventListener('click', (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
