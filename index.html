@@ -1261,6 +1261,7 @@ div.querySelector('button').onclick = () => { div.remove(); calcularLucroVenda()
           action: 'append', sheet: 'Vendas',
           data: {
             id: vendaId,
+vendedor: usuarioLogado?.nome || 'Sistema',
             id_produto: id_produto,
             sku_variacao: skuVar,
             numero: numero,
@@ -1428,6 +1429,7 @@ tbody.querySelectorAll('[data-view-order]').forEach(b => b.onclick = () => viewO
           action: 'append', sheet: 'Despesas',
           data: {
             id: uuid(),
+vendedor: usuarioLogado?.nome || 'Sistema',
             descricao: desc,
             categoria: cat,
             valor: valor,
@@ -1511,6 +1513,7 @@ tbody.querySelectorAll('[data-view-order]').forEach(b => b.onclick = () => viewO
           action: 'append', sheet: 'Clientes',
           data: {
             id: uuid(),
+vendedor: usuarioLogado?.nome || 'Sistema',
             nome: nome,
             whatsapp: whatsapp,
             cpf: cpf,
@@ -1634,6 +1637,7 @@ tbody.querySelectorAll('[data-view-order]').forEach(b => b.onclick = () => viewO
           action: 'append', sheet: 'Pedidos',
           data: {
             id: uuid(),
+vendedor: usuarioLogado?.nome || 'Sistema',
             cliente: cliente,
             id_produto: id_produto,
             sku_variacao: `${p.sku}-${numero}`,
