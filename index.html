@@ -2320,21 +2320,42 @@ window.viewRequest = function(id) {
 
       const lista = document.getElementById('orderCostsList');
       lista.innerHTML = '';
+      
       custosArr.forEach(c => {
         const div = document.createElement('div');
         div.style.display = 'flex'; div.style.gap = '10px'; div.style.marginBottom = '10px';
-        div.innerHTML = `
-          <input type="text" class="order-cost-desc" value="${esc(c.descricao)}" style="flex:2; padding:8px; border:1px solid var(--line); border-radius:6px;" />
-<input type="number" class="order-cost-val" value="${c.valor}"  min="0" step="0.01" style="flex:1; padding:8px; border:1px solid var(--line); border-radius:6px;" />
-          <button type="button" class="btn btn-danger" style="padding:8px;">X</button>`;
-        div.querySelector('button').onclick = () => { div.remove(); calcularLucroVenda(); };
+        
+        // Criação segura dos elementos via DOM para evitar erro de template string
+        const inputDesc = document.createElement('input');
+        inputDesc.type = 'text';
+        inputDesc.className = 'order-cost-desc';
+        inputDesc.value = c.descricao;
+        inputDesc.style = 'flex:2; padding:8px; border:1px solid var(--line); border-radius:6px;';
+
+        const inputVal = document.createElement('input');
+        inputVal.type = 'number';
+        inputVal.className = 'order-cost-val';
+        inputVal.value = Number(c.valor);
+        inputVal.min = '0';
+        inputVal.step = '0.01';
+        inputVal.style = 'flex:1; padding:8px; border:1px solid var(--line); border-radius:6px;';
+
+        const btnDel = document.createElement('button');
+        btnDel.type = 'button';
+        btnDel.className = 'btn btn-danger';
+        btnDel.textContent = 'X';
+        btnDel.style = 'padding:8px;';
+        btnDel.onclick = () => { div.remove(); calcularLucroVenda(); };
+
+        div.appendChild(inputDesc);
+        div.appendChild(inputVal);
+        div.appendChild(btnDel);
         lista.appendChild(div);
       });
 
       calcularLucroVenda();
       setTimeout(() => document.getElementById('orderFormPanel').scrollIntoView({ behavior:'smooth', block:'start' }), 50);
     }
-
 
     function editarPedidoExistente(r) {
       editingRequestId = r.id;
