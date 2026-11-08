@@ -153,6 +153,7 @@
 <button class="nav-btn" data-section="orders"><span class="nav-icon">🛍</span> Pedidos</button>
           <button class="nav-btn" data-section="finance"><span class="nav-icon">◉</span> Financeiro</button>
           <button class="nav-btn" data-section="activities"><span class="nav-icon">📊</span> Atividades</button>
+          <button class="nav-btn" data-section="reports"><span class="nav-icon">📈</span> Relatório</button>
           <button class="nav-btn" data-section="contacts"><span class="nav-icon">♙</span> Clientes e fornecedores</button>
         </nav>
       </div>
@@ -562,6 +563,39 @@
                 <tbody id="activitiesTable">
                   <tr><td colspan="4" class="table-empty">Clique em "Filtrar" para carregar as atividades.</td></tr>
                 </tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <!-- RELATÓRIOS -->
+        <section class="section" id="reports">
+          <div class="page-heading">
+            <div><h1>Relatório de Faturamento</h1><p class="subtitle">Analise o desempenho das vendas por período.</p></div>
+            <button class="btn btn-light" id="printReportBtn" onclick="window.print()">🖨 Imprimir</button>
+          </div>
+          
+          <section class="panel" style="margin-bottom: 20px;">
+            <div class="toolbar" style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+              <div class="field" style="flex:1; min-width:150px;"><label>De</label><input type="date" id="reportStart" class="search"></div>
+              <div class="field" style="flex:1; min-width:150px;"><label>Até</label><input type="date" id="reportEnd" class="search"></div>
+              <button class="btn btn-primary" id="generateReportBtn" style="height:39px;">Gerar Relatório</button>
+            </div>
+          </section>
+
+          <div class="metrics" style="margin-bottom: 20px;">
+            <article class="metric"><div class="metric-top"><span class="metric-label">Total Vendido</span><span class="metric-icon">💵</span></div><div class="metric-value" id="repTotal">R$ 0,00</div></article>
+            <article class="metric"><div class="metric-top"><span class="metric-label">Lucro Total</span><span class="metric-icon">📈</span></div><div class="metric-value" id="repProfit" style="color:var(--success)">R$ 0,00</div></article>
+            <article class="metric"><div class="metric-top"><span class="metric-label">Qtd. Vendas</span><span class="metric-icon">🛍</span></div><div class="metric-value" id="repCount">0</div></article>
+            <article class="metric"><div class="metric-top"><span class="metric-label">Ticket Médio</span><span class="metric-icon">🏷</span></div><div class="metric-value" id="repAvg">R$ 0,00</div></article>
+          </div>
+
+          <section class="panel">
+            <div class="panel-head"><div><h2>Resumo por Dia</h2><div class="panel-desc">Detalhamento diário do período selecionado.</div></div></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Data</th><th>Qtd. Vendas</th><th>Total Vendido</th><th>Lucro</th></tr></thead>
+                <tbody id="reportTable"><tr><td colspan="4" class="table-empty">Selecione o período e clique em Gerar Relatório.</td></tr></tbody>
               </table>
             </div>
           </section>
@@ -988,7 +1022,7 @@
     };
 
     // ====== Navegação ======
-const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sales:'Vendas', orders:'Pedidos', finance:'Financeiro', contacts:'Clientes e fornecedores', activities:'Atividades', settings:'Configurações' };
+const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sales:'Vendas', orders:'Pedidos', finance:'Financeiro', contacts:'Clientes e fornecedores', activities:'Atividades', reports:'Relatório de Faturamento', settings:'Configurações' };
     function showSection(id) {
       document.querySelectorAll('.section').forEach(el => el.classList.toggle('active', el.id === id));
       document.querySelectorAll('.nav-btn[data-section]').forEach(el => el.classList.toggle('active', el.dataset.section === id));
@@ -2254,6 +2288,79 @@ function editarVendaExistente(v) {
         endLoad();
       }
     }, true);
+
+    // ====== Relatórios ======
+    document.getElementById('generateReportBtn')?.addEventListener('click', () => {
+      const startStr = document.getElementById('reportStart').value;
+      const endStr = document.getElementById('reportEnd').value;
+
+      if (!startStr || !endStr) {
+        notify('Selecione as datas de início e fim.', true);
+        return;
+      }
+
+      const start = new Date(startStr + 'T00:00:00');
+      const end = new Date(endStr + 'T23:59:59');
+
+      // Filtra as vendas no período
+      const filtered = sales.filter(s => {
+        if (!s.data_venda) return false;
+        const d = new Date(s.data_venda);
+        return d >= start && d <= end;
+      });
+
+      if (filtered.length === 0) {
+        document.getElementById('repTotal').textContent = money(0);
+        document.getElementById('repProfit').textContent = money(0);
+        document.getElementById('repCount').textContent = 0;
+        document.getElementById('repAvg').textContent = money(0);
+        document.getElementById('reportTable').innerHTML = '<tr><td colspan="4" class="table-empty">Nenhuma venda registrada neste período.</td></tr>';
+        return;
+      }
+
+      // Calcula os totais gerais
+      let totalVendido = 0;
+      let totalLucro = 0;
+      const porDia = {};
+
+      filtered.forEach(s => {
+        const valor = Number(s.valor_venda || 0);
+        const lucro = Number(s.lucro || 0);
+        
+        totalVendido += valor;
+        totalLucro += lucro;
+
+        // Agrupa por dia (YYYY-MM-DD)
+        const diaStr = new Date(s.data_venda).toISOString().split('T')[0];
+        if (!porDia[diaStr]) {
+          porDia[diaStr] = { count: 0, valor: 0, lucro: 0 };
+        }
+        porDia[diaStr].count++;
+        porDia[diaStr].valor += valor;
+        porDia[diaStr].lucro += lucro;
+      });
+
+      // Atualiza as métricas do topo
+      document.getElementById('repTotal').textContent = money(totalVendido);
+      document.getElementById('repProfit').textContent = money(totalLucro);
+      document.getElementById('repCount').textContent = filtered.length;
+      document.getElementById('repAvg').textContent = money(totalVendido / filtered.length);
+
+      // Renderiza a tabela por dia (ordenado do mais recente pro mais antigo)
+      const diasOrdenados = Object.keys(porDia).sort().reverse();
+      
+      document.getElementById('reportTable').innerHTML = diasOrdenados.map(dia => {
+        const dataFormatada = new Date(dia + 'T12:00:00').toLocaleDateString('pt-BR');
+        const d = porDia[dia];
+        return `<tr>
+          <td><strong>${dataFormatada}</strong></td>
+          <td>${d.count}</td>
+          <td><strong style="color:#27775d">${money(d.valor)}</strong></td>
+          <td>${money(d.lucro)}</td>
+        </tr>`;
+      }).join('');
+    });
+
     // ====== Start ======
 
     // ====== Lógica de Login ======
