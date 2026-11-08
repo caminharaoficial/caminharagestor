@@ -340,8 +340,8 @@
             <div class="panel-head"><div><h2>Histórico de Vendas</h2><div class="panel-desc">Últimas transações registradas.</div></div></div>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Data</th><th>Produto</th><th>Num.</th><th>Qtd.</th><th>Custo Prod.</th><th>Custos Extras</th><th>Venda</th><th>Lucro Líquido</th><th>Status</th><th>Ações</th></tr></thead>
-                <tbody id="ordersTable"><tr><td colspan="10" class="table-empty">Carregando...</td></tr></tbody>
+                <thead><tr><th>ID</th><th>Data</th><th>Produto</th><th>Num.</th><th>Qtd.</th><th>Custo Prod.</th><th>Custos Extras</th><th>Venda</th><th>Lucro Líquido</th><th>Status</th><th>Ações</th></tr></thead>
+                <tbody id="ordersTable"><tr><td colspan="11" class="table-empty">Carregando...</td></tr></tbody>
               </table>
             </div>
           </section>
@@ -1161,14 +1161,6 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
 
     // SUBMIT DA VENDA (Atualizado com Custos e Opção de Estoque)
     // Listener do botão Adicionar Custo
-    document.getElementById('cancelOrderBtn')?.addEventListener('click', () => {
-      document.getElementById('orderForm').reset();
-      document.getElementById('orderCostsList').innerHTML = '';
-      editingSaleId = null;
-      orderFormPanel.hidden = true;
-      calcularLucroVenda();
-    });
-
     document.getElementById('addOrderCostBtn')?.addEventListener('click', (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
@@ -1311,6 +1303,7 @@ const txtCustos = custosArr.map(c => `${esc(c.descricao)}: ${money(c.valor)}`).j
           : '<span style="color:#b04545;font-weight:700;background:#fce8e8;padding:4px 8px;border-radius:6px">Pendente</span>';
         
         return `<tr>
+          <td><small title="${esc(v.id)}" style="font-family: monospace; color:#738091; cursor:pointer;" onclick="navigator.clipboard.writeText('${esc(v.id)}'); notify('ID copiado!')">${esc(String(v.id).slice(0,8))}</small></td>
           <td>${dataStr}</td>
           <td><strong>${nomeProd}</strong><br><small style="color:#738091">${esc(v.sku_variacao)}</small></td>
           <td>${esc(v.numero)}</td>
@@ -1325,7 +1318,7 @@ const txtCustos = custosArr.map(c => `${esc(c.descricao)}: ${money(c.valor)}`).j
   <button class="btn btn-danger" data-del-order="${esc(v.id)}" style="padding:6px 9px">Excluir</button>
 </td>
         </tr>`;
-      }).join('') : '<tr><td colspan="10" class="table-empty">Nenhuma venda registrada ainda.</td></tr>';
+      }).join('') : '<tr><td colspan="11" class="table-empty">Nenhuma venda registrada ainda.</td></tr>';
 
       tbody.querySelectorAll('[data-del-order]').forEach(b => b.onclick = () => deleteOrder(b.dataset.delOrder));
 tbody.querySelectorAll('[data-view-order]').forEach(b => b.onclick = () => viewOrder(b.dataset.viewOrder));
@@ -1883,6 +1876,7 @@ window.viewOrder = function(id) {
     : '<span style="color:#b04545">Nenhum custo extra</span>';
 
   const rows = [
+    ['ID', `<span style="font-family:monospace; user-select:all;">${esc(v.id)}</span>`],
     ['Data', v.data_venda ? new Date(v.data_venda).toLocaleString('pt-BR') : '—'],
     ['Produto', nomeProd], ['SKU', esc(v.sku_variacao || '—')],
     ['Numeração', esc(v.numero || '—')], ['Quantidade', v.quantidade || 0],
@@ -1907,6 +1901,7 @@ window.viewOrder = function(id) {
       const custo = Number(r.custo_unitario || 0);
       const lucro = Number(r.valor_total || 0) - (custo * Number(r.quantidade || 0));
       const rows = [
+        ['ID', `<span style="font-family:monospace; user-select:all;">${esc(r.id)}</span>`],
         ['Data', r.data_pedido ? new Date(r.data_pedido).toLocaleString('pt-BR') : '—'],
         ['Cliente', esc(r.cliente || 'Consumidor Final')],
         ['Produto', nomeProd], ['SKU', esc(r.sku_variacao || '—')],
