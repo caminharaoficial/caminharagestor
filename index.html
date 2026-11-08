@@ -1289,9 +1289,9 @@ vendedor: usuarioLogado?.nome || 'Sistema',
             action: 'update', sheet: 'Estoque',
             data: {
               ...estoqueItem,
-              vendedor: usuarioLogado?.nome || 'Sistema', // <-- ADICIONE ESTA LINHA
-              quantidade: qtdDevolvida,
-              vendidos: vendidosAtualizados,
+              vendedor: usuarioLogado?.nome || 'Sistema',
+              quantidade: novaQtd,
+              vendidos: novosVendidos,
               atualizado_em: new Date().toISOString()
             }
           });
@@ -1369,7 +1369,6 @@ tbody.querySelectorAll('[data-view-order]').forEach(b => b.onclick = () => viewO
       startLoad();
       try {
         // 1. Apaga a venda
-        // 1. Apaga a venda
         await apiPost({ action: 'delete', sheet: 'Vendas', id: idVenda, vendedor: usuarioLogado?.nome || 'Sistema' });
         
         // 2. Apaga os custos extras vinculados
@@ -1385,6 +1384,7 @@ tbody.querySelectorAll('[data-view-order]').forEach(b => b.onclick = () => viewO
             action: 'update', sheet: 'Estoque',
             data: {
               ...estoqueItem,
+              vendedor: usuarioLogado?.nome || 'Sistema', // <-- ADICIONE ESTA LINHA
               quantidade: qtdDevolvida,
               vendidos: vendidosAtualizados,
               atualizado_em: new Date().toISOString()
