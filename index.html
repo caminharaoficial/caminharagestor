@@ -1690,12 +1690,89 @@ vendedor: usuarioLogado?.nome || 'Sistema',
           <td>${esc(c.whatsapp)}</td>
           <td>${esc(c.cpf || '—')}</td>
           <td>${esc(c.cidade || '—')}</td>
-          <td><button class="btn btn-danger" data-del-client="${esc(c.id)}" style="padding:6px 9px">Excluir</button></td>
+          <td>
+            <button class="btn btn-light" data-view-client="${esc(c.id)}" style="padding:6px 9px">Ver</button>
+            <button class="btn btn-danger" data-del-client="${esc(c.id)}" style="padding:6px 9px">Excluir</button>
+          </td>
         </tr>
       `).join('') : '<tr><td colspan="5" class="table-empty">Nenhum cliente cadastrado.</td></tr>';
 
       tbody.querySelectorAll('[data-del-client]').forEach(b => b.onclick = () => deleteClient(b.dataset.delClient));
+      tbody.querySelectorAll('[data-view-client]').forEach(b => b.onclick = () => viewClient(b.dataset.viewClient));
     }
+
+    window.viewClient = function(id) {
+      const c = clients.find(x => String(x.id) === String(id));
+      if (!c) return;
+
+      // Busca as vendas deste cliente (comparando pelo nome)
+      const clientSales = sales.filter(s => String(s.cliente).trim() === String(c.nome).trim());
+      
+      // Calcula totais
+      const totalGasto = clientSales.reduce((sum, s) => sum + Number(s.valor_venda || 0), 0);
+      const qtdCompras = clientSales.length;
+      
+      // Ordena as vendas da mais recente para a mais antiga
+      clientSales.sort((a, b) => new Date(b.data_venda) - new Date(a.data_venda));
+      
+      const ultimaCompra = clientSales.length > 0 
+        ? new Date(clientSales[0].data_venda).toLocaleDateString('pt-BR') 
+        : 'Nenhuma';
+
+      // Monta o HTML das últimas 10 vendas
+      const ultimas = clientSales.slice(0, 10);
+      let tabelaVendas = '';
+      if (ultimas.length > 0) {
+        tabelaVendas = `
+          <table style="width:100%; border-collapse:collapse; margin-top:10px; font-size:11px;">
+            <thead><tr style="background:#fafbfc; text-align:left;"><th>Data</th><th>Produto</th><th>Valor</th></tr></thead>
+            <tbody>
+              ${ultimas.map(s => {
+                const p = productById(s.id_produto);
+                const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Excluído';
+                const dataStr = new Date(s.data_venda).toLocaleDateString('pt-BR');
+                return `<tr>
+                  <td style="padding:6px 0; border-bottom:1px solid var(--line);">${dataStr}</td>
+                  <td style="padding:6px 0; border-bottom:1px solid var(--line);">${nomeProd}</td>
+                  <td style="padding:6px 0; border-bottom:1px solid var(--line);">${money(s.valor_venda)}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        `;
+      } else {
+        tabelaVendas = '<p style="color:#738091; font-size:12px; margin-top:10px;">Nenhuma compra registrada.</p>';
+      }
+
+      // Monta os dados do modal
+      const rows = [
+        ['Nome', esc(c.nome)],
+        ['WhatsApp', esc(c.whatsapp)],
+        ['CPF', esc(c.cpf || '—')],
+        ['Cidade', esc(c.cidade || '—')],
+        ['Total Gasto', `<span style="color:#27775d; font-weight:700;">${money(totalGasto)}</span>`],
+        ['Qtd. Compras', qtdCompras],
+        ['Última Compra', ultimaCompra],
+      ];
+
+      detailKind = 'client'; detailId = id; 
+      detailTitle.textContent = 'Ficha do Cliente';
+      
+      detailBody.innerHTML = `
+        <table style="width:100%; border-collapse:collapse;">${renderDetailRows(rows)}</table>
+        <div style="margin-top:20px;">
+          <h4 style="margin:0 0 10px 0; font-size:13px; color:#202a35;">Últimas 10 Vendas</h4>
+          ${tabelaVendas}
+        </div>
+      `;
+      
+      // Esconde o botão Editar (pois não implementamos edição de cliente)
+      // e esconde o botão Excluir para não duplicar com o da tabela
+      detailEditBtn.style.display = 'none';
+      detailDeleteBtn.style.display = 'none';
+
+      detailModal.style.display = 'flex';
+    };
 
     async function deleteClient(id) {
       if (!confirm('Excluir este cliente permanentemente?')) return;
@@ -2033,16 +2110,18 @@ vendedor: usuarioLogado?.nome || 'Sistema',
 window.viewOrder = function(id) {
   const v = sales.find(x => String(x.id) === String(id));
   if (!v) return;
+
+  detailEditBtn.style.display = 'inline-flex';
+  detailDeleteBtn.style.display = 'inline-flex';
+
   detailKind = 'order'; detailId = id; detailTitle.textContent = 'Detalhes da Venda';
   const p = productById(v.id_produto);
   const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto excluído';
 
-  // Custos vêm embutidos na própria linha da venda (JSON)
   let custosArr = [];
   if (v.custos_extras) {
     try { custosArr = JSON.parse(v.custos_extras); } catch (e) { custosArr = []; }
   }
-  // Fallback: legado (pipe) ou aba Custos antiga
   if ((!custosArr || custosArr.length === 0) && typeof v.custos_extras === 'string' && v.custos_extras.includes(':')) {
     custosArr = v.custos_extras.split('|').map(s => {
       const [d, val] = s.split(':');
@@ -2075,29 +2154,33 @@ window.viewOrder = function(id) {
   detailModal.style.display = 'flex';
 };
 
-    window.viewRequest = function(id) {
-      const r = requests.find(x => String(x.id) === String(id));
-      if (!r) return;
-      detailKind = 'request'; detailId = id; detailTitle.textContent = 'Detalhes do Pedido';
-      const p = productById(r.id_produto);
-      const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto excluído';
-      const custo = Number(r.custo_unitario || 0);
-      const lucro = Number(r.valor_total || 0) - (custo * Number(r.quantidade || 0));
-      const rows = [
-        ['ID', `<span style="font-family:monospace; user-select:all;">${esc(r.id)}</span>`],
-        ['Data', r.data_pedido ? new Date(r.data_pedido).toLocaleString('pt-BR') : '—'],
-        ['Cliente', esc(r.cliente || 'Consumidor Final')],
-        ['Produto', nomeProd], ['SKU', esc(r.sku_variacao || '—')],
-        ['Numeração', esc(r.numero || '—')], ['Quantidade', r.quantidade || 0],
-        ['Custo Unitário', money(custo)],
-        ['Valor Total', `<span style="color:#27775d">${money(r.valor_total)}</span>`],
-        ['Lucro Real', `<span style="color:#27775d">${money(lucro)}</span>`],
-        ['Status', esc(r.status_pedido || '—')],
-        ['Observação', esc(r.observacao || '—')],
-      ];
-      detailBody.innerHTML = `<table style="width:100%; border-collapse:collapse;">${renderDetailRows(rows)}</table>`;
-      detailModal.style.display = 'flex';
-    };
+window.viewRequest = function(id) {
+  const r = requests.find(x => String(x.id) === String(id));
+  if (!r) return;
+
+  detailEditBtn.style.display = 'inline-flex';
+  detailDeleteBtn.style.display = 'inline-flex';
+
+  detailKind = 'request'; detailId = id; detailTitle.textContent = 'Detalhes do Pedido';
+  const p = productById(r.id_produto);
+  const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto excluído';
+  const custo = Number(r.custo_unitario || 0);
+  const lucro = Number(r.valor_total || 0) - (custo * Number(r.quantidade || 0));
+  const rows = [
+    ['ID', `<span style="font-family:monospace; user-select:all;">${esc(r.id)}</span>`],
+    ['Data', r.data_pedido ? new Date(r.data_pedido).toLocaleString('pt-BR') : '—'],
+    ['Cliente', esc(r.cliente || 'Consumidor Final')],
+    ['Produto', nomeProd], ['SKU', esc(r.sku_variacao || '—')],
+    ['Numeração', esc(r.numero || '—')], ['Quantidade', r.quantidade || 0],
+    ['Custo Unitário', money(custo)],
+    ['Valor Total', `<span style="color:#27775d">${money(r.valor_total)}</span>`],
+    ['Lucro Real', `<span style="color:#27775d">${money(lucro)}</span>`],
+    ['Status', esc(r.status_pedido || '—')],
+    ['Observação', esc(r.observacao || '—')],
+  ];
+  detailBody.innerHTML = `<table style="width:100%; border-collapse:collapse;">${renderDetailRows(rows)}</table>`;
+  detailModal.style.display = 'flex';
+};
 
     detailDeleteBtn?.addEventListener('click', () => {
       const k = detailKind, id = detailId;
