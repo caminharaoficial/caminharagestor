@@ -638,6 +638,8 @@
       </div>
       <div id="detailBody"></div>
       <div class="form-actions" style="margin-top:20px;">
+        <button class="btn btn-light" type="button" id="detailReceiptBtn" style="display:none; margin-right:auto;">🖨 Comprovante</button>
+        <button class="btn btn-primary" type="button" id="detailWaBtn" style="display:none; margin-right:10px; background:#25D366; color:#fff;">Enviar WhatsApp</button>
         <button class="btn btn-primary" type="button" id="detailEditBtn">Editar</button>
         <button class="btn btn-danger" type="button" id="detailDeleteBtn">Excluir</button>
       </div>
@@ -1502,6 +1504,80 @@ const txtCustos = custosArr.map(c => `${esc(c.descricao)}: ${money(c.valor)}`).j
 tbody.querySelectorAll('[data-view-order]').forEach(b => b.onclick = () => viewOrder(b.dataset.viewOrder));
     }
 
+    function imprimirRecibo(venda) {
+      const p = productById(venda.id_produto);
+      const nomeProd = p ? `${p.marca} ${p.modelo}` : 'Produto';
+      const dataStr = venda.data_venda ? new Date(venda.data_venda).toLocaleString('pt-BR') : '—';
+      const cliente = venda.cliente || 'Consumidor Final';
+      
+      // Cria uma nova janela
+      const win = window.open('', '_blank');
+      win.document.write(`
+        <html>
+        <head>
+          <title>Comprovante - CAMINHARA</title>
+          <style>
+            body { font-family: sans-serif; padding: 40px; color: #333; max-width: 600px; margin: auto; }
+            h1 { text-align: center; font-family: serif; margin-bottom: 5px; }
+            .header { text-align: center; border-bottom: 2px solid #ccc; padding-bottom: 15px; margin-bottom: 20px; }
+            .row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
+            .total { font-size: 20px; font-weight: bold; margin-top: 20px; text-align: right; border-top: 2px solid #ccc; padding-top: 15px; }
+            .footer { text-align: center; font-size: 11px; color: #888; margin-top: 40px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>CAMINHARA</h1>
+            <div>Loja Virtual · Gestão</div>
+          </div>
+          
+          <div class="row"><span>Data:</span> <strong>${dataStr}</strong></div>
+          <div class="row"><span>Cliente:</span> <strong>${cliente}</strong></div>
+          <div class="row"><span>Produto:</span> <strong>${nomeProd} (${venda.numero || 'S/N'})</strong></div>
+          <div class="row"><span>Qtd:</span> <strong>${venda.quantidade || 1}</strong></div>
+          
+          <div class="total">Total: ${money(venda.valor_venda)}</div>
+          
+          <div class="footer">
+            Obrigado pela preferência!<br>
+            ID da Venda: ${venda.id}
+          </div>
+          
+          <script>
+            window.onload = function() { window.print(); }
+          </script>
+        </body>
+        </html>
+      `);
+      win.document.close();
+    }
+
+    function enviarWhatsApp(venda) {
+      const dataStr = venda.data_venda ? new Date(venda.data_venda).toLocaleDateString('pt-BR') : '—';
+      const cliente = venda.cliente || 'Consumidor Final';
+      
+      // Pega o WhatsApp do cliente, se ele estiver cadastrado
+      let tel = '';
+      const cli = clients.find(c => String(c.nome).trim() === String(venda.cliente).trim());
+      if (cli && cli.whatsapp) {
+        // Remove tudo que não for número (parênteses, traços, espaços)
+        tel = String(cli.whatsapp).replace(/\D/g, '');
+        // Se não tiver o 55 (Brasil) no início, adiciona
+        if (tel.length > 0 && !tel.startsWith('55')) tel = '55' + tel;
+      }
+
+      const texto = `*CAMINHARA LOJA VIRTUAL*\n\nOlá, ${cliente}!\nSegue o comprovante da sua compra:\n\n📅 Data: ${dataStr}\n🛍 Qtd: ${venda.quantidade || 1}\n💰 Valor Total: ${money(venda.valor_venda)}\n\n_Obrigado pela preferência!_`;
+
+      // Se achou o telefone, manda direto pra conversa do cliente. Senão, abre a tela de escolher contato.
+      const url = tel 
+        ? `https://wa.me/${tel}?text=${encodeURIComponent(texto)}`
+        : `https://wa.me/?text=${encodeURIComponent(texto)}`;
+        
+      window.open(url, '_blank');
+    }
+
+    async function deleteOrder(idVenda) {
+
     async function deleteOrder(idVenda) {
       const venda = sales.find(v => String(v.id) === String(idVenda));
       if (!venda) return;
@@ -1702,6 +1778,8 @@ vendedor: usuarioLogado?.nome || 'Sistema',
     }
 
     window.viewClient = function(id) {
+      document.getElementById('detailReceiptBtn').style.display = 'none';
+      document.getElementById('detailWaBtn').style.display = 'none';
       const c = clients.find(x => String(x.id) === String(id));
       if (!c) return;
 
@@ -2113,6 +2191,15 @@ window.viewOrder = function(id) {
 
   detailEditBtn.style.display = 'inline-flex';
   detailDeleteBtn.style.display = 'inline-flex';
+  
+  const receiptBtn = document.getElementById('detailReceiptBtn');
+  const waBtn = document.getElementById('detailWaBtn');
+  receiptBtn.style.display = 'inline-flex';
+  waBtn.style.display = 'inline-flex';
+
+  // Ações dos novos botões
+  receiptBtn.onclick = () => imprimirRecibo(v);
+  waBtn.onclick = () => enviarWhatsApp(v);
 
   detailKind = 'order'; detailId = id; detailTitle.textContent = 'Detalhes da Venda';
   const p = productById(v.id_produto);
@@ -2154,7 +2241,10 @@ window.viewOrder = function(id) {
   detailModal.style.display = 'flex';
 };
 
+
 window.viewRequest = function(id) {
+  document.getElementById('detailReceiptBtn').style.display = 'none';
+  document.getElementById('detailWaBtn').style.display = 'none';
   const r = requests.find(x => String(x.id) === String(id));
   if (!r) return;
 
