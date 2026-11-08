@@ -117,7 +117,26 @@
   </style>
 </head>
 <body>
-  <div id="progressBar"></div>
+  <div id="loginOverlay" style="position:fixed; inset:0; background:#202a35; z-index:99999; display:flex; align-items:center; justify-content:center;">
+    <div style="background:#fff; padding:30px; border-radius:14px; width:320px; box-shadow:0 10px 25px rgba(0,0,0,0.2); text-align:center;">
+      <div style="font-family:Georgia, serif; font-size:32px; color:#202a35; font-weight:bold; margin-bottom:5px;">C</div>
+      <h2 style="margin:0 0 20px 0; color:#202a35; font-size:18px;">CAMINHARA</h2>
+      
+      <div class="field" style="margin-bottom:12px; text-align:left;">
+        <label style="font-size:11px; color:#5e6a78; font-weight:bold;">Usuário</label>
+        <input id="loginUser" style="width:100%; padding:10px; border:1px solid #e4e9ee; border-radius:8px; margin-top:5px;" placeholder="Seu nome" />
+      </div>
+      
+      <div class="field" style="margin-bottom:20px; text-align:left;">
+        <label style="font-size:11px; color:#5e6a78; font-weight:bold;">Senha</label>
+        <input id="loginPass" type="password" style="width:100%; padding:10px; border:1px solid #e4e9ee; border-radius:8px; margin-top:5px;" placeholder="Sua senha" />
+      </div>
+      
+      <button id="loginBtn" class="btn btn-primary" style="width:100%;">Entrar</button>
+      <div id="loginError" style="color:#b04545; font-size:12px; margin-top:10px; display:none;"></div>
+    </div>
+  </div>
+<div id="progressBar" hidden></div>
   <div class="app">
     <aside class="sidebar" id="sidebar">
       <div class="brand">
@@ -153,7 +172,10 @@
         </div>
         <div class="top-right">
           <div class="status"><span class="dot" id="connDot"></span> <span id="connLabel">Conectando...</span></div>
-          <div class="avatar" title="Administrador">AD</div>
+          <div style="display:flex; align-items:center; gap:10px; margin-left:10px; border-left:1px solid #e4e9ee; padding-left:15px;">
+            <span id="topUserName" style="font-size:12px; font-weight:bold; color:#202a35;"></span>
+            <button class="btn btn-light" id="logoutBtn" style="padding:6px 10px; font-size:11px;">Sair</button>
+          </div>
         </div>
       </header>
 
@@ -2112,8 +2134,77 @@ function editarVendaExistente(v) {
       }
     }, true);
     // ====== Start ======
+
+    // ====== Lógica de Login ======
+    let usuarioLogado = null;
+
+    document.getElementById('loginBtn').addEventListener('click', async () => {
+      const nome = document.getElementById('loginUser').value.trim();
+      const senha = document.getElementById('loginPass').value.trim();
+      const errDiv = document.getElementById('loginError');
+      const btn = document.getElementById('loginBtn');
+
+      if (!nome || !senha) {
+        errDiv.textContent = 'Preencha usuário e senha.';
+        errDiv.style.display = 'block';
+        return;
+      }
+
+      btn.textContent = 'Entrando...';
+      btn.disabled = true;
+      errDiv.style.display = 'none';
+
+      try {
+        const res = await apiPost({ action: 'login', nome, senha });
+        if (res.ok) {
+          // Guarda na memória da aba do navegador
+          sessionStorage.setItem('caminhara_token', res.token);
+          sessionStorage.setItem('caminhara_user', res.nome);
+          
+          usuarioLogado = { nome: res.nome, perfil: res.perfil };
+document.getElementById('topUserName').textContent = res.nome;
+          
+          // Esconde a tela de login e carrega os dados
+          document.getElementById('loginOverlay').style.display = 'none';
+          await loadAll();
+        }
+      } catch (err) {
+        errDiv.textContent = err.message;
+        errDiv.style.display = 'block';
+      } finally {
+        btn.textContent = 'Entrar';
+        btn.disabled = false;
+      }
+    });
+
+    // Permite apertar Enter para logar
+    document.getElementById('loginPass').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') document.getElementById('loginBtn').click();
+    });
+
+    // ====== Logout ======
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      if (!confirm('Deseja realmente sair do sistema?')) return;
+      const token = sessionStorage.getItem('caminhara_token');
+      if (token) {
+        try { await apiPost({ action: 'logout', token }); } catch(e) {}
+      }
+      sessionStorage.clear();
+      window.location.reload();
+    });
+
     document.addEventListener('DOMContentLoaded', () => {
-      loadAll();
+      const tokenSalvo = sessionStorage.getItem('caminhara_token');
+      const userSalvo = sessionStorage.getItem('caminhara_user');
+      
+      if (tokenSalvo && userSalvo) {
+        // Se já estava logado nesta aba, pula a tela de login
+        document.getElementById('loginOverlay').style.display = 'none';
+        usuarioLogado = { nome: userSalvo }; 
+document.getElementById('topUserName').textContent = userSalvo;
+        loadAll();
+      }
+      // Se não tem token, a tela de login já está visível por padrão.
     });
 
   </script>
