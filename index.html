@@ -1704,6 +1704,7 @@ vendedor: usuarioLogado?.nome || 'Sistema',
           data: {
             id: uuid(),
             id_produto: pedido.id_produto,
+            vendedor: usuarioLogado?.nome || 'Sistema',
             sku_variacao: pedido.sku_variacao,
             numero: pedido.numero,
             quantidade: pedido.quantidade,
@@ -1801,7 +1802,7 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       if (!nome || !whatsapp) { notify('Nome e WhatsApp obrigatórios.', true); return; }
       try {
         startLoad();
-        await apiPost({ action: 'append', sheet: 'Clientes', data: { id: uuid(), nome, whatsapp, cpf, cidade, data_cadastro: new Date().toISOString() } });
+        await apiPost({ action: 'append', sheet: 'Clientes', data: { id: uuid(), nome, whatsapp, cpf, cidade, data_cadastro: new Date().toISOString(), vendedor: usuarioLogado?.nome || 'Sistema' } });
         notify('Cliente cadastrado!');
         quickClientModal.style.display = 'none';
         await loadAll();
@@ -2083,6 +2084,7 @@ function editarVendaExistente(v) {
           action: 'update', sheet: 'Vendas',
           data: {
             id: idVenda, id_produto,
+            vendedor: usuarioLogado?.nome || 'Sistema',
             sku_variacao: `${p.sku}-${numero}`, numero,
             quantidade: qtd, valor_venda: total,
             data_venda: vAntiga?.data_venda || new Date().toISOString(),
@@ -2123,6 +2125,7 @@ function editarVendaExistente(v) {
           action: 'update', sheet: 'Pedidos',
           data: {
             id: idPed, cliente, id_produto,
+            vendedor: usuarioLogado?.nome || 'Sistema',
             sku_variacao: `${p.sku}-${numero}`, numero,
             quantidade: qtd, valor_total: valor, custo_unitario: custo,
             data_pedido: antigo?.data_pedido || new Date().toISOString(),
