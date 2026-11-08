@@ -192,6 +192,18 @@
             <article class="metric"><div class="metric-top"><span class="metric-label">Pedidos registrados</span><span class="metric-icon">🛍</span></div><div class="metric-value" id="metricOrders">0</div><div class="metric-note">Pedidos lançados</div></article>
             <article class="metric"><div class="metric-top"><span class="metric-label">Lucro Líquido</span><span class="metric-icon">◉</span></div><div class="metric-value" id="metricNetProfit">R$ 0,00</div><div class="metric-note">Vendas - Custos - Despesas</div></article>
           </div>
+
+          <div id="lowStockAlert" style="display:none; margin-bottom:20px;">
+            <div id="lowStockCard" style="background:#fff8eb; border:1px solid #f0dfbd; border-radius:14px; padding:16px 20px; display:flex; align-items:center; gap:14px; cursor:pointer; box-shadow:var(--shadow); transition:.15s;" onmouseover="this.style.background='#fdf1d8'" onmouseout="this.style.background='#fff8eb'">
+              <div style="width:40px; height:40px; border-radius:10px; background:#f0dfbd; display:grid; place-items:center; font-size:20px; flex:0 0 auto;">⚠</div>
+              <div style="flex:1;">
+                <div id="lowStockTitle" style="font-weight:700; font-size:13px; color:#785d2e;">0 produtos com estoque baixo</div>
+                <div style="font-size:11px; color:#a16b1e; margin-top:3px;">Clique para ver a lista na aba Estoque</div>
+              </div>
+              <div style="font-size:20px; color:#a16b1e;">›</div>
+            </div>
+          </div>
+
           <div class="dashboard-grid">
             <section class="panel">
               <div class="panel-head"><div><h2>Últimos produtos</h2><div class="panel-desc">Cadastrados recentemente</div></div><button class="btn btn-light" data-go="products">Ver produtos</button></div>
@@ -712,6 +724,7 @@
         ? recent.map(p => `<tr><td><strong>${esc(p.modelo)}</strong></td><td>${esc(p.marca)}</td><td>${money(p.preco_venda)}</td><td>${totalStock(p.id)}</td></tr>`).join('')
         : '<tr><td colspan="4" class="table-empty">Nenhum produto cadastrado ainda.</td></tr>';
 
+      renderLowStockAlert();
       renderProducts();
       renderStock();
       fillProductSelect();
@@ -724,6 +737,54 @@
       renderRequests();       // <-- ADICIONE
       fillRequestProducts();  // <-- ADICIONE    
 }
+
+    function renderLowStockAlert() {
+      const alertEl = document.getElementById('lowStockAlert');
+      const titleEl = document.getElementById('lowStockTitle');
+      const cardEl = document.getElementById('lowStockCard');
+      if (!alertEl || !titleEl) return;
+
+      // Produto é "baixo" quando a soma das quantidades em Estoque <= estoque_minimo
+      // (e estoque_minimo > 0, senão todo produto zerado viraria alerta)
+      const baixos = products.filter(p => {
+        const min = Number(p.estoque_minimo || 0);
+        if (min <= 0) return false;
+        return totalStock(p.id) <= min;
+      });
+
+      if (baixos.length === 0) {
+        alertEl.style.display = 'none';
+        return;
+      }
+
+      alertEl.style.display = 'block';
+      titleEl.textContent = `${baixos.length} produto${baixos.length > 1 ? 's' : ''} com estoque baixo (clique para ver)`;
+
+      // Guarda a lista para o clique usar
+      window._lowStockList = baixos;
+
+      if (cardEl) {
+        cardEl.onclick = () => {
+          showSection('stock');
+          const search = document.getElementById('stockSearch');
+          if (search) {
+            search.value = '';
+            // Rola até o primeiro produto baixo e destaca a linha
+            setTimeout(() => {
+              const primeiro = window._lowStockList && window._lowStockList[0];
+              if (!primeiro) return;
+              const row = document.querySelector(`.stock-parent[data-id="${primeiro.id}"]`);
+              if (row) {
+                row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                row.style.transition = 'background .3s';
+                row.style.background = '#fff3d6';
+                setTimeout(() => { row.style.background = '#f8fafc'; }, 2000);
+              }
+            }, 80);
+          }
+        };
+      }
+    }
 
     function updateNetProfit() {
       const lucroBruto = sales.reduce((sum, s) => sum + Number(s.lucro || 0), 0);
