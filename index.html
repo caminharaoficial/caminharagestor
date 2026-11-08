@@ -2465,6 +2465,35 @@ function editarVendaExistente(v) {
       }).join('');
     });
 
+    // ====== Permissões ======
+    function aplicarPermissoes() {
+      const perfil = usuarioLogado?.perfil || 'vendedor';
+      
+      // Esconde menus proibidos para vendedores
+      const menusProibidos = ['finance', 'activities', 'reports', 'settings'];
+      menusProibidos.forEach(id => {
+        const btn = document.querySelector(`.nav-btn[data-section="${id}"]`);
+        if (btn) btn.style.display = (perfil === 'gerente') ? 'flex' : 'none';
+      });
+
+      // Esconde todos os botões de Excluir da tela
+      const botoesExcluir = document.querySelectorAll('.btn-danger');
+      botoesExcluir.forEach(btn => {
+        // Não esconde o botão "X" de remover custo extra, apenas os de exclusão em geral
+        if (!btn.textContent.includes('X')) {
+          btn.style.display = (perfil === 'gerente') ? 'inline-flex' : 'none';
+        }
+      });
+
+      // Se o vendedor estava em uma tela proibida, manda pro Dashboard
+      if (perfil !== 'gerente') {
+        const secaoAtiva = document.querySelector('.section.active');
+        if (secaoAtiva && menusProibidos.includes(secaoAtiva.id)) {
+          showSection('dashboard');
+        }
+      }
+    }
+
     // ====== Start ======
 
     // ====== Lógica de Login ======
@@ -2492,6 +2521,7 @@ function editarVendaExistente(v) {
           // Guarda na memória da aba do navegador
           sessionStorage.setItem('caminhara_token', res.token);
           sessionStorage.setItem('caminhara_user', res.nome);
+          sessionStorage.setItem('caminhara_perfil', res.perfil || 'vendedor');
           
           usuarioLogado = { nome: res.nome, perfil: res.perfil };
 document.getElementById('topUserName').textContent = res.nome;
@@ -2499,6 +2529,7 @@ document.getElementById('topUserName').textContent = res.nome;
           // Esconde a tela de login e carrega os dados
           document.getElementById('loginOverlay').style.display = 'none';
           await loadAll();
+          aplicarPermissoes();
         }
       } catch (err) {
         errDiv.textContent = err.message;
@@ -2513,6 +2544,14 @@ document.getElementById('topUserName').textContent = res.nome;
     document.getElementById('loginPass').addEventListener('keypress', (e) => {
       if (e.key === 'Enter') document.getElementById('loginBtn').click();
     });
+
+    // Atualiza o perfil na sessão quando logar
+    const originalSetItem = sessionStorage.setItem;
+    sessionStorage.setItem = function(key, value) {
+      originalSetItem.apply(this, arguments);
+      if (key === 'caminhara_perfil') aplicarPermissoes();
+    };
+
 
     // ====== Logout ======
     document.getElementById('logoutBtn').addEventListener('click', async () => {
@@ -2626,9 +2665,10 @@ document.getElementById('topUserName').textContent = res.nome;
       if (tokenSalvo && userSalvo) {
         // Se já estava logado nesta aba, pula a tela de login
         document.getElementById('loginOverlay').style.display = 'none';
-        usuarioLogado = { nome: userSalvo }; 
+        usuarioLogado = { nome: userSalvo, perfil: sessionStorage.getItem('caminhara_perfil') || 'vendedor' }; 
 document.getElementById('topUserName').textContent = userSalvo;
         loadAll();
+        setTimeout(aplicarPermissoes, 500);
       }
       // Se não tem token, a tela de login já está visível por padrão.
     });
