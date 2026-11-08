@@ -340,7 +340,7 @@
             <div class="panel-head"><div><h2>Histórico de Vendas</h2><div class="panel-desc">Últimas transações registradas.</div></div></div>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>ID</th><th>Data</th><th>Produto</th><th>Num.</th><th>Qtd.</th><th>Custo Prod.</th><th>Custos Extras</th><th>Venda</th><th>Lucro Líquido</th><th>Status</th><th>Ações</th></tr></thead>
+<thead><tr><th>ID</th><th>Data</th><th>Produto</th><th>Num.</th><th>Qtd.</th><th>Custo Prod.</th><th>Custos Extras</th><th>Venda</th><th>Lucro Líquido</th><th>Status</th><th>Ações</th></tr></thead>
                 <tbody id="ordersTable"><tr><td colspan="11" class="table-empty">Carregando...</td></tr></tbody>
               </table>
             </div>
@@ -1161,6 +1161,14 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
 
     // SUBMIT DA VENDA (Atualizado com Custos e Opção de Estoque)
     // Listener do botão Adicionar Custo
+    document.getElementById('cancelOrderBtn')?.addEventListener('click', () => {
+      document.getElementById('orderForm').reset();
+      document.getElementById('orderCostsList').innerHTML = '';
+      editingSaleId = null;
+      orderFormPanel.hidden = true;
+      calcularLucroVenda();
+    });
+
     document.getElementById('addOrderCostBtn')?.addEventListener('click', (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
