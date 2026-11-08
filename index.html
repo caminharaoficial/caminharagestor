@@ -1577,8 +1577,6 @@ tbody.querySelectorAll('[data-view-order]').forEach(b => b.onclick = () => viewO
     }
 
     async function deleteOrder(idVenda) {
-
-    async function deleteOrder(idVenda) {
       const venda = sales.find(v => String(v.id) === String(idVenda));
       if (!venda) return;
 
