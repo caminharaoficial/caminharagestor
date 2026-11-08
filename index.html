@@ -152,6 +152,7 @@
 <button class="nav-btn" data-section="sales"><span class="nav-icon">💵</span> Vendas</button>
 <button class="nav-btn" data-section="orders"><span class="nav-icon">🛍</span> Pedidos</button>
           <button class="nav-btn" data-section="finance"><span class="nav-icon">◉</span> Financeiro</button>
+          <button class="nav-btn" data-section="activities"><span class="nav-icon">📊</span> Atividades</button>
           <button class="nav-btn" data-section="contacts"><span class="nav-icon">♙</span> Clientes e fornecedores</button>
         </nav>
       </div>
@@ -522,6 +523,38 @@
           </section>
         </section>
 
+        <!-- ATIVIDADES -->
+        <section class="section" id="activities">
+          <div class="page-heading">
+            <div><h1>Log de Atividades</h1><p class="subtitle">Acompanhe tudo o que cada vendedor fez no sistema.</p></div>
+          </div>
+          <section class="panel">
+            <div class="toolbar" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+              <select id="actFilterUser" class="search" style="flex:1; min-width:150px; max-width:200px;">
+                <option value="">Todos os Vendedores</option>
+              </select>
+              <input type="date" id="actFilterStart" class="search" style="flex:1; max-width:150px;" title="Data inicial" />
+              <input type="date" id="actFilterEnd" class="search" style="flex:1; max-width:150px;" title="Data final" />
+              <button class="btn btn-primary" id="actFilterBtn">Filtrar</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Data/Hora</th>
+                    <th>Vendedor</th>
+                    <th>Ação</th>
+                    <th>Detalhes</th>
+                  </tr>
+                </thead>
+                <tbody id="activitiesTable">
+                  <tr><td colspan="4" class="table-empty">Clique em "Filtrar" para carregar as atividades.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
         <section class="section" id="settings">
           <div class="page-heading"><div><h1>Configurações</h1><p class="subtitle">Informações do sistema.</p></div></div>
           <div class="panel">
@@ -880,7 +913,7 @@
     };
 
     // ====== Navegação ======
-const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sales:'Vendas', orders:'Pedidos', finance:'Financeiro', contacts:'Clientes e fornecedores', settings:'Configurações' };
+const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sales:'Vendas', orders:'Pedidos', finance:'Financeiro', contacts:'Clientes e fornecedores', activities:'Atividades', settings:'Configurações' };
     function showSection(id) {
       document.querySelectorAll('.section').forEach(el => el.classList.toggle('active', el.id === id));
       document.querySelectorAll('.nav-btn[data-section]').forEach(el => el.classList.toggle('active', el.dataset.section === id));
@@ -2204,6 +2237,100 @@ document.getElementById('topUserName').textContent = res.nome;
       }
       sessionStorage.clear();
       window.location.reload();
+    });
+
+    // ====== Tela de Atividades ======
+    async function carregarAtividades() {
+      const tbody = document.getElementById('activitiesTable');
+      tbody.innerHTML = '<tr><td colspan="4" class="table-empty">Carregando atividades...</td></tr>';
+      
+      const fUser = document.getElementById('actFilterUser').value.toLowerCase();
+      const fStart = document.getElementById('actFilterStart').value;
+      const fEnd = document.getElementById('actFilterEnd').value;
+
+      try {
+        startLoad();
+        // Puxa todas as abas necessárias
+        const [v, p, d, c, l] = await Promise.all([
+          apiRead('Vendas'), apiRead('Pedidos'), apiRead('Despesas'), apiRead('Clientes'), apiRead('Log_Exclusoes')
+        ]);
+
+        let logs = [];
+
+        // Monta o log de Vendas
+        v.forEach(item => {
+          if (!item.id) return;
+          logs.push({ data: item.data_venda, user: item.vendedor || 'Sistema', acao: 'Venda', detalhe: `Venda de ${item.quantidade}x ${item.sku_variacao} (${money(item.valor_venda)}) - Cliente: ${item.cliente || 'Consumidor'}` });
+        });
+
+        // Monta o log de Pedidos
+        p.forEach(item => {
+          if (!item.id) return;
+          logs.push({ data: item.data_pedido, user: item.vendedor || 'Sistema', acao: 'Pedido', detalhe: `Pedido de ${item.quantidade}x ${item.sku_variacao} (${money(item.valor_total)})` });
+        });
+
+        // Monta o log de Despesas
+        d.forEach(item => {
+          if (!item.id) return;
+          logs.push({ data: item.data_vencimento + 'T12:00:00', user: item.vendedor || 'Sistema', acao: 'Despesa', detalhe: `${item.descricao} - ${money(item.valor)}` });
+        });
+
+        // Monta o log de Clientes
+        c.forEach(item => {
+          if (!item.id) return;
+          logs.push({ data: item.data_cadastro, user: item.vendedor || 'Sistema', acao: 'Cliente', detalhe: `Cadastrou o cliente ${item.nome}` });
+        });
+
+        // Monta o log de Exclusões
+        l.forEach(item => {
+          if (!item.id) return;
+          logs.push({ data: item.data_exclusao, user: item.vendedor || 'Sistema', acao: 'Exclusão', detalhe: `Apagou um registro da aba ${item.tabela}` });
+        });
+
+        // Filtra por usuário e data
+        if (fUser) logs = logs.filter(x => x.user.toLowerCase().includes(fUser));
+        if (fStart) logs = logs.filter(x => new Date(x.data) >= new Date(fStart + 'T00:00:00'));
+        if (fEnd) logs = logs.filter(x => new Date(x.data) <= new Date(fEnd + 'T23:59:59'));
+
+        // Ordena do mais recente para o mais antigo
+        logs.sort((a, b) => new Date(b.data) - new Date(a.data));
+
+        // Renderiza
+        tbody.innerHTML = logs.length ? logs.map(log => {
+          const dataStr = log.data ? new Date(log.data).toLocaleString('pt-BR') : '—';
+          return `<tr>
+            <td>${dataStr}</td>
+            <td><strong>${esc(log.user)}</strong></td>
+            <td><span class="tag">${log.acao}</span></td>
+            <td>${esc(log.detalhe)}</td>
+          </tr>`;
+        }).join('') : '<tr><td colspan="4" class="table-empty">Nenhuma atividade encontrada para este filtro.</td></tr>';
+
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="4" class="table-empty" style="color:#b04545;">Erro ao carregar: ${err.message}</td></tr>`;
+      } finally {
+        endLoad();
+      }
+    }
+
+    // Popula o select de vendedores na tela de atividades
+    async function fillActUsers() {
+      try {
+        const users = await apiRead('Usuarios');
+        const sel = document.getElementById('actFilterUser');
+        sel.innerHTML = '<option value="">Todos os Vendedores</option>' + 
+          users.filter(u => u.nome).map(u => `<option value="${esc(u.nome)}">${esc(u.nome)}</option>`).join('');
+      } catch(e) {}
+    }
+
+    document.getElementById('actFilterBtn')?.addEventListener('click', carregarAtividades);
+    
+    // Quando clicar no menu "Atividades", limpa e carrega
+    document.querySelectorAll('[data-section="activities"]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        fillActUsers();
+        carregarAtividades();
+      });
     });
 
     document.addEventListener('DOMContentLoaded', () => {
