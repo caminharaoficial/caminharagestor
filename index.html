@@ -115,6 +115,7 @@
       .status { display: none; }
     }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 </head>
 <body>
   <div id="loginOverlay" style="position:fixed; inset:0; background:#202a35; z-index:99999; display:flex; align-items:center; justify-content:center;">
@@ -845,10 +846,12 @@
         <td>${esc(p.genero || '—')}</td><td>${esc(p.colecao || '—')}</td>
         <td>${esc(p.grade || '—')}</td>
         <td>${money(p.custo)}</td><td>${money(p.preco_venda)}</td><td>${totalStock(p.id)}</td>
-        <td><button class="btn btn-light" data-edit="${esc(p.id)}" style="padding:6px 9px">Editar</button> <button class="btn btn-danger" data-del="${esc(p.id)}" style="padding:6px 9px">Excluir</button></td>
+        <td><button class="btn btn-light" data-edit="${esc(p.id)}" style="padding:6px 9px">Editar</button>
+<button class="btn btn-light" data-label="${esc(p.id)}" style="padding:6px 9px; color:#526b83; border-color:#526b83;">Etiquetas</button> <button class="btn btn-danger" data-del="${esc(p.id)}" style="padding:6px 9px">Excluir</button></td>
       </tr>`).join('') : `<tr><td colspan="12" class="table-empty">${q ? 'Sem resultados.' : 'Nenhum produto cadastrado.'}</td></tr>`;
       tbody.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => editProduct(b.dataset.edit));
       tbody.querySelectorAll('[data-del]').forEach(b => b.onclick = () => deleteProduct(b.dataset.del));
+      tbody.querySelectorAll('[data-label]').forEach(b => b.onclick = () => gerarEtiquetas(b.dataset.label));
     }
 
     function renderStock() {
@@ -2464,6 +2467,97 @@ function editarVendaExistente(v) {
         </tr>`;
       }).join('');
     });
+
+    // ====== Gerar Etiquetas ======
+    function gerarEtiquetas(produtoId) {
+      const p = productById(produtoId);
+      if (!p) return;
+      
+      const variacoes = stockForProduct(produtoId);
+      if (variacoes.length === 0) {
+        notify('Este produto não possui numerações cadastradas no estoque.', true);
+        return;
+      }
+
+      // Monta o HTML de cada etiqueta
+      let etiquetasHtml = '';
+      variacoes.forEach(v => {
+        const skuCompleto = v.sku_variacao || `${p.sku}-${v.numero}`;
+        etiquetasHtml += `
+          <div class="etiqueta-item">
+            <div class="etiqueta-produto">${esc(p.marca)} ${esc(p.modelo)}</div>
+            <div class="etiqueta-num">Numeração: <strong>${esc(v.numero)}</strong></div>
+            <svg class="barcode" data-sku="${esc(skuCompleto)}"></svg>
+            <div class="etiqueta-sku">${esc(skuCompleto)}</div>
+            <div class="etiqueta-preco">${money(p.preco_venda)}</div>
+          </div>
+        `;
+      });
+
+      // Cria a janela de impressão
+      const win = window.open('', '_blank');
+      win.document.write(`
+        <html>
+        <head>
+          <title>Etiquetas - ${esc(p.marca)} ${esc(p.modelo)}</title>
+          <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script>
+          <style>
+            body { font-family: sans-serif; padding: 20px; margin: 0; }
+            .etiquetas-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+            .etiqueta-item {
+              width: 180px;
+              border: 1px dashed #ccc;
+              border-radius: 6px;
+              padding: 10px;
+              text-align: center;
+              box-sizing: border-box;
+            }
+            .etiqueta-produto { font-size: 11px; font-weight: bold; text-transform: uppercase; margin-bottom: 3px; height: 26px; overflow: hidden; }
+            .etiqueta-num { font-size: 10px; color: #555; margin-bottom: 5px; }
+            .barcode { max-width: 100%; height: 45px; display: block; margin: 0 auto; }
+            .etiqueta-sku { font-size: 9px; margin-top: 3px; font-family: monospace; }
+            .etiqueta-preco { font-size: 14px; font-weight: bold; margin-top: 5px; }
+            
+            @media print {
+              body { padding: 0; }
+              .etiqueta-item { page-break-inside: avoid; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="etiquetas-grid">
+            ${etiquetasHtml}
+          </div>
+          <script>
+            window.onload = function() {
+              // Gera todos os códigos de barras
+              document.querySelectorAll('.barcode').forEach(svg => {
+                try {
+                  JsBarcode(svg, svg.dataset.sku, {
+                    format: "CODE128",
+                    width: 1.5,
+                    height: 40,
+                    displayValue: false,
+                    margin: 0
+                  });
+                } catch(e) {
+                  console.error('Erro ao gerar código para ' + svg.dataset.sku, e);
+                }
+              });
+              
+              // Espera um tempinho para o navegador renderizar os códigos e abre a janela de impressão
+              setTimeout(() => {
+                window.print();
+              }, 300);
+            }
+          <\/script>
+        </body>
+        </html>
+      `);
+      win.document.close();
+    }
+
+    // ====== Permissões ======
 
     // ====== Permissões ======
     function aplicarPermissoes() {
