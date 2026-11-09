@@ -700,6 +700,34 @@
       return `${m}-${mo}-${c}`;
     }
 
+    // ====== Máscaras ======
+    function maskCPF(value) {
+      return value
+        .replace(/\D/g, '')
+        .replace(/(\d{3})(\d)/, '$1.$2')
+        .replace(/(\d{3})(\d)/, '$1.$2')
+        .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+        .slice(0, 14);
+    }
+
+    function maskWhatsApp(value) {
+      let v = value.replace(/\D/g, '');
+      if (v.length <= 10) {
+        // Fixo: (11) 1234-5678
+        return v
+          .replace(/^(\d{2})(\d)/, '($1) $2')
+          .replace(/(\d{4})(\d)/, '$1-$2')
+          .slice(0, 14);
+      } else {
+        // Celular: (11) 91234-5678
+        return v
+          .replace(/^(\d{2})(\d)/, '($1) $2')
+          .replace(/(\d{5})(\d)/, '$1-$2')
+          .slice(0, 15);
+      }
+    }
+
+
     function notify(msg, isError) {
       const t = document.getElementById('toast');
       t.textContent = msg;
@@ -1717,6 +1745,15 @@ vendedor: usuarioLogado?.nome || 'Sistema',
     // ====== Clientes ======
     const clientFormPanel = document.getElementById('clientFormPanel');
 
+    // Aplica máscara ao digitar
+    document.getElementById('clientCpf')?.addEventListener('input', function() {
+      this.value = maskCPF(this.value);
+    });
+    document.getElementById('clientWhatsapp')?.addEventListener('input', function() {
+      this.value = maskWhatsApp(this.value);
+    });
+
+
     document.getElementById('newClientBtn')?.addEventListener('click', () => {
       document.getElementById('clientForm').reset();
       clientFormPanel.hidden = false;
@@ -2100,6 +2137,15 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       ['qcName','qcWhatsapp','qcCpf','qcCidade'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
       if (quickClientModal) quickClientModal.style.display = 'flex';
     }
+
+    // Aplica máscara no cadastro rápido também
+    document.getElementById('qcCpf')?.addEventListener('input', function() {
+      this.value = maskCPF(this.value);
+    });
+    document.getElementById('qcWhatsapp')?.addEventListener('input', function() {
+      this.value = maskWhatsApp(this.value);
+    });
+
     document.getElementById('quickAddClientBtn')?.addEventListener('click', () => abrirQuickClient('order'));
     document.getElementById('quickAddReqClientBtn')?.addEventListener('click', () => abrirQuickClient('request'));
     document.getElementById('qcCancel')?.addEventListener('click', () => { if (quickClientModal) quickClientModal.style.display = 'none'; });
