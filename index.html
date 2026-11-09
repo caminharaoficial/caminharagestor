@@ -659,6 +659,7 @@
       </div>
       <div id="detailBody"></div>
       <div class="form-actions" style="margin-top:20px;">
+        <button class="btn btn-light" type="button" id="detailDuplicateBtn" style="display:none; margin-right:auto;">📄 Duplicar</button>
         <button class="btn btn-primary" type="button" id="detailEditBtn">Editar</button>
         <button class="btn btn-danger" type="button" id="detailDeleteBtn">Excluir</button>
       </div>
@@ -1783,6 +1784,7 @@ vendedor: usuarioLogado?.nome || 'Sistema',
     window.viewClient = function(id) {
       const c = clients.find(x => String(x.id) === String(id));
       if (!c) return;
+      document.getElementById('detailDuplicateBtn').style.display = 'none';
 
       // Busca as vendas deste cliente (comparando pelo nome)
       const clientSales = sales.filter(s => String(s.cliente).trim() === String(c.nome).trim());
@@ -2191,6 +2193,10 @@ window.viewOrder = function(id) {
 
   detailEditBtn.style.display = 'inline-flex';
   detailDeleteBtn.style.display = 'inline-flex';
+  
+  const dupBtn = document.getElementById('detailDuplicateBtn');
+  dupBtn.style.display = 'inline-flex';
+  dupBtn.onclick = () => { fecharDetail(); duplicarVenda(v); };
 
   detailKind = 'order'; detailId = id; detailTitle.textContent = 'Detalhes da Venda';
   const p = productById(v.id_produto);
@@ -2238,6 +2244,8 @@ window.viewRequest = function(id) {
 
   detailEditBtn.style.display = 'inline-flex';
   detailDeleteBtn.style.display = 'inline-flex';
+  
+  document.getElementById('detailDuplicateBtn').style.display = 'none';
 
   detailKind = 'request'; detailId = id; detailTitle.textContent = 'Detalhes do Pedido';
   const p = productById(r.id_produto);
@@ -2270,6 +2278,89 @@ window.viewRequest = function(id) {
     // Edição
     let editingSaleId = null;
     let editingRequestId = null;
+
+
+    function duplicarVenda(v) {
+      // Limpa o formulário primeiro
+      document.getElementById('orderForm').reset();
+      document.getElementById('orderCostsList').innerHTML = '';
+      editingSaleId = null;
+      
+      showSection('sales');
+      orderFormPanel.hidden = false;
+      
+      // Preenche os campos com os dados da venda original
+      const selProd = document.getElementById('orderProduct');
+      selProd.value = v.id_produto;
+      selProd.dispatchEvent(new Event('change', { bubbles: true }));
+      
+      document.getElementById('orderNumber').value = v.numero || '';
+      document.getElementById('orderQty').value = v.quantidade || 1;
+      document.getElementById('orderCostUnit').value = v.custo_unitario || 0;
+      document.getElementById('orderPrice').value = v.valor_venda || 0;
+      document.getElementById('orderNote').value = v.observacao || '';
+      document.getElementById('orderStatus').value = v.status_pagamento || 'OK';
+      document.getElementById('orderClient').value = v.cliente || '';
+      
+      // Se for Cartão Crédito, mostra as parcelas
+      const pag = v.forma_pagamento || 'Dinheiro';
+      document.getElementById('orderPayment').value = pag;
+      if (pag === 'Cartão Crédito') {
+        document.getElementById('orderParcelasField').style.display = 'grid';
+        document.getElementById('orderParcelaInfo').style.display = 'grid';
+      } else {
+        document.getElementById('orderParcelasField').style.display = 'none';
+        document.getElementById('orderParcelaInfo').style.display = 'none';
+      }
+      
+      // Recria os custos extras
+      let custosArr = [];
+      if (v.custos_extras) {
+        try { custosArr = JSON.parse(v.custos_extras); } catch (e) {
+          custosArr = String(v.custos_extras).split('|').map(s => {
+            const [d, val] = s.split(':');
+            return { descricao: d, valor: Number(val) };
+          }).filter(c => c.descricao);
+        }
+      }
+      
+      const lista = document.getElementById('orderCostsList');
+      custosArr.forEach(c => {
+        const div = document.createElement('div');
+        div.style.display = 'flex'; div.style.gap = '10px'; div.style.marginBottom = '10px';
+        
+        const inputDesc = document.createElement('input');
+        inputDesc.type = 'text';
+        inputDesc.className = 'order-cost-desc';
+        inputDesc.value = c.descricao || '';
+        inputDesc.style.cssText = 'flex:2; padding:8px; border:1px solid var(--line); border-radius:6px;';
+
+        const inputVal = document.createElement('input');
+        inputVal.type = 'number';
+        inputVal.className = 'order-cost-val';
+        inputVal.value = Number(c.valor || 0);
+        inputVal.min = '0';
+        inputVal.step = '0.01';
+        inputVal.style.cssText = 'flex:1; padding:8px; border:1px solid var(--line); border-radius:6px;';
+
+        const btnDel = document.createElement('button');
+        btnDel.type = 'button';
+        btnDel.className = 'btn btn-danger';
+        btnDel.textContent = 'X';
+        btnDel.style.cssText = 'padding:8px;';
+        btnDel.onclick = () => { div.remove(); calcularLucroVenda(); };
+
+        div.appendChild(inputDesc);
+        div.appendChild(inputVal);
+        div.appendChild(btnDel);
+        lista.appendChild(div);
+      });
+
+      calcularLucroVenda();
+      notify('Venda duplicada para edição. Ajuste se necessário e confirme.');
+      setTimeout(() => document.getElementById('orderFormPanel').scrollIntoView({ behavior:'smooth', block:'start' }), 50);
+    }
+
 
     function editarVendaExistente(v) {
       editingSaleId = v.id;
