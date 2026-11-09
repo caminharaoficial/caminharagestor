@@ -906,8 +906,6 @@
     }
 
     function updateNetProfit() {
-
-    function updateNetProfit() {
       const lucroBruto = sales.reduce((sum, s) => sum + Number(s.lucro || 0), 0);
       const totalDespesas = expenses.reduce((sum, d) => sum + Number(d.valor || 0), 0);
       const lucroLiquido = lucroBruto - totalDespesas;
