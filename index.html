@@ -599,6 +599,17 @@
             <article class="metric"><div class="metric-top"><span class="metric-label">Ticket Médio</span><span class="metric-icon">🏷</span></div><div class="metric-value" id="repAvg">R$ 0,00</div></article>
           </div>
 
+          <section class="panel" style="margin-bottom: 20px;">
+            <div class="panel-head"><div><h2>Resumo por Forma de Pagamento</h2><div class="panel-desc">Total recebido em cada modalidade no período.</div></div></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Forma de Pagamento</th><th>Qtd. de Vendas</th><th>Total Recebido</th></tr></thead>
+                <tbody id="reportPaymentTable"><tr><td colspan="3" class="table-empty">Gere um relatório para ver os dados.</td></tr></tbody>
+              </table>
+            </div>
+          </section>
+
+
           <section class="panel">
             <div class="panel-head"><div><h2>Resumo por Dia</h2><div class="panel-desc">Detalhamento diário do período selecionado.</div></div></div>
             <div class="table-wrap">
@@ -1430,6 +1441,7 @@ div.querySelector('button').onclick = () => { div.remove(); calcularLucroVenda()
       const cliente = document.getElementById('orderClient').value.trim();
       const obs = document.getElementById('orderNote').value.trim();
       const statusPagamento = document.getElementById('orderStatus').value;
+      const formaPagamento = document.getElementById('orderPayment').value;
       const baixarEstoque = document.getElementById('orderBaixarEstoque').checked;
 
       if (!id_produto || !numero || qtdVendida <= 0) {
@@ -1484,6 +1496,7 @@ vendedor: usuarioLogado?.nome || 'Sistema',
             custo_unitario: custoUnitario,
             lucro: lucroLiquido,
             status_pagamento: statusPagamento,
+            forma_pagamento: formaPagamento,
             custos_extras: custosString
           }
         });
@@ -2528,6 +2541,28 @@ function editarVendaExistente(v) {
           <td>${money(d.lucro)}</td>
         </tr>`;
       }).join('');
+
+      // ====== RESUMO POR FORMA DE PAGAMENTO ======
+      const porPagamento = {};
+      filtered.forEach(s => {
+        const forma = s.forma_pagamento || 'Não informada';
+        if (!porPagamento[forma]) porPagamento[forma] = { count: 0, valor: 0 };
+        porPagamento[forma].count++;
+        porPagamento[forma].valor += Number(s.valor_venda || 0);
+      });
+
+      const formas = Object.keys(porPagamento).sort();
+      document.getElementById('reportPaymentTable').innerHTML = formas.length
+        ? formas.map(forma => {
+            const d = porPagamento[forma];
+            return `<tr>
+              <td><strong>${esc(forma)}</strong></td>
+              <td>${d.count}</td>
+              <td><strong style="color:#27775d">${money(d.valor)}</strong></td>
+            </tr>`;
+          }).join('')
+        : '<tr><td colspan="3" class="table-empty">Nenhum pagamento registrado no período.</td></tr>';
+
     });
 
     // ====== Gerar Etiquetas ======
