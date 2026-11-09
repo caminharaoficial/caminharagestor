@@ -527,6 +527,7 @@
                 <div class="field"><label for="clientWhatsapp">WhatsApp *</label><input id="clientWhatsapp" required maxlength="20" placeholder="Ex.: 11 99999-9999"/></div>
                 <div class="field"><label for="clientCpf">CPF</label><input id="clientCpf" maxlength="14" placeholder="Ex.: 123.456.789-00"/></div>
                 <div class="field"><label for="clientCity">Cidade</label><input id="clientCity" maxlength="60" placeholder="Ex.: São Paulo"/></div>
+                <div class="field" style="grid-column: span 2;"><label for="clientObs">Observação Interna</label><input id="clientObs" maxlength="200" placeholder="Ex.: Prefere contato por WhatsApp à tarde"/></div>
               </div>
               <div class="form-actions">
                 <button class="btn btn-primary" type="submit">Salvar Cliente</button>
@@ -1732,6 +1733,7 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       const whatsapp = document.getElementById('clientWhatsapp').value.trim();
       const cpf = document.getElementById('clientCpf').value.trim();
       const cidade = document.getElementById('clientCity').value.trim();
+      const observacao = document.getElementById('clientObs').value.trim();
 
       if (!nome || !whatsapp) { notify('Preencha nome e WhatsApp.', true); return; }
 
@@ -1746,6 +1748,7 @@ vendedor: usuarioLogado?.nome || 'Sistema',
             whatsapp: whatsapp,
             cpf: cpf,
             cidade: cidade,
+            observacao: observacao,
             data_cadastro: new Date().toISOString()
           }
         });
@@ -1831,6 +1834,7 @@ vendedor: usuarioLogado?.nome || 'Sistema',
         ['WhatsApp', esc(c.whatsapp)],
         ['CPF', esc(c.cpf || '—')],
         ['Cidade', esc(c.cidade || '—')],
+        ['Observação Interna', esc(c.observacao || '—')],
         ['Total Gasto', `<span style="color:#27775d; font-weight:700;">${money(totalGasto)}</span>`],
         ['Qtd. Compras', qtdCompras],
         ['Última Compra', ultimaCompra],
