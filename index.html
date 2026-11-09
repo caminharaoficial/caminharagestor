@@ -334,7 +334,8 @@
                 <div class="field">
                   <label for="orderClient">Cliente</label>
                   <div style="display:flex; gap:6px;">
-                    <select id="orderClient" style="flex:1"><option value="">— Consumidor Final —</option></select>
+                    <input id="orderClient" list="orderClientList" placeholder="Consumidor Final ou digite..." style="flex:1" />
+                    <datalist id="orderClientList"></datalist>
                     <button type="button" class="btn btn-light" id="quickAddClientBtn" style="white-space:nowrap;">＋ Novo</button>
                   </div>
                 </div>
@@ -1867,10 +1868,9 @@ vendedor: usuarioLogado?.nome || 'Sistema',
 
     // Preenche a lista de clientes no formulário de venda
     function fillOrderClients() {
-      const sel = document.getElementById('orderClient');
-      if (!sel) return;
-      sel.innerHTML = '<option value="">— Consumidor Final (Sem cadastro) —</option>' + 
-        clients.map(c => `<option value="${esc(c.nome)}">${esc(c.nome)}</option>`).join('');
+      const list = document.getElementById('orderClientList');
+      if (!list) return;
+      list.innerHTML = clients.map(c => `<option value="${esc(c.nome)}">`).join('');
     }
 
     // ====== Lógica de Pedidos ======
@@ -2110,8 +2110,8 @@ vendedor: usuarioLogado?.nome || 'Sistema',
         quickClientModal.style.display = 'none';
         await loadAll();
         const selId = quickClientTarget === 'order' ? 'orderClient' : 'reqClient';
-        const sel = document.getElementById(selId);
-        if (sel) sel.value = nome;
+        const input = document.getElementById(selId);
+        if (input) input.value = nome;
       } catch (err) { notify('Erro: ' + err.message, true); endLoad(); }
     });
 
@@ -2271,80 +2271,77 @@ window.viewRequest = function(id) {
     let editingSaleId = null;
     let editingRequestId = null;
 
-function editarVendaExistente(v) {
-  editingSaleId = v.id;
-  showSection('sales');
-  orderFormPanel.hidden = false;
-  const selProd = document.getElementById('orderProduct');
-  selProd.value = v.id_produto;
-  selProd.dispatchEvent(new Event('change', { bubbles: true }));
-  document.getElementById('orderNumber').value = v.numero || '';
-  document.getElementById('orderQty').value = v.quantidade || 1;
-  document.getElementById('orderCostUnit').value = v.custo_unitario || 0;
-  document.getElementById('orderPrice').value = v.valor_venda || 0;
-  document.getElementById('orderNote').value = v.observacao || '';
-  document.getElementById('orderStatus').value = v.status_pagamento || 'OK';
-  const selCli = document.getElementById('orderClient');
-  if (v.cliente) {
-    const opt = Array.from(selCli.options).find(o => o.value === v.cliente);
-    if (!opt) { const n = new Option(v.cliente, v.cliente); selCli.add(n); }
-    selCli.value = v.cliente;
-  } else selCli.value = '';
+    function editarVendaExistente(v) {
+      editingSaleId = v.id;
+      showSection('sales');
+      orderFormPanel.hidden = false;
+      const selProd = document.getElementById('orderProduct');
+      selProd.value = v.id_produto;
+      selProd.dispatchEvent(new Event('change', { bubbles: true }));
+      document.getElementById('orderNumber').value = v.numero || '';
+      document.getElementById('orderQty').value = v.quantidade || 1;
+      document.getElementById('orderCostUnit').value = v.custo_unitario || 0;
+      document.getElementById('orderPrice').value = v.valor_venda || 0;
+      document.getElementById('orderNote').value = v.observacao || '';
+      document.getElementById('orderStatus').value = v.status_pagamento || 'OK';
+      
+      // AJUSTE: Como agora é um input, apenas preenche o valor
+      document.getElementById('orderClient').value = v.cliente || '';
 
-  // Lê custos embutidos na venda
-  let custosArr = [];
-  if (v.custos_extras) {
-    try { custosArr = JSON.parse(v.custos_extras); } catch (e) {
-      // fallback pipe
-      custosArr = String(v.custos_extras).split('|').map(s => {
-        const [d, val] = s.split(':');
-        return { descricao: d, valor: Number(val) };
-      }).filter(c => c.descricao);
+      // Lê custos embutidos na venda
+      let custosArr = [];
+      if (v.custos_extras) {
+        try { custosArr = JSON.parse(v.custos_extras); } catch (e) {
+          custosArr = String(v.custos_extras).split('|').map(s => {
+            const [d, val] = s.split(':');
+            return { descricao: d, valor: Number(val) };
+          }).filter(c => c.descricao);
+        }
+      }
+      if (!custosArr.length) {
+        custosArr = orderCosts
+          .filter(c => String(c.id_venda).trim() === String(v.id).trim())
+          .map(c => ({ descricao: c.descricao, valor: Number(c.valor) }));
+      }
+
+      const lista = document.getElementById('orderCostsList');
+      lista.innerHTML = '';
+      custosArr.forEach(c => {
+        const div = document.createElement('div');
+        div.style.display = 'flex'; div.style.gap = '10px'; div.style.marginBottom = '10px';
+        
+        const inputDesc = document.createElement('input');
+        inputDesc.type = 'text';
+        inputDesc.className = 'order-cost-desc';
+        inputDesc.value = c.descricao || '';
+        inputDesc.style.cssText = 'flex:2; padding:8px; border:1px solid var(--line); border-radius:6px;';
+
+        const inputVal = document.createElement('input');
+        inputVal.type = 'number';
+        inputVal.className = 'order-cost-val';
+        inputVal.value = Number(c.valor || 0);
+        inputVal.min = '0';
+        inputVal.step = '0.01';
+        inputVal.style.cssText = 'flex:1; padding:8px; border:1px solid var(--line); border-radius:6px;';
+
+        const btnDel = document.createElement('button');
+        btnDel.type = 'button';
+        btnDel.className = 'btn btn-danger';
+        btnDel.textContent = 'X';
+        btnDel.style.cssText = 'padding:8px;';
+        btnDel.onclick = () => { div.remove(); calcularLucroVenda(); };
+
+        div.appendChild(inputDesc);
+        div.appendChild(inputVal);
+        div.appendChild(btnDel);
+        lista.appendChild(div);
+      });
+
+      calcularLucroVenda();
+      setTimeout(() => document.getElementById('orderFormPanel').scrollIntoView({ behavior:'smooth', block:'start' }), 50);
     }
-  }
-  if (!custosArr.length) {
-    custosArr = orderCosts
-      .filter(c => String(c.id_venda).trim() === String(v.id).trim())
-      .map(c => ({ descricao: c.descricao, valor: Number(c.valor) }));
-  }
 
-  const lista = document.getElementById('orderCostsList');
-  lista.innerHTML = '';
-  custosArr.forEach(c => {
-    const div = document.createElement('div');
-    div.style.display = 'flex'; div.style.gap = '10px'; div.style.marginBottom = '10px';
-    
-    // Criação segura dos elementos, evitando template strings que possam confundir o navegador
-    const inputDesc = document.createElement('input');
-    inputDesc.type = 'text';
-    inputDesc.className = 'order-cost-desc';
-    inputDesc.value = c.descricao || '';
-    inputDesc.style.cssText = 'flex:2; padding:8px; border:1px solid var(--line); border-radius:6px;';
 
-    const inputVal = document.createElement('input');
-    inputVal.type = 'number';
-    inputVal.className = 'order-cost-val';
-    inputVal.value = Number(c.valor || 0);
-    inputVal.min = '0';
-    inputVal.step = '0.01';
-    inputVal.style.cssText = 'flex:1; padding:8px; border:1px solid var(--line); border-radius:6px;';
-
-    const btnDel = document.createElement('button');
-    btnDel.type = 'button';
-    btnDel.className = 'btn btn-danger';
-    btnDel.textContent = 'X';
-    btnDel.style.cssText = 'padding:8px;';
-    btnDel.onclick = () => { div.remove(); calcularLucroVenda(); };
-
-    div.appendChild(inputDesc);
-    div.appendChild(inputVal);
-    div.appendChild(btnDel);
-    lista.appendChild(div);
-  });
-
-  calcularLucroVenda();
-  setTimeout(() => document.getElementById('orderFormPanel').scrollIntoView({ behavior:'smooth', block:'start' }), 50);
-}
     function editarPedidoExistente(r) {
       editingRequestId = r.id;
       showSection('orders');
@@ -2358,12 +2355,10 @@ function editarVendaExistente(v) {
       document.getElementById('reqPrice').value = r.valor_total || 0;
       document.getElementById('reqNote').value = r.observacao || '';
       document.getElementById('reqStatus').value = r.status_pedido || 'Em preparo';
-      const selCli = document.getElementById('reqClient');
-      if (r.cliente) {
-        const opt = Array.from(selCli.options).find(o => o.value === r.cliente);
-        if (!opt) { const n = new Option(r.cliente, r.cliente); selCli.add(n); }
-        selCli.value = r.cliente;
-      } else selCli.value = '';
+      
+      // AJUSTE: Como agora é um input, apenas preenche o valor
+      document.getElementById('reqClient').value = r.cliente || '';
+
       calcularLucroPedido();
       setTimeout(() => document.getElementById('requestFormPanel').scrollIntoView({ behavior:'smooth', block:'start' }), 50);
     }
