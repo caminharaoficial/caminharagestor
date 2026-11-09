@@ -383,7 +383,10 @@
           </div>
 
           <section class="panel">
-            <div class="panel-head"><div><h2>Histórico de Vendas</h2><div class="panel-desc">Últimas transações registradas.</div></div></div>
+            <div class="panel-head">
+              <div><h2>Histórico de Vendas</h2><div class="panel-desc">Últimas transações registradas.</div></div>
+              <input class="search" id="orderClientFilter" placeholder="Filtrar por cliente..." style="max-width:250px;" />
+            </div>
             <div class="table-wrap">
               <table>
 <thead><tr><th>ID</th><th>Data</th><th>Produto</th><th>Num.</th><th>Qtd.</th><th>Custo Prod.</th><th>Custos Extras</th><th>Venda</th><th>Lucro Líquido</th><th>Status</th><th>Ações</th></tr></thead>
@@ -1276,6 +1279,8 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
       }
     }
 
+
+    document.getElementById('orderClientFilter')?.addEventListener('input', renderOrders);
     document.getElementById('productSearch').addEventListener('input', renderProducts);
     document.getElementById('stockSearch')?.addEventListener('input', renderStock); // <-- ADICIONE
 
@@ -1563,7 +1568,14 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       const tbody = document.getElementById('ordersTable');
       if (!tbody) return;
       
-      const sorted = [...sales].sort((a, b) => new Date(b.data_venda) - new Date(a.data_venda));
+      const filtroCliente = (document.getElementById('orderClientFilter')?.value || '').trim().toLowerCase();
+      
+      let lista = [...sales];
+      if (filtroCliente) {
+        lista = lista.filter(v => String(v.cliente || '').toLowerCase().includes(filtroCliente));
+      }
+      
+      const sorted = lista.sort((a, b) => new Date(b.data_venda) - new Date(a.data_venda));
       
       tbody.innerHTML = sorted.length ? sorted.map(v => {
         const p = productById(v.id_produto);
