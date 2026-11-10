@@ -751,19 +751,7 @@
       </div>
     </main>
   </div>
-  <div id="quickClientModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:99999; align-items:center; justify-content:center;">
-    <div style="background:#fff; border-radius:14px; padding:24px; width:420px; max-width:90%;">
-      <h3 style="margin-top:0;">Cadastro rápido de cliente</h3>
-      <div class="field" style="margin-bottom:12px;"><label>Nome *</label><input id="qcName" /></div>
-      <div class="field" style="margin-bottom:12px;"><label>WhatsApp *</label><input id="qcWhatsapp" /></div>
-      <div class="field" style="margin-bottom:12px;"><label>CPF</label><input id="qcCpf" /></div>
-      <div class="field" style="margin-bottom:12px;"><label>Cidade</label><input id="qcCidade" /></div>
-      <div class="form-actions">
-        <button class="btn btn-primary" type="button" id="qcSave">Salvar</button>
-        <button class="btn btn-light" type="button" id="qcCancel">Cancelar</button>
-      </div>
-    </div>
-  </div>
+
   <!-- Modal de detalhes de Venda / Pedido -->
   <div id="detailModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:99998; align-items:center; justify-content:center; padding:16px;">
     <div style="background:#fff; border-radius:14px; padding:24px; width:600px; max-width:100%; max-height:90vh; overflow-y:auto;">
@@ -1743,6 +1731,14 @@ div.querySelector('button').onclick = () => { div.remove(); calcularLucroVenda()
       if (editingSaleId) return; // edição tem listener próprio depois
       e.preventDefault();
       
+      const nomeCliente = document.getElementById('orderClient').value.trim();
+      const clienteCadastrado = clients.find(c => String(c.nome).trim().toLowerCase() === nomeCliente.toLowerCase());
+      
+      if (!clienteCadastrado) {
+        notify('Por favor, cadastre o cliente antes de realizar a venda.', true);
+        return;
+      }
+
       const prodText = document.getElementById('orderProduct').value;
       const prodObj = products.find(x => `${x.marca} ${x.modelo} ${x.cor ? '· ' + x.cor : ''} (${x.sku})` === prodText);
       const id_produto = prodObj ? prodObj.id : '';
@@ -2410,7 +2406,12 @@ vendedor: usuarioLogado?.nome || 'Sistema',
     function fillOrderClients() {
       const list = document.getElementById('orderClientList');
       if (!list) return;
-      list.innerHTML = clients.map(c => `<option value="${esc(c.nome)}">`).join('');
+      list.innerHTML = '';
+      clients.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.nome;
+        list.appendChild(opt);
+      });
     }
 
     // ====== Fornecedores ======
@@ -2598,7 +2599,12 @@ vendedor: usuarioLogado?.nome || 'Sistema',
     function fillRequestClients() {
       const list = document.getElementById('reqClientList');
       if (!list) return;
-      list.innerHTML = clients.map(c => `<option value="${esc(c.nome)}">`).join('');
+      list.innerHTML = '';
+      clients.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.nome;
+        list.appendChild(opt);
+      });
     }
 
     // Botão de adicionar custo extra no Pedido
@@ -2644,8 +2650,16 @@ vendedor: usuarioLogado?.nome || 'Sistema',
 
     document.getElementById('requestForm')?.addEventListener('submit', async e => {
       e.preventDefault();
-      const cliente = document.getElementById('reqClient').value;
       
+      const nomeCliente = document.getElementById('reqClient').value.trim();
+      const clienteCadastrado = clients.find(c => String(c.nome).trim().toLowerCase() === nomeCliente.toLowerCase());
+      
+      if (!clienteCadastrado) {
+        notify('Por favor, cadastre o cliente antes de salvar o pedido.', true);
+        return;
+      }
+
+      const cliente = nomeCliente;
       const prodText = document.getElementById('reqProduct').value;
       const prodObj = products.find(x => `${x.marca} ${x.modelo} ${x.cor ? '· ' + x.cor : ''} (${x.sku})` === prodText);
       const id_produto = prodObj ? prodObj.id : '';
@@ -2866,8 +2880,14 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       this.value = maskWhatsApp(this.value);
     });
 
-    document.getElementById('quickAddClientBtn')?.addEventListener('click', () => abrirQuickClient('order'));
-    document.getElementById('quickAddReqClientBtn')?.addEventListener('click', () => abrirQuickClient('request'));
+    document.getElementById('quickAddClientBtn')?.addEventListener('click', () => {
+      showSection('contacts');
+      document.getElementById('newClientBtn').click();
+    });
+    document.getElementById('quickAddReqClientBtn')?.addEventListener('click', () => {
+      showSection('contacts');
+      document.getElementById('newClientBtn').click();
+    });
     document.getElementById('qcCancel')?.addEventListener('click', () => { if (quickClientModal) quickClientModal.style.display = 'none'; });
     document.getElementById('qcSave')?.addEventListener('click', async () => {
       const nome = document.getElementById('qcName').value.trim();
