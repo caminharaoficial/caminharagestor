@@ -2732,8 +2732,28 @@ vendedor: usuarioLogado?.nome || 'Sistema',
         // 3. Remove o pedido da lista
         await apiPost({ action: 'delete', sheet: 'Pedidos', id: idPedido, vendedor: usuarioLogado?.nome || 'Sistema' });
 
-        notify('Pedido faturado com sucesso!');
-        await loadAll();
+        // 4. Pergunta se quer enviar o WhatsApp
+        await loadAll(); // Atualiza a tela primeiro
+        
+        if (confirm('Pedido faturado com sucesso!\n\nDeseja enviar o comprovante para o cliente via WhatsApp?')) {
+          // Recupera a venda que acabou de ser criada (a última da lista)
+          const vendaRecente = sales.find(s => String(s.id_produto) === String(pedido.id_produto) && String(s.numero) === String(pedido.numero));
+          if (vendaRecente) {
+            enviarWhatsApp(vendaRecente);
+          } else {
+            // Fallback: se não achar a venda na lista (por algum motivo de cache), envia com os dados do pedido
+            enviarWhatsApp({
+              id_produto: pedido.id_produto,
+              numero: pedido.numero,
+              quantidade: pedido.quantidade,
+              valor_venda: pedido.valor_total,
+              cliente: pedido.cliente,
+              endereco_entrega: pedido.endereco_entrega,
+              data_venda: new Date().toISOString()
+            });
+          }
+        }
+        
       } catch (err) {
         notify('Erro ao faturar: ' + err.message, true);
         endLoad();
