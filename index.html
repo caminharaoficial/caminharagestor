@@ -801,6 +801,8 @@
 
       <div class="form-actions" style="margin-top:20px;">
         <button class="btn btn-light" type="button" id="detailDuplicateBtn" style="display:none; margin-right:auto;">📄 Duplicar</button>
+        <button class="btn btn-light" type="button" id="detailPrintBtn" style="display:none; color:#526b83; border-color:#526b83;">🖨 Comprovante</button>
+        <button class="btn btn-light" type="button" id="detailWhatsBtn" style="display:none; color:#25D366; border-color:#25D366;">📱 WhatsApp</button>
         <button class="btn btn-primary" type="button" id="detailEditBtn">Editar</button>
         <button class="btn btn-danger" type="button" id="detailDeleteBtn">Excluir</button>
       </div>
@@ -2340,6 +2342,8 @@ vendedor: usuarioLogado?.nome || 'Sistema',
 
       detailKind = 'client'; detailId = id; 
       detailTitle.textContent = 'Ficha do Cliente';
+  document.getElementById('detailPrintBtn').style.display = 'none';
+  document.getElementById('detailWhatsBtn').style.display = 'none';
       
       detailBody.innerHTML = `
         <table style="width:100%; border-collapse:collapse;">${renderDetailRows(rows)}</table>
@@ -2889,12 +2893,112 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       `).join('');
     }
 
+    function gerarComprovante(v) {
+      const p = productById(v.id_produto);
+      const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto excluído';
+      const dataStr = v.data_venda ? new Date(v.data_venda).toLocaleString('pt-BR') : '—';
+      
+      // Formata os custos extras
+      let custosHtml = '';
+      if (v.custos_extras) {
+        try {
+          const arr = JSON.parse(v.custos_extras);
+          if (arr.length > 0) {
+            custosHtml = `
+              <div style="margin-top:10px; font-size:12px; border-top:1px dashed #ccc; padding-top:5px;">
+                <strong>Custos Extras:</strong><br>
+                ${arr.map(c => `- ${esc(c.descricao)}: ${money(c.valor)}`).join('<br>')}
+              </div>
+            `;
+          }
+        } catch (e) {}
+      }
+
+      const win = window.open('', '_blank');
+      win.document.write(`
+        <html>
+        <head>
+          <title>Comprovante - ${esc(v.id).slice(0, 8)}</title>
+          <style>
+            body { font-family: sans-serif; padding: 20px; width: 300px; margin: auto; color: #000; }
+            h2 { text-align: center; margin-bottom: 5px; }
+            h4 { text-align: center; margin-top: 0; color: #555; font-weight: normal; font-size: 12px; }
+            .linha { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+            .bold { font-weight: bold; }
+            .total { font-size: 16px; font-weight: bold; margin-top: 10px; border-top: 1px solid #000; border-bottom: 1px solid #000; padding: 5px 0; text-align: center; }
+            .footer { text-align: center; font-size: 10px; color: #777; margin-top: 20px; }
+          </style>
+        </head>
+        <body>
+          <h2>CAMINHARA</h2>
+          <h4>Loja Virtual</h4>
+          
+          <div style="text-align:center; font-size:11px; margin-bottom:15px;">
+            Data: ${dataStr}<br>
+            Venda: #${esc(String(v.id).slice(0, 8))}
+          </div>
+
+          <div class="linha"><span><strong>Produto:</strong></span><span style="text-align:right;">${nomeProd}</span></div>
+          <div class="linha"><span><strong>SKU:</strong></span><span>${esc(v.sku_variacao)}</span></div>
+          <div class="linha"><span><strong>Numeração:</strong></span><span>${esc(v.numero)}</span></div>
+          <div class="linha"><span><strong>Qtd:</strong></span><span>${v.quantidade}</span></div>
+          <div class="linha"><span><strong>Cliente:</strong></span><span>${esc(v.cliente || 'Consumidor Final')}</span></div>
+          <div class="linha"><span><strong>Pagamento:</strong></span><span>${esc(v.forma_pagamento || '—')}</span></div>
+
+          ${custosHtml}
+
+          <div class="total">Total: ${money(v.valor_venda)}</div>
+          
+          <div class="footer">
+            Obrigado pela preferência!<br>
+            www.caminhara.com
+          </div>
+          <script>
+            window.onload = function() { window.print(); }
+          <\/script>
+        </body>
+        </html>
+      `);
+      win.document.close();
+    }
+
+    function enviarWhatsApp(v) {
+      const p = productById(v.id_produto);
+      const nomeProd = p ? `${p.marca} ${p.modelo}` : 'Produto';
+      const dataStr = v.data_venda ? new Date(v.data_venda).toLocaleDateString('pt-BR') : '—';
+      
+      const texto = `*CAMINHARA - Recibo de Compra*%0A%0A` +
+        `*Data:* ${dataStr}%0A` +
+        `*Produto:* ${nomeProd}%0A` +
+        `*Numeração:* ${v.numero}%0A` +
+        `*Qtd:* ${v.quantidade}%0A` +
+        `*Total:* ${money(v.valor_venda)}%0A%0A` +
+        `Obrigado pela preferência!`;
+      
+      // Busca o whatsapp do cliente
+      const cli = clients.find(c => String(c.nome).trim() === String(v.cliente).trim());
+      const numeroCli = cli && cli.whatsapp ? cli.whatsapp.replace(/\D/g, '') : '';
+      
+      // Se o cliente tem número, envia direto para ele. Senão, abre a tela de escolha
+      const url = numeroCli 
+        ? `https://wa.me/55${numeroCli}?text=${texto}` 
+        : `https://wa.me/?text=${texto}`;
+        
+      window.open(url, '_blank');
+    }
+
 window.viewOrder = function(id) {
   const v = sales.find(x => String(x.id) === String(id));
   if (!v) return;
 
   detailEditBtn.style.display = 'inline-flex';
   detailDeleteBtn.style.display = 'inline-flex';
+  
+  // Mostra os botões de comprovante e whatsapp
+  document.getElementById('detailPrintBtn').style.display = 'inline-flex';
+  document.getElementById('detailWhatsBtn').style.display = 'inline-flex';
+  document.getElementById('detailPrintBtn').onclick = () => gerarComprovante(v);
+  document.getElementById('detailWhatsBtn').onclick = () => enviarWhatsApp(v);
   
   const dupBtn = document.getElementById('detailDuplicateBtn');
   dupBtn.style.display = 'inline-flex';
@@ -2950,6 +3054,8 @@ window.viewRequest = function(id) {
   document.getElementById('detailDuplicateBtn').style.display = 'none';
 
   detailKind = 'request'; detailId = id; detailTitle.textContent = 'Detalhes do Pedido';
+  document.getElementById('detailPrintBtn').style.display = 'none';
+  document.getElementById('detailWhatsBtn').style.display = 'none';
   const p = productById(r.id_produto);
   const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto excluído';
   const custo = Number(r.custo_unitario || 0);
