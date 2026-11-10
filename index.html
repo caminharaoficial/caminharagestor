@@ -364,15 +364,12 @@
                   <input id="orderLucroReal" readonly style="background:#e6f4ea; color:#27775d; font-weight:700;" value="R$ 0,00"/>
                 </div>
                 <div class="field">
-                  <label for="orderCpfCnpj">CPF ou CNPJ do Cliente *</label>
+                  <label for="orderClient">Cliente</label>
                   <div style="display:flex; gap:6px;">
-                    <input id="orderCpfCnpj" placeholder="Digite o CPF/CNPJ e aperte Enter" style="flex:1" />
+                    <input id="orderClient" list="orderClientList" placeholder="Consumidor Final ou digite..." style="flex:1" />
+                    <datalist id="orderClientList"></datalist>
                     <button type="button" class="btn btn-light" id="quickAddClientBtn" style="white-space:nowrap;">＋ Novo</button>
                   </div>
-                </div>
-                <div class="field">
-                  <label for="orderClient">Cliente *</label>
-                  <input id="orderClient" readonly style="background:#f0f3f6; font-weight:700;" placeholder="Preenchido automaticamente" />
                 </div>
                 <div class="field" id="orderAddressField" style="display:none;">
                   <label for="orderAddress">Endereço de Entrega</label>
@@ -449,15 +446,12 @@
              <form id="requestForm">
               <div class="form-grid">
                 <div class="field">
-                  <label for="reqCpfCnpj">CPF ou CNPJ do Cliente *</label>
+                  <label for="reqClient">Cliente</label>
                   <div style="display:flex; gap:6px;">
-                    <input id="reqCpfCnpj" placeholder="Digite o CPF/CNPJ e aperte Enter" style="flex:1" />
+                    <input id="reqClient" list="reqClientList" placeholder="Consumidor Final ou digite..." style="flex:1" />
+                    <datalist id="reqClientList"></datalist>
                     <button type="button" class="btn btn-light" id="quickAddReqClientBtn" style="white-space:nowrap;">＋ Novo</button>
                   </div>
-                </div>
-                <div class="field">
-                  <label for="reqClient">Cliente *</label>
-                  <input id="reqClient" readonly style="background:#f0f3f6; font-weight:700;" placeholder="Preenchido automaticamente" />
                 </div>
                 <div class="field" id="reqAddressField" style="display:none;">
                   <label for="reqAddress">Endereço de Entrega</label>
@@ -1513,7 +1507,47 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
     }
 
 
+    // Preenche o select de endereços na Venda (Dispara ao digitar ou selecionar do autocomplete)
+    function atualizarEnderecoVenda() {
+      const nomeCliente = document.getElementById('orderClient').value.trim();
+      const field = document.getElementById('orderAddressField');
+      const select = document.getElementById('orderAddress');
+      
+      const cliente = clients.find(c => String(c.nome).trim().toLowerCase() === nomeCliente.toLowerCase());
+      
+      if (cliente) {
+        const enderecos = deliveryAddresses.filter(a => String(a.id_cliente).trim() === String(cliente.id).trim());
+        
+        if (enderecos.length > 0) {
+          // Tem endereços na aba de entregas
+          field.style.display = 'grid';
+          select.innerHTML = '<option value="">— Selecione o endereço —</option>' + 
+            enderecos.map(a => `<option value="${esc(a.logradouro)}, ${esc(a.numero_end)} - ${esc(a.bairro)} (${esc(a.cidade)}/${esc(a.estado)})" ${a.principal === 'Sim' ? 'selected' : ''}>${esc(a.apelido || 'Endereço')} - ${esc(a.logradouro)}, ${esc(a.numero_end)}</option>`).join('');
+        } else if (cliente.logradouro) {
+          // Não tem na aba de entregas, mas tem no cadastro do cliente
+          field.style.display = 'grid';
+          const enderecoFormatado = `${cliente.logradouro}, ${cliente.numero_end || 'S/N'} - ${cliente.bairro || ''} (${cliente.cidade}/${cliente.estado})`;
+          select.innerHTML = `<option value="${esc(enderecoFormatado)}" selected>Usar endereço do cadastro: ${esc(cliente.logradouro)}, ${esc(cliente.numero_end || 'S/N')}</option>`;
+        } else {
+          // Não tem endereço nenhum
+          field.style.display = 'grid';
+          select.innerHTML = '<option value="">— Cliente sem endereço cadastrado —</option>';
+        }
+      } else {
+        field.style.display = 'none';
+        select.innerHTML = '';
+      }
+    }
 
+    document.getElementById('orderClient')?.addEventListener('input', atualizarEnderecoVenda);
+    document.getElementById('orderClient')?.addEventListener('change', atualizarEnderecoVenda);
+
+    document.getElementById('orderClientFilter')?.addEventListener('input', renderOrders);
+    document.getElementById('productSearch').addEventListener('input', renderProducts);
+    document.getElementById('stockSearch')?.addEventListener('input', renderStock); // <-- ADICIONE
+
+    // ====== Estoque: form ======
+    const stockFormPanel = document.getElementById('stockFormPanel');
     document.getElementById('newStockBtn').addEventListener('click', () => {
       document.getElementById('stockForm').reset();
       fillProductSelect();
@@ -1700,11 +1734,10 @@ div.querySelector('button').onclick = () => { div.remove(); calcularLucroVenda()
       e.preventDefault();
       
       const nomeCliente = document.getElementById('orderClient').value.trim();
-      const docCliente = document.getElementById('orderCpfCnpj').value.trim();
-      const clienteCadastrado = buscarClientePorDocumento(docCliente, 'venda');
-
-      if (!clienteCadastrado || !nomeCliente) {
-        notify('Informe um CPF/CNPJ de cliente já cadastrado para realizar a venda.', true);
+      const clienteCadastrado = clients.find(c => String(c.nome).trim().toLowerCase() === nomeCliente.toLowerCase());
+      
+      if (!clienteCadastrado) {
+        notify('Por favor, cadastre o cliente antes de realizar a venda.', true);
         return;
       }
 
@@ -2534,69 +2567,20 @@ vendedor: usuarioLogado?.nome || 'Sistema',
     }
 
     // Preenche o endereço de entrega no Pedido (dispara ao digitar ou selecionar)
-    // ====== BUSCA CLIENTE POR CPF/CNPJ (Vendas e Pedidos) ======
-    function buscarClientePorDocumento(doc, tipo) {
-      const docLimpo = String(doc).replace(/\D/g, '');
-      if (!docLimpo) return null;
-      return clients.find(c => String(c.cpf).replace(/\D/g, '') === docLimpo || String(c.cnpj).replace(/\D/g, '') === docLimpo);
-    }
-
-    // VENDAS: Ao digitar o CPF e sair do campo
-    document.getElementById('orderCpfCnpj')?.addEventListener('change', function() {
-      const doc = this.value.trim();
-      if (!doc) {
-        document.getElementById('orderClient').value = '';
-        document.getElementById('orderAddressField').style.display = 'none';
-        return;
-      }
-
-      const cliente = buscarClientePorDocumento(doc, 'venda');
-      const nomeInput = document.getElementById('orderClient');
-      const field = document.getElementById('orderAddressField');
-      const select = document.getElementById('orderAddress');
-
-      if (cliente) {
-        nomeInput.value = cliente.nome;
-        // Preencher endereços
-        const enderecos = deliveryAddresses.filter(a => String(a.id_cliente).trim() === String(cliente.id).trim());
-        if (enderecos.length > 0) {
-          field.style.display = 'grid';
-          select.innerHTML = enderecos.map(a => `<option value="${esc(a.logradouro)}, ${esc(a.numero_end)} - ${esc(a.bairro)} (${esc(a.cidade)}/${esc(a.estado)})" ${a.principal === 'Sim' ? 'selected' : ''}>${esc(a.apelido || 'Endereço')} - ${esc(a.logradouro)}, ${esc(a.numero_end)}</option>`).join('');
-        } else if (cliente.logradouro) {
-          field.style.display = 'grid';
-          const enderecoFormatado = `${cliente.logradouro}, ${cliente.numero_end || 'S/N'} - ${cliente.bairro || ''} (${cliente.cidade}/${cliente.estado})`;
-          select.innerHTML = `<option value="${esc(enderecoFormatado)}" selected>Usar endereço do cadastro: ${esc(cliente.logradouro)}, ${esc(cliente.numero_end || 'S/N')}</option>`;
-        } else {
-          field.style.display = 'grid';
-          select.innerHTML = '<option value="">— Cliente sem endereço cadastrado —</option>';
-        }
-      } else {
-        nomeInput.value = '';
-        field.style.display = 'none';
-        notify('Cliente não encontrado. Por favor, cadastre o cliente antes.', true);
-      }
-    });
-
-    // PEDIDOS: Ao digitar o CPF e sair do campo
-    document.getElementById('reqCpfCnpj')?.addEventListener('change', function() {
-      const doc = this.value.trim();
-      if (!doc) {
-        document.getElementById('reqClient').value = '';
-        document.getElementById('reqAddressField').style.display = 'none';
-        return;
-      }
-
-      const cliente = buscarClientePorDocumento(doc, 'pedido');
-      const nomeInput = document.getElementById('reqClient');
+    function atualizarEnderecoPedido() {
+      const nomeCliente = document.getElementById('reqClient').value.trim();
       const field = document.getElementById('reqAddressField');
       const select = document.getElementById('reqAddress');
-
+      
+      const cliente = clients.find(c => String(c.nome).trim().toLowerCase() === nomeCliente.toLowerCase());
+      
       if (cliente) {
-        nomeInput.value = cliente.nome;
         const enderecos = deliveryAddresses.filter(a => String(a.id_cliente).trim() === String(cliente.id).trim());
+        
         if (enderecos.length > 0) {
           field.style.display = 'grid';
-          select.innerHTML = enderecos.map(a => `<option value="${esc(a.logradouro)}, ${esc(a.numero_end)} - ${esc(a.bairro)} (${esc(a.cidade)}/${esc(a.estado)})" ${a.principal === 'Sim' ? 'selected' : ''}>${esc(a.apelido || 'Endereço')} - ${esc(a.logradouro)}, ${esc(a.numero_end)}</option>`).join('');
+          select.innerHTML = '<option value="">— Selecione o endereço —</option>' + 
+            enderecos.map(a => `<option value="${esc(a.logradouro)}, ${esc(a.numero_end)} - ${esc(a.bairro)} (${esc(a.cidade)}/${esc(a.estado)})" ${a.principal === 'Sim' ? 'selected' : ''}>${esc(a.apelido || 'Endereço')} - ${esc(a.logradouro)}, ${esc(a.numero_end)}</option>`).join('');
         } else if (cliente.logradouro) {
           field.style.display = 'grid';
           const enderecoFormatado = `${cliente.logradouro}, ${cliente.numero_end || 'S/N'} - ${cliente.bairro || ''} (${cliente.cidade}/${cliente.estado})`;
@@ -2606,19 +2590,10 @@ vendedor: usuarioLogado?.nome || 'Sistema',
           select.innerHTML = '<option value="">— Cliente sem endereço cadastrado —</option>';
         }
       } else {
-        nomeInput.value = '';
         field.style.display = 'none';
-        notify('Cliente não encontrado. Por favor, cadastre o cliente antes.', true);
+        select.innerHTML = '';
       }
-    });
-
-    // Máscara de CPF/CNPJ nos campos de busca
-    document.getElementById('orderCpfCnpj')?.addEventListener('input', function() {
-      this.value = maskCPF(this.value);
-    });
-    document.getElementById('reqCpfCnpj')?.addEventListener('input', function() {
-      this.value = maskCPF(this.value);
-    });
+    }
 
     document.getElementById('reqClient')?.addEventListener('input', atualizarEnderecoPedido);
     document.getElementById('reqClient')?.addEventListener('change', atualizarEnderecoPedido);
@@ -2679,11 +2654,10 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       e.preventDefault();
       
       const nomeCliente = document.getElementById('reqClient').value.trim();
-      const docCliente = document.getElementById('reqCpfCnpj').value.trim();
-      const clienteCadastrado = buscarClientePorDocumento(docCliente, 'pedido');
-
-      if (!clienteCadastrado || !nomeCliente) {
-        notify('Informe um CPF/CNPJ de cliente já cadastrado para salvar o pedido.', true);
+      const clienteCadastrado = clients.find(c => String(c.nome).trim().toLowerCase() === nomeCliente.toLowerCase());
+      
+      if (!clienteCadastrado) {
+        notify('Por favor, cadastre o cliente antes de salvar o pedido.', true);
         return;
       }
 
