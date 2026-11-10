@@ -349,7 +349,11 @@
             <div class="panel-head"><div><h2>Registrar nova venda</h2><div class="panel-desc">A baixa no estoque será automática.</div></div></div>
             <form id="orderForm">
               <div class="form-grid">
-                <div class="field"><label for="orderProduct">Produto *</label><select id="orderProduct" required></select></div>
+                <div class="field">
+                  <label for="orderProduct">Produto *</label>
+                  <input id="orderProduct" list="orderProductList" placeholder="Digite para buscar..." required style="width:100%" />
+                  <datalist id="orderProductList"></datalist>
+                </div>
                 <div class="field"><label for="orderNumber">Numeração *</label><select id="orderNumber" required></select></div>
                 <div class="field"><label for="orderQty">Quantidade *</label><input id="orderQty" type="number" min="1" step="1" value="1" required /></div>
 
@@ -451,7 +455,11 @@
                   <label for="reqAddress">Endereço de Entrega</label>
                   <select id="reqAddress"></select>
                 </div>
-                <div class="field"><label for="reqProduct">Produto *</label><select id="reqProduct" required></select></div>
+                <div class="field">
+                  <label for="reqProduct">Produto *</label>
+                  <input id="reqProduct" list="reqProductList" placeholder="Digite para buscar..." required style="width:100%" />
+                  <datalist id="reqProductList"></datalist>
+                </div>
                 <div class="field"><label for="reqNumber">Numeração *</label><select id="reqNumber" required></select></div>
                 <div class="field"><label for="reqQty">Qtd *</label><input id="reqQty" type="number" min="1" value="1" required/></div>
                 <div class="field"><label for="reqCostUnit">Custo Unitário (R$) *</label><input id="reqCostUnit" type="number" min="0" step="0.01" required/></div>
@@ -1528,14 +1536,20 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
     
     // Preenche o select de produtos na tela de vendas
     function fillOrderProducts() {
-      const sel = document.getElementById('orderProduct');
-      if (!sel) return;
-      sel.innerHTML = '<option value="">— Selecione o Produto —</option>' + products.map(p => `<option value="${esc(p.id)}" data-price="${p.preco_venda}">${esc(p.marca)} ${esc(p.modelo)} ${p.cor ? '· ' + esc(p.cor) : ''}</option>`).join('');
+      const list = document.getElementById('orderProductList');
+      if (!list) return;
+      list.innerHTML = products.map(p => {
+        // Cria uma string única para o autocomplete: "MARCA MODELO (SKU)"
+        const label = `${p.marca} ${p.modelo} ${p.cor ? '· ' + p.cor : ''} (${p.sku})`;
+        return `<option value="${esc(label)}" data-id="${esc(p.id)}">`;
+      }).join('');
     }
 
     // Atualiza as numerações disponíveis quando o produto é escolhido
     document.getElementById('orderProduct')?.addEventListener('change', function() {
-      const idProd = this.value;
+      // Encontra o produto pelo texto digitado na datalist
+      const prod = products.find(p => `${p.marca} ${p.modelo} ${p.cor ? '· ' + p.cor : ''} (${p.sku})` === this.value);
+      const idProd = prod ? prod.id : '';
       const numSelect = document.getElementById('orderNumber');
       const priceInput = document.getElementById('orderPrice');
 
@@ -2283,9 +2297,12 @@ vendedor: usuarioLogado?.nome || 'Sistema',
     });
 
     function fillRequestProducts() {
-      const sel = document.getElementById('reqProduct');
-      if (!sel) return;
-      sel.innerHTML = '<option value="">— Selecione —</option>' + products.map(p => `<option value="${esc(p.id)}">${esc(p.marca)} ${esc(p.modelo)}</option>`).join('');
+      const list = document.getElementById('reqProductList');
+      if (!list) return;
+      list.innerHTML = products.map(p => {
+        const label = `${p.marca} ${p.modelo} ${p.cor ? '· ' + p.cor : ''} (${p.sku})`;
+        return `<option value="${esc(label)}" data-id="${esc(p.id)}">`;
+      }).join('');
     }
 
     // Preenche o select de endereços no Pedido
@@ -2324,7 +2341,8 @@ vendedor: usuarioLogado?.nome || 'Sistema',
     }
 
     document.getElementById('reqProduct')?.addEventListener('change', function() {
-      const idProd = this.value;
+      const prod = products.find(p => `${p.marca} ${p.modelo} ${p.cor ? '· ' + p.cor : ''} (${p.sku})` === this.value);
+      const idProd = prod ? prod.id : '';
       const numSelect = document.getElementById('reqNumber');
       if (!idProd) { numSelect.innerHTML = '<option value="">—</option>'; return; }
       
@@ -2347,7 +2365,11 @@ vendedor: usuarioLogado?.nome || 'Sistema',
     document.getElementById('requestForm')?.addEventListener('submit', async e => {
       e.preventDefault();
       const cliente = document.getElementById('reqClient').value;
-      const id_produto = document.getElementById('reqProduct').value;
+      
+      const prodText = document.getElementById('reqProduct').value;
+      const p = products.find(x => `${x.marca} ${x.modelo} ${x.cor ? '· ' + x.cor : ''} (${x.sku})` === prodText);
+      const id_produto = p ? p.id : '';
+      
       const numero = document.getElementById('reqNumber').value;
       const qtd = Number(document.getElementById('reqQty').value);
       const valor = Number(document.getElementById('reqPrice').value);
@@ -2911,7 +2933,10 @@ window.viewRequest = function(id) {
       const idVenda = editingSaleId;
       const vAntiga = sales.find(x => String(x.id) === String(idVenda));
       
-      const id_produto = document.getElementById('orderProduct').value;
+      const prodText = document.getElementById('orderProduct').value;
+      const p = products.find(x => `${x.marca} ${x.modelo} ${x.cor ? '· ' + x.cor : ''} (${x.sku})` === prodText);
+      const id_produto = p ? p.id : '';
+      
       const numero = document.getElementById('orderNumber').value;
       const qtdNova = Number(document.getElementById('orderQty').value);
       const custo = Number(document.getElementById('orderCostUnit').value || 0);
