@@ -550,8 +550,9 @@
           </div>
 
           <div class="panel" id="clientFormPanel" style="margin-bottom:18px">
-            <div class="panel-head"><div><h2>Cadastrar Cliente</h2><div class="panel-desc">Nome e WhatsApp são obrigatórios.</div></div></div>
+            <div class="panel-head"><div><h2 id="clientFormTitle">Cadastrar Cliente</h2><div class="panel-desc">Nome e WhatsApp são obrigatórios.</div></div></div>
             <form id="clientForm">
+              <input type="hidden" id="clientEditId" />
               <div class="form-grid">
                 <div class="field"><label for="clientName">Nome Completo *</label><input id="clientName" required maxlength="100" placeholder="Ex.: Maria Silva"/></div>
                 <div class="field"><label for="clientWhatsapp">WhatsApp *</label><input id="clientWhatsapp" required maxlength="20" placeholder="Ex.: 11 99999-9999"/></div>
@@ -1810,9 +1811,28 @@ vendedor: usuarioLogado?.nome || 'Sistema',
 
     document.getElementById('newClientBtn')?.addEventListener('click', () => {
       document.getElementById('clientForm').reset();
+      document.getElementById('clientEditId').value = '';
+      document.getElementById('clientFormTitle').textContent = 'Cadastrar Cliente';
       clientFormPanel.hidden = false;
       clientFormPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
+
+    window.editClient = function(id) {
+      const c = clients.find(x => String(x.id) === String(id));
+      if (!c) return;
+      
+      document.getElementById('clientEditId').value = c.id;
+      document.getElementById('clientName').value = c.nome || '';
+      document.getElementById('clientWhatsapp').value = c.whatsapp || '';
+      document.getElementById('clientCpf').value = c.cpf || '';
+      document.getElementById('clientCity').value = c.cidade || '';
+      document.getElementById('clientObs').value = c.observacao || '';
+      
+      document.getElementById('clientFormTitle').textContent = 'Editar Cliente';
+      clientFormPanel.hidden = false;
+      showSection('contacts');
+      clientFormPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
 
     document.getElementById('cancelClientBtn')?.addEventListener('click', () => { 
       clientFormPanel.hidden = true; 
@@ -1827,23 +1847,34 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       const observacao = document.getElementById('clientObs').value.trim();
 
       if (!nome || !whatsapp) { notify('Preencha nome e WhatsApp.', true); return; }
+      
+      const editId = document.getElementById('clientEditId').value;
 
       try {
         startLoad();
-        await apiPost({
-          action: 'append', sheet: 'Clientes',
-          data: {
-            id: uuid(),
-vendedor: usuarioLogado?.nome || 'Sistema',
-            nome: nome,
-            whatsapp: whatsapp,
-            cpf: cpf,
-            cidade: cidade,
-            observacao: observacao,
-            data_cadastro: new Date().toISOString()
-          }
-        });
-        notify('Cliente cadastrado!');
+        
+        const payloadData = {
+          nome: nome,
+          whatsapp: whatsapp,
+          cpf: cpf,
+          cidade: cidade,
+          observacao: observacao,
+          vendedor: usuarioLogado?.nome || 'Sistema'
+        };
+
+        if (editId) {
+          payloadData.id = editId;
+          await apiPost({ action: 'update', sheet: 'Clientes', data: payloadData });
+          notify('Cliente atualizado!');
+        } else {
+          payloadData.id = uuid();
+          payloadData.data_cadastro = new Date().toISOString();
+          await apiPost({ action: 'append', sheet: 'Clientes', data: payloadData });
+          notify('Cliente cadastrado!');
+        }
+        
+        document.getElementById('clientEditId').value = '';
+        document.getElementById('clientFormTitle').textContent = 'Cadastrar Cliente';
         clientFormPanel.hidden = true;
         await loadAll(); 
       } catch (err) {
@@ -1942,9 +1973,8 @@ vendedor: usuarioLogado?.nome || 'Sistema',
         </div>
       `;
       
-      // Esconde o botão Editar (pois não implementamos edição de cliente)
-      // e esconde o botão Excluir para não duplicar com o da tabela
-      detailEditBtn.style.display = 'none';
+      // Mostra o botão Editar e esconde o Excluir (para não duplicar com o da tabela)
+      detailEditBtn.style.display = 'inline-flex';
       detailDeleteBtn.style.display = 'none';
 
       detailModal.style.display = 'flex';
@@ -2561,6 +2591,7 @@ window.viewRequest = function(id) {
     detailEditBtn?.addEventListener('click', () => {
       const k = detailKind, id = detailId;
       fecharDetail();
+      if (k === 'client') { editClient(id); return; }
       if (k === 'order') {
         const v = sales.find(x => String(x.id) === String(id));
         if (v) editarVendaExistente(v);
