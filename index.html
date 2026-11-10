@@ -1386,7 +1386,7 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
       const cliente = clients.find(c => String(c.nome).trim().toLowerCase() === nomeCliente.toLowerCase());
       
       if (cliente) {
-        const enderecos = deliveryAddresses.filter(a => String(a.id_cliente) === String(cliente.id));
+        const enderecos = deliveryAddresses.filter(a => String(a.id_cliente).trim() === String(cliente.id).trim());
         if (enderecos.length > 0) {
           field.style.display = 'grid';
           select.innerHTML = '<option value="">— Selecione o endereço —</option>' + 
@@ -2083,8 +2083,9 @@ vendedor: usuarioLogado?.nome || 'Sistema',
     });
 
     document.getElementById('btnSaveAddress')?.addEventListener('click', async () => {
-      const id_cliente = detailId;
-      if (!id_cliente) return;
+      // Pega o ID direto do formulário do cliente que está sendo editado/visualizado no modal
+      const id_cliente = document.getElementById('clientEditId').value || detailId;
+      if (!id_cliente) { notify('Erro: Cliente não identificado.', true); return; }
 
       const apelido = document.getElementById('addrApelido').value.trim();
       const cep = document.getElementById('addrCep').value.trim();
