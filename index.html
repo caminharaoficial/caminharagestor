@@ -1559,7 +1559,6 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
         return;
       }
 
-      const prod = productById(idProd);
       const costInput = document.getElementById('orderCostUnit');
       if (prod) {
         priceInput.value = prod.preco_venda;
@@ -1638,7 +1637,7 @@ div.querySelector('button').onclick = () => { div.remove(); calcularLucroVenda()
         if (!confirmar) return;
       }
 
-      const p = productById(id_produto);
+      const p = prodSelecionado;
       const skuVar = (estoqueItem ? estoqueItem.sku_variacao : null) || `${p.sku}-${numero}`;
       const custoUnitario = Number(document.getElementById('orderCostUnit').value || 0);
 
@@ -2346,8 +2345,7 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       const numSelect = document.getElementById('reqNumber');
       if (!idProd) { numSelect.innerHTML = '<option value="">—</option>'; return; }
       
-      // CORREÇÃO: Sempre puxa da grade do produto (independente de ter estoque ou não)
-            const p = productById(idProd);
+      const p = prod;
       const priceInput = document.getElementById('reqPrice');
       const costInput = document.getElementById('reqCostUnit');
       if (p) {
@@ -2934,8 +2932,8 @@ window.viewRequest = function(id) {
       const vAntiga = sales.find(x => String(x.id) === String(idVenda));
       
       const prodText = document.getElementById('orderProduct').value;
-      const p = products.find(x => `${x.marca} ${x.modelo} ${x.cor ? '· ' + x.cor : ''} (${x.sku})` === prodText);
-      const id_produto = p ? p.id : '';
+      const prodSelecionado = products.find(x => `${x.marca} ${x.modelo} ${x.cor ? '· ' + x.cor : ''} (${x.sku})` === prodText);
+      const id_produto = prodSelecionado ? prodSelecionado.id : '';
       
       const numero = document.getElementById('orderNumber').value;
       const qtdNova = Number(document.getElementById('orderQty').value);
