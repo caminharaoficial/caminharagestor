@@ -716,8 +716,9 @@
     let stock = [];
     let sales = [];
     let expenses = [];
-    let clients = []; // <-- ADICIONE ESTA LINHA
-     let orderCosts = [];
+    let clients = []; 
+    let deliveryAddresses = []; // <-- NOVO
+    let orderCosts = [];
     let requests = []; // <-- ADICIONE
     let connected = false;
 
@@ -825,8 +826,8 @@
       startLoad();
       try {
         setConnection(true);
-        const [p, s, v, d, c, oc, r] = await Promise.all([
-          apiRead('Produtos'), apiRead('Estoque'), apiRead('Vendas'), apiRead('Despesas'), apiRead('Clientes'), apiRead('Custos'), apiRead('Pedidos')
+        const [p, s, v, d, c, oc, r, e] = await Promise.all([
+          apiRead('Produtos'), apiRead('Estoque'), apiRead('Vendas'), apiRead('Despesas'), apiRead('Clientes'), apiRead('Custos'), apiRead('Pedidos'), apiRead('Enderecos_Entrega')
         ]);
         // ...
         requests = r.filter(x => x && x.id && String(x.id).trim() !== ''); // <-- ADICIONE
@@ -836,7 +837,8 @@
         stock = s.filter(x => x && x.id_produto && String(x.id_produto).trim() !== '');
         sales = v.filter(x => x && x.id && String(x.id).trim() !== '');
         expenses = d.filter(x => x && x.id && String(x.id).trim() !== '');
-        clients = c.filter(x => x && x.id && String(x.id).trim() !== ''); // <-- ADICIONE ESTA LINHA
+        clients = c.filter(x => x && x.id && String(x.id).trim() !== ''); 
+        deliveryAddresses = e.filter(x => x && x.id && String(x.id).trim() !== ''); // <-- NOVO
         
         setConnection(true);
         renderAll();
