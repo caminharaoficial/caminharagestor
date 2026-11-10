@@ -997,15 +997,17 @@
       fillProductSelect();
       renderOrders();         
       fillOrderProducts();    
-      renderExpenses();       // <-- ADICIONE ESTA LINHA
-      updateNetProfit();      // <-- ADICIONE ESTA LINHA
+      renderExpenses();       
+      updateNetProfit();      
       renderSalesChart();
       renderClients();        
       fillOrderClients();      
-      renderRequests();       // <-- ADICIONE
-      fillRequestProducts();  // <-- ADICIONE    
-      renderSuppliers();      // <-- NOVO
+      renderRequests();       
+      fillRequestProducts();  
+      renderSuppliers();      
 }
+
+
     function renderLowStockAlert() {
       const alertEl = document.getElementById('lowStockAlert');
       const titleEl = document.getElementById('lowStockTitle');
@@ -3979,6 +3981,40 @@ document.getElementById('topUserName').textContent = res.nome;
         carregarAtividades();
       });
     });
+
+    // Força o datalist a abrir ao clicar no campo
+    function forcarAbrirLista(inputId) {
+      const input = document.getElementById(inputId);
+      if (!input) return;
+      
+      input.addEventListener('click', function() {
+        const listId = this.getAttribute('list');
+        if (!listId) return;
+        const list = document.getElementById(listId);
+        if (!list) return;
+
+        // Truque para reabrir a lista de sugestões no Chrome/Edge
+        const valorAtual = this.value;
+        this.value = '';
+        this.value = valorAtual;
+        
+        // Simula o pressionamento da seta para baixo para abrir o dropdown
+        const evt = new KeyboardEvent('keydown', {
+          key: 'ArrowDown',
+          code: 'ArrowDown',
+          keyCode: 40,
+          which: 40,
+          bubbles: true
+        });
+        this.dispatchEvent(evt);
+      });
+    }
+
+    // Aplica o truque nos 4 campos (Venda e Pedido, Produto e Cliente)
+    forcarAbrirLista('orderClient');
+    forcarAbrirLista('orderProduct');
+    forcarAbrirLista('reqClient');
+    forcarAbrirLista('reqProduct');
 
     document.addEventListener('DOMContentLoaded', () => {
       const tokenSalvo = sessionStorage.getItem('caminhara_token');
