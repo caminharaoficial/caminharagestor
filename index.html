@@ -2545,8 +2545,8 @@ vendedor: usuarioLogado?.nome || 'Sistema',
 
     document.getElementById('newRequestBtn')?.addEventListener('click', () => {
       document.getElementById('requestForm').reset();
-      fillProductSelect(); // Reutiliza a função
-      fillRequestClients();
+      fillProductSelect();
+      fillRequestClients();   // <-- Garanta que essa linha existe
       requestFormPanel.hidden = false;
       requestFormPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
@@ -2563,13 +2563,37 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       }).join('');
     }
 
-    // Preenche o select de endereços no Pedido
-    document.getElementById('reqClient')?.addEventListener('change', function() {
-      const nomeCliente = this.value;
+    // Preenche o endereço de entrega no Pedido (dispara ao digitar ou selecionar)
+    function atualizarEnderecoPedido() {
+      const nomeCliente = document.getElementById('reqClient').value.trim();
       const field = document.getElementById('reqAddressField');
       const select = document.getElementById('reqAddress');
       
-      const cliente = clients.find(c => String(c.nome).trim() === nomeCliente);
+      const cliente = clients.find(c => String(c.nome).trim().toLowerCase() === nomeCliente.toLowerCase());
+      
+      if (cliente) {
+        const enderecos = deliveryAddresses.filter(a => String(a.id_cliente).trim() === String(cliente.id).trim());
+        
+        if (enderecos.length > 0) {
+          field.style.display = 'grid';
+          select.innerHTML = '<option value="">— Selecione o endereço —</option>' + 
+            enderecos.map(a => `<option value="${esc(a.logradouro)}, ${esc(a.numero_end)} - ${esc(a.bairro)} (${esc(a.cidade)}/${esc(a.estado)})" ${a.principal === 'Sim' ? 'selected' : ''}>${esc(a.apelido || 'Endereço')} - ${esc(a.logradouro)}, ${esc(a.numero_end)}</option>`).join('');
+        } else if (cliente.logradouro) {
+          field.style.display = 'grid';
+          const enderecoFormatado = `${cliente.logradouro}, ${cliente.numero_end || 'S/N'} - ${cliente.bairro || ''} (${cliente.cidade}/${cliente.estado})`;
+          select.innerHTML = `<option value="${esc(enderecoFormatado)}" selected>Usar endereço do cadastro: ${esc(cliente.logradouro)}, ${esc(cliente.numero_end || 'S/N')}</option>`;
+        } else {
+          field.style.display = 'grid';
+          select.innerHTML = '<option value="">— Cliente sem endereço cadastrado —</option>';
+        }
+      } else {
+        field.style.display = 'none';
+        select.innerHTML = '';
+      }
+    }
+
+    document.getElementById('reqClient')?.addEventListener('input', atualizarEnderecoPedido);
+    document.getElementById('reqClient')?.addEventListener('change', atualizarEnderecoPedido);
       
       if (cliente) {
         const enderecos = deliveryAddresses.filter(a => String(a.id_cliente).trim() === String(cliente.id).trim());
