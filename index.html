@@ -1401,7 +1401,10 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
         document.getElementById('productSku').value = sku;
       }
       
-      const grade = document.getElementById('productGrade').value.trim();
+      // Limpa a string da grade: remove espaços, quebra por vírgula e remove itens vazios
+      const gradeBruta = document.getElementById('productGrade').value;
+      const numerosLimpos = gradeBruta.split(',').map(n => n.trim()).filter(Boolean);
+      const grade = numerosLimpos.join(','); // Salva a grade padronizada
 
       const dup = products.find(p => String(p.sku).toUpperCase() === sku.toUpperCase() && String(p.id) !== String(id));
       if (dup) { notify('SKU já existe: ' + sku, true); return; }
@@ -1443,14 +1446,13 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
           notify('Produto atualizado e grade conferida.');
         } else {
           await apiPost({ action: 'append', sheet: 'Produtos', data: { ...data, vendedor: usuarioLogado?.nome || 'Sistema' } });
-          const numeros = grade.split(',').map(n => n.trim()).filter(Boolean);
-          for (const num of numeros) {
+           for (const num of numerosLimpos) {
             await apiPost({
               action: 'append', sheet: 'Estoque',
               data: {
                 id: uuid(), id_produto: data.id, sku_variacao: `${sku}-${num}`,
                 numero: num, quantidade: 0, vendidos: 0,
-                vendedor: usuarioLogado?.nome || 'Sistema', // <-- ADICIONE
+                vendedor: usuarioLogado?.nome || 'Sistema',
                 atualizado_em: new Date().toISOString()
               }
             });
