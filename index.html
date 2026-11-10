@@ -1930,8 +1930,9 @@ vendedor: usuarioLogado?.nome || 'Sistema',
         document.getElementById('clientFormTitle').textContent = 'Cadastrar Cliente';
         clientFormPanel.hidden = true;
         await loadAll(); 
+        endLoad(); // <-- ADICIONADO AQUI PARA NÃO TRAVAR O OVERLAY
       } catch (err) {
-        notify('Erro ao cadastrar cliente: ' + err.message, true);
+        notify('Erro ao salvar cliente: ' + err.message, true);
         endLoad();
       }
     });
@@ -1959,26 +1960,18 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       tbody.querySelectorAll('[data-view-client]').forEach(b => b.onclick = () => viewClient(b.dataset.viewClient));
     }
 
-    window.viewClient = function(id) {
+     window.viewClient = function(id) {
       const c = clients.find(x => String(x.id) === String(id));
       if (!c) return;
       document.getElementById('detailDuplicateBtn').style.display = 'none';
 
-      // Busca as vendas deste cliente (comparando pelo nome)
       const clientSales = sales.filter(s => String(s.cliente).trim() === String(c.nome).trim());
-      
-      // Calcula totais
       const totalGasto = clientSales.reduce((sum, s) => sum + Number(s.valor_venda || 0), 0);
       const qtdCompras = clientSales.length;
       
-      // Ordena as vendas da mais recente para a mais antiga
       clientSales.sort((a, b) => new Date(b.data_venda) - new Date(a.data_venda));
-      
-      const ultimaCompra = clientSales.length > 0 
-        ? new Date(clientSales[0].data_venda).toLocaleDateString('pt-BR') 
-        : 'Nenhuma';
+      const ultimaCompra = clientSales.length > 0 ? new Date(clientSales[0].data_venda).toLocaleDateString('pt-BR') : 'Nenhuma';
 
-      // Monta o HTML das últimas 10 vendas
       const ultimas = clientSales.slice(0, 10);
       let tabelaVendas = '';
       if (ultimas.length > 0) {
@@ -2003,12 +1996,17 @@ vendedor: usuarioLogado?.nome || 'Sistema',
         tabelaVendas = '<p style="color:#738091; font-size:12px; margin-top:10px;">Nenhuma compra registrada.</p>';
       }
 
-      // Monta os dados do modal
+      // Monta os dados do modal (Agora com Endereço e E-mail)
+      const enderecoCompleto = c.logradouro 
+        ? `${esc(c.logradouro)}, ${esc(c.numero_end || 'S/N')} ${c.complemento ? ' - ' + esc(c.complemento) : ''}<br>${esc(c.bairro || '')} - ${esc(c.cidade || '')} / ${esc(c.estado || '')}<br>CEP: ${esc(c.cep || '—')}`
+        : (c.cidade ? `Apenas cidade: ${esc(c.cidade)}` : 'Não informado');
+
       const rows = [
         ['Nome', esc(c.nome)],
         ['WhatsApp', esc(c.whatsapp)],
+        ['E-mail', esc(c.email || '—')],
         ['CPF', esc(c.cpf || '—')],
-        ['Cidade', esc(c.cidade || '—')],
+        ['Endereço', enderecoCompleto],
         ['Observação Interna', esc(c.observacao || '—')],
         ['Total Gasto', `<span style="color:#27775d; font-weight:700;">${money(totalGasto)}</span>`],
         ['Qtd. Compras', qtdCompras],
@@ -2026,7 +2024,6 @@ vendedor: usuarioLogado?.nome || 'Sistema',
         </div>
       `;
       
-      // Mostra o botão Editar e esconde o Excluir (para não duplicar com o da tabela)
       detailEditBtn.style.display = 'inline-flex';
       detailDeleteBtn.style.display = 'none';
 
