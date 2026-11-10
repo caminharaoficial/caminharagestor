@@ -2901,7 +2901,6 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       const cli = clients.find(c => String(c.nome).trim() === String(v.cliente).trim());
       const cliCpf = cli && cli.cpf ? ` - CPF: ${esc(cli.cpf)}` : '';
       
-      // Formata os custos extras (o que o cliente pagou a mais, ex: frete)
       let custosHtml = '';
       if (v.custos_extras) {
         try {
@@ -2931,7 +2930,6 @@ vendedor: usuarioLogado?.nome || 'Sistema',
             h2 { text-align: center; margin-bottom: 5px; }
             h4 { text-align: center; margin-top: 0; color: #555; font-weight: normal; font-size: 12px; }
             .linha { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
-            .bold { font-weight: bold; }
             .total { font-size: 16px; font-weight: bold; margin-top: 10px; border-top: 1px solid #000; border-bottom: 1px solid #000; padding: 5px 0; text-align: center; }
             .footer { text-align: center; font-size: 10px; color: #777; margin-top: 20px; }
           </style>
@@ -2976,13 +2974,11 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       win.document.close();
     }
 
-
     function enviarWhatsApp(v) {
       const p = productById(v.id_produto);
       const nomeProd = p ? `${p.marca} ${p.modelo}` : 'Produto';
       const dataStr = v.data_venda ? new Date(v.data_venda).toLocaleDateString('pt-BR') : '—';
       
-      // Monta o texto com encodeURIComponent para não quebrar acentos ou emojis
       const texto = encodeURIComponent(
         `*CAMINHARA - Recibo de Compra*\n\n` +
         `*Data:* ${dataStr}\n` +
@@ -2994,11 +2990,9 @@ vendedor: usuarioLogado?.nome || 'Sistema',
         `\nObrigado pela preferência!`
       );
       
-      // Busca o whatsapp do cliente
       const cli = clients.find(c => String(c.nome).trim() === String(v.cliente).trim());
       const numeroCli = cli && cli.whatsapp ? cli.whatsapp.replace(/\D/g, '') : '';
       
-      // Usa a API correta do WhatsApp (api.whatsapp.com) que evita bloqueio de pop-up
       const url = numeroCli 
         ? `https://api.whatsapp.com/send?phone=55${numeroCli}&text=${texto}` 
         : `https://api.whatsapp.com/send?text=${texto}`;
@@ -3058,6 +3052,38 @@ window.viewOrder = function(id) {
     ['Status', v.status_pagamento === 'OK' ? 'Recebido' : 'Pendente'],
     ['Observação', esc(v.observacao || '—')],
     ['Custos Extras', txtCustos],
+  ];
+  detailBody.innerHTML = `<table style="width:100%; border-collapse:collapse;">${renderDetailRows(rows)}</table>`;
+  detailModal.style.display = 'flex';
+};
+
+window.viewRequest = function(id) {
+  const r = requests.find(x => String(x.id) === String(id));
+  if (!r) return;
+
+  detailEditBtn.style.display = 'inline-flex';
+  detailDeleteBtn.style.display = 'inline-flex';
+  
+  document.getElementById('detailDuplicateBtn').style.display = 'none';
+  document.getElementById('detailPrintBtn').style.display = 'none';
+  document.getElementById('detailWhatsBtn').style.display = 'none';
+
+  detailKind = 'request'; detailId = id; detailTitle.textContent = 'Detalhes do Pedido';
+  const p = productById(r.id_produto);
+  const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto excluído';
+  const custo = Number(r.custo_unitario || 0);
+  const lucro = Number(r.valor_total || 0) - (custo * Number(r.quantidade || 0));
+  const rows = [
+    ['ID', `<span style="font-family:monospace; user-select:all;">${esc(r.id)}</span>`],
+    ['Data', r.data_pedido ? new Date(r.data_pedido).toLocaleString('pt-BR') : '—'],
+    ['Cliente', esc(r.cliente || 'Consumidor Final')],
+    ['Produto', nomeProd], ['SKU', esc(r.sku_variacao || '—')],
+    ['Numeração', esc(r.numero || '—')], ['Quantidade', r.quantidade || 0],
+    ['Custo Unitário', money(custo)],
+    ['Valor Total', `<span style="color:#27775d">${money(r.valor_total)}</span>`],
+    ['Lucro Real', `<span style="color:#27775d">${money(lucro)}</span>`],
+    ['Status', esc(r.status_pedido || '—')],
+    ['Observação', esc(r.observacao || '—')],
   ];
   detailBody.innerHTML = `<table style="width:100%; border-collapse:collapse;">${renderDetailRows(rows)}</table>`;
   detailModal.style.display = 'flex';
