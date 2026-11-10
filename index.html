@@ -370,9 +370,10 @@
                     <button type="button" class="btn btn-light" id="quickAddClientBtn" style="white-space:nowrap;">＋ Novo</button>
                   </div>
                 </div>
-                <div class="field">
+                <div class="field" style="grid-column: span 2;">
                   <label for="orderClient">Cliente *</label>
                   <input id="orderClient" readonly style="background:#f0f3f6; font-weight:700;" placeholder="Preenchido automaticamente" />
+                  <div id="orderClientInfo" style="display:none; margin-top:6px;"></div>
                 </div>
                 <div class="field" id="orderAddressField" style="display:none;">
                   <label for="orderAddress">Endereço de Entrega</label>
@@ -455,9 +456,10 @@
                     <button type="button" class="btn btn-light" id="quickAddReqClientBtn" style="white-space:nowrap;">＋ Novo</button>
                   </div>
                 </div>
-                <div class="field">
+                <div class="field" style="grid-column: span 2;">
                   <label for="reqClient">Cliente *</label>
                   <input id="reqClient" readonly style="background:#f0f3f6; font-weight:700;" placeholder="Preenchido automaticamente" />
+                  <div id="reqClientInfo" style="display:none; margin-top:6px;"></div>
                 </div>
                 <div class="field" id="reqAddressField" style="display:none;">
                   <label for="reqAddress">Endereço de Entrega</label>
@@ -1659,6 +1661,63 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
       }
     });
 
+    // ====== BUSCA CLIENTE POR CPF/CNPJ ======
+    function buscarClientePorDocumento(doc) {
+      const docLimpo = String(doc).replace(/\D/g, '');
+      if (!docLimpo) return null;
+      return clients.find(c => String(c.cpf).replace(/\D/g, '') === docLimpo);
+    }
+
+    function preencherDadosCliente(cliente, tipo) {
+      // tipo = 'venda' ou 'pedido'
+      const prefix = tipo === 'venda' ? 'order' : 'req';
+      
+      const nomeInput = document.getElementById(`${prefix}Client`);
+      const resumoDiv = document.getElementById(`${prefix}ClientInfo`);
+
+      if (cliente) {
+        nomeInput.value = cliente.nome;
+        
+        // Monta o resumo visual
+        let enderecoTexto = 'Sem endereço principal cadastrado.';
+        if (cliente.logradouro) {
+          enderecoTexto = `${cliente.logradouro}, ${cliente.numero_end || 'S/N'} - ${cliente.bairro || ''}, ${cliente.cidade || ''}/${cliente.estado || ''}`;
+        }
+        
+        resumoDiv.style.display = 'block';
+        resumoDiv.innerHTML = `
+          <div style="background:#f8fafc; padding:10px; border-radius:8px; border:1px solid #e4e9ee; font-size:11px; line-height:1.6;">
+            <strong>Confirme os dados do cliente:</strong><br>
+            <span style="color:#526b83;">📞 ${esc(cliente.whatsapp || '—')}</span><br>
+            ${cliente.email ? `<span style="color:#526b83;">✉️ ${esc(cliente.email)}</span><br>` : ''}
+            <span style="color:#526b83;">📍 ${esc(enderecoTexto)}</span><br>
+            <small style="color:#b04545;">Se algo estiver errado, peça para atualizar no cadastro de Clientes.</small>
+          </div>
+        `;
+      } else {
+        nomeInput.value = '';
+        resumoDiv.style.display = 'block';
+        resumoDiv.innerHTML = `
+          <div style="background:#fce8e8; padding:10px; border-radius:8px; border:1px solid #f5c6cb; font-size:11px; color:#b04545;">
+            ❌ Cliente não encontrado. Por favor, cadastre o cliente antes de continuar.
+          </div>
+        `;
+      }
+    }
+
+    // Eventos Venda
+    document.getElementById('orderCpfCnpj')?.addEventListener('change', function() {
+      const cliente = buscarClientePorDocumento(this.value);
+      preencherDadosCliente(cliente, 'venda');
+    });
+
+    // Eventos Pedido
+    document.getElementById('reqCpfCnpj')?.addEventListener('change', function() {
+      const cliente = buscarClientePorDocumento(this.value);
+      preencherDadosCliente(cliente, 'pedido');
+    });
+
+
     // ====== Vendas (Pedidos) ======
     const orderFormPanel = document.getElementById('orderFormPanel');
     
@@ -1739,11 +1798,11 @@ div.querySelector('button').onclick = () => { div.remove(); calcularLucroVenda()
       if (editingSaleId) return; // edição tem listener próprio depois
       e.preventDefault();
       
-      const nomeCliente = document.getElementById('orderClient').value.trim();
-      const clienteCadastrado = clients.find(c => String(c.nome).trim().toLowerCase() === nomeCliente.toLowerCase());
-      
+      const docCliente = document.getElementById('orderCpfCnpj').value.trim();
+      const clienteCadastrado = buscarClientePorDocumento(docCliente);
+
       if (!clienteCadastrado) {
-        notify('Por favor, cadastre o cliente antes de realizar a venda.', true);
+        notify('Informe um CPF/CNPJ de cliente já cadastrado.', true);
         return;
       }
 
@@ -2659,15 +2718,15 @@ vendedor: usuarioLogado?.nome || 'Sistema',
     document.getElementById('requestForm')?.addEventListener('submit', async e => {
       e.preventDefault();
       
-      const nomeCliente = document.getElementById('reqClient').value.trim();
-      const clienteCadastrado = clients.find(c => String(c.nome).trim().toLowerCase() === nomeCliente.toLowerCase());
-      
+      const docCliente = document.getElementById('reqCpfCnpj').value.trim();
+      const clienteCadastrado = buscarClientePorDocumento(docCliente);
+
       if (!clienteCadastrado) {
-        notify('Por favor, cadastre o cliente antes de salvar o pedido.', true);
+        notify('Informe um CPF/CNPJ de cliente já cadastrado.', true);
         return;
       }
 
-      const cliente = nomeCliente;
+      const cliente = clienteCadastrado.nome;
       const prodText = document.getElementById('reqProduct').value;
       const prodObj = products.find(x => `${x.marca} ${x.modelo} ${x.cor ? '· ' + x.cor : ''} (${x.sku})` === prodText);
       const id_produto = prodObj ? prodObj.id : '';
