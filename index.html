@@ -557,7 +557,15 @@
                 <div class="field"><label for="clientName">Nome Completo *</label><input id="clientName" required maxlength="100" placeholder="Ex.: Maria Silva"/></div>
                 <div class="field"><label for="clientWhatsapp">WhatsApp *</label><input id="clientWhatsapp" required maxlength="20" placeholder="Ex.: 11 99999-9999"/></div>
                 <div class="field"><label for="clientCpf">CPF</label><input id="clientCpf" maxlength="14" placeholder="Ex.: 123.456.789-00"/></div>
+                <div class="field"><label for="clientEmail">E-mail</label><input id="clientEmail" type="email" maxlength="100" placeholder="Ex.: cliente@email.com"/></div>
+                
+                <div class="field"><label for="clientCep">CEP</label><input id="clientCep" maxlength="9" placeholder="Ex.: 01001-000"/></div>
+                <div class="field"><label for="clientLogradouro">Logradouro</label><input id="clientLogradouro" maxlength="100" placeholder="Ex.: Rua das Flores"/></div>
+                <div class="field"><label for="clientNumeroEnd">Número</label><input id="clientNumeroEnd" maxlength="20" placeholder="Ex.: 123"/></div>
+                <div class="field"><label for="clientComplemento">Complemento</label><input id="clientComplemento" maxlength="50" placeholder="Ex.: Apto 42"/></div>
+                <div class="field"><label for="clientBairro">Bairro</label><input id="clientBairro" maxlength="60" placeholder="Ex.: Centro"/></div>
                 <div class="field"><label for="clientCity">Cidade</label><input id="clientCity" maxlength="60" placeholder="Ex.: São Paulo"/></div>
+                <div class="field"><label for="clientEstado">Estado (UF)</label><input id="clientEstado" maxlength="2" placeholder="Ex.: SP" style="text-transform:uppercase"/></div>
                 <div class="field" style="grid-column: span 2;"><label for="clientObs">Observação Interna</label><input id="clientObs" maxlength="200" placeholder="Ex.: Prefere contato por WhatsApp à tarde"/></div>
               </div>
               <div class="form-actions">
@@ -1808,6 +1816,37 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       this.value = maskWhatsApp(this.value);
     });
 
+    // Máscara e Busca de CEP (ViaCEP)
+    document.getElementById('clientCep')?.addEventListener('input', async function() {
+      // Máscara visual
+      let v = this.value.replace(/\D/g, '');
+      if (v.length > 5) v = v.replace(/^(\d{5})(\d)/, '$1-$2');
+      this.value = v.slice(0, 9);
+
+      // Busca automática quando tiver 8 dígitos
+      if (v.length === 8) {
+        try {
+          startLoad();
+          const res = await fetch(`https://viacep.com.br/ws/${v}/json/`);
+          const data = await res.json();
+          if (!data.erro) {
+            document.getElementById('clientLogradouro').value = data.logradouro || '';
+            document.getElementById('clientBairro').value = data.bairro || '';
+            document.getElementById('clientCity').value = data.localidade || '';
+            document.getElementById('clientEstado').value = data.uf || '';
+            // Foca no campo Número após preencher
+            document.getElementById('clientNumeroEnd').focus();
+          } else {
+            notify('CEP não encontrado.', true);
+          }
+        } catch (err) {
+          notify('Erro ao buscar CEP.', true);
+        } finally {
+          endLoad();
+        }
+      }
+    });
+
 
     document.getElementById('newClientBtn')?.addEventListener('click', () => {
       document.getElementById('clientForm').reset();
@@ -1825,7 +1864,14 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       document.getElementById('clientName').value = c.nome || '';
       document.getElementById('clientWhatsapp').value = c.whatsapp || '';
       document.getElementById('clientCpf').value = c.cpf || '';
+      document.getElementById('clientEmail').value = c.email || '';
+      document.getElementById('clientCep').value = c.cep || '';
+      document.getElementById('clientLogradouro').value = c.logradouro || '';
+      document.getElementById('clientNumeroEnd').value = c.numero_end || '';
+      document.getElementById('clientComplemento').value = c.complemento || '';
+      document.getElementById('clientBairro').value = c.bairro || '';
       document.getElementById('clientCity').value = c.cidade || '';
+      document.getElementById('clientEstado').value = c.estado || '';
       document.getElementById('clientObs').value = c.observacao || '';
       
       document.getElementById('clientFormTitle').textContent = 'Editar Cliente';
@@ -1859,6 +1905,13 @@ vendedor: usuarioLogado?.nome || 'Sistema',
           cpf: cpf,
           cidade: cidade,
           observacao: observacao,
+          email: document.getElementById('clientEmail').value.trim(),
+          cep: document.getElementById('clientCep').value.trim(),
+          logradouro: document.getElementById('clientLogradouro').value.trim(),
+          numero_end: document.getElementById('clientNumeroEnd').value.trim(),
+          complemento: document.getElementById('clientComplemento').value.trim(),
+          bairro: document.getElementById('clientBairro').value.trim(),
+          estado: document.getElementById('clientEstado').value.trim(),
           vendedor: usuarioLogado?.nome || 'Sistema'
         };
 
