@@ -3721,9 +3721,6 @@ window.viewRequest = function(id) {
 
       // 4. Se o vendedor estava em uma tela proibida, manda pro Dashboard
       if (!isGerente) {
-
-      // 4. Se o vendedor estava em uma tela proibida, manda pro Dashboard
-      if (!isGerente) {
         const secaoAtiva = document.querySelector('.section.active');
         if (secaoAtiva && menusProibidos.includes(secaoAtiva.id)) {
           showSection('dashboard');
