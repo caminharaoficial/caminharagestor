@@ -1377,13 +1377,13 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
     }
 
 
-    // Preenche o select de endereços na Venda
-    document.getElementById('orderClient')?.addEventListener('input', function() {
-      const nomeCliente = this.value.trim();
+    // Preenche o select de endereços na Venda (Dispara ao digitar ou selecionar do autocomplete)
+    function atualizarEnderecoVenda() {
+      const nomeCliente = document.getElementById('orderClient').value.trim();
       const field = document.getElementById('orderAddressField');
       const select = document.getElementById('orderAddress');
       
-      const cliente = clients.find(c => String(c.nome).trim() === nomeCliente);
+      const cliente = clients.find(c => String(c.nome).trim().toLowerCase() === nomeCliente.toLowerCase());
       
       if (cliente) {
         const enderecos = deliveryAddresses.filter(a => String(a.id_cliente) === String(cliente.id));
@@ -1392,14 +1392,17 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
           select.innerHTML = '<option value="">— Selecione o endereço —</option>' + 
             enderecos.map(a => `<option value="${esc(a.logradouro)}, ${esc(a.numero_end)} - ${esc(a.bairro)} (${esc(a.cidade)}/${esc(a.estado)})" ${a.principal === 'Sim' ? 'selected' : ''}>${esc(a.apelido || 'Endereço')} - ${esc(a.logradouro)}, ${esc(a.numero_end)}</option>`).join('');
         } else {
-          field.style.display = 'none';
-          select.innerHTML = '';
+          field.style.display = 'grid'; // Mostra a div
+          select.innerHTML = '<option value="">— Cliente sem endereço cadastrado —</option>'; // Avisa
         }
       } else {
         field.style.display = 'none';
         select.innerHTML = '';
       }
-    });
+    }
+
+    document.getElementById('orderClient')?.addEventListener('input', atualizarEnderecoVenda);
+    document.getElementById('orderClient')?.addEventListener('change', atualizarEnderecoVenda);
 
     document.getElementById('orderClientFilter')?.addEventListener('input', renderOrders);
     document.getElementById('productSearch').addEventListener('input', renderProducts);
