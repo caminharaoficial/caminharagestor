@@ -610,6 +610,9 @@
 
           <section class="panel">
             <div class="panel-head"><div><h2>Lista de Clientes</h2><div class="panel-desc">Contatos cadastrados.</div></div></div>
+            <div class="toolbar">
+              <input class="search" id="clientSearch" placeholder="Buscar por nome, CPF, WhatsApp ou cidade..." aria-label="Buscar clientes"/>
+            </div>
             <div class="table-wrap">
               <table>
                 <thead><tr><th>Nome</th><th>WhatsApp</th><th>CPF</th><th>Cidade</th><th>Ações</th></tr></thead>
@@ -2119,7 +2122,7 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       this.value = maskWhatsApp(this.value);
     });
 
-    // Máscara e Busca de CEP (ViaCEP)
+    // ====== BUSCA DE CEP (ViaCEP) - Cadastro de Cliente ======
     document.getElementById('clientCep')?.addEventListener('input', async function() {
       let v = this.value.replace(/\D/g, '');
       if (v.length > 5) v = v.replace(/^(\d{5})(\d)/, '$1-$2');
@@ -2136,6 +2139,34 @@ vendedor: usuarioLogado?.nome || 'Sistema',
             document.getElementById('clientCity').value = data.localidade || '';
             document.getElementById('clientEstado').value = data.uf || '';
             document.getElementById('clientNumeroEnd').focus();
+          } else {
+            notify('CEP não encontrado.', true);
+          }
+        } catch (err) {
+          notify('Erro ao buscar CEP.', true);
+        } finally {
+          endLoad();
+        }
+      }
+    });
+
+    // ====== BUSCA DE CEP - Endereços de Entrega ======
+    document.getElementById('addrCep')?.addEventListener('input', async function() {
+      let v = this.value.replace(/\D/g, '');
+      if (v.length > 5) v = v.replace(/^(\d{5})(\d)/, '$1-$2');
+      this.value = v.slice(0, 9);
+
+      if (v.length === 8) {
+        try {
+          startLoad();
+          const res = await fetch(`https://viacep.com.br/ws/${v}/json/`);
+          const data = await res.json();
+          if (!data.erro) {
+            document.getElementById('addrLogradouro').value = data.logradouro || '';
+            document.getElementById('addrBairro').value = data.bairro || '';
+            document.getElementById('addrCidade').value = data.localidade || '';
+            document.getElementById('addrEstado').value = data.uf || '';
+            document.getElementById('addrNumero').focus();
           } else {
             notify('CEP não encontrado.', true);
           }
@@ -2241,7 +2272,19 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       const tbody = document.getElementById('clientsTable');
       if (!tbody) return;
       
-      const sorted = [...clients].sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
+      const q = (document.getElementById('clientSearch')?.value || '').trim().toLowerCase();
+      let lista = [...clients];
+      if (q) {
+        lista = lista.filter(c => 
+          String(c.nome || '').toLowerCase().includes(q) ||
+          String(c.cpf || '').replace(/\D/g, '').includes(q.replace(/\D/g, '')) ||
+          String(c.whatsapp || '').replace(/\D/g, '').includes(q.replace(/\D/g, '')) ||
+          String(c.cidade || '').toLowerCase().includes(q) ||
+          String(c.email || '').toLowerCase().includes(q)
+        );
+      }
+      
+      const sorted = lista.sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
       
       tbody.innerHTML = sorted.length ? sorted.map(c => `
         <tr>
@@ -4098,6 +4141,8 @@ document.getElementById('topUserName').textContent = res.nome;
     document.getElementById('reqCpfCnpj')?.addEventListener('input', function() {
       this.value = maskCPF(this.value);
     });
+
+    document.getElementById('clientSearch')?.addEventListener('input', renderClients);
 
     document.addEventListener('DOMContentLoaded', () => {
       const tokenSalvo = sessionStorage.getItem('caminhara_token');
