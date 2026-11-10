@@ -2122,33 +2122,6 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       this.value = maskWhatsApp(this.value);
     });
 
-    // ====== BUSCA DE CEP (ViaCEP) - Cadastro de Cliente ======
-    document.getElementById('clientCep')?.addEventListener('input', async function() {
-      let v = this.value.replace(/\D/g, '');
-      if (v.length > 5) v = v.replace(/^(\d{5})(\d)/, '$1-$2');
-      this.value = v.slice(0, 9);
-
-      if (v.length === 8) {
-        try {
-          startLoad();
-          const res = await fetch(`https://viacep.com.br/ws/${v}/json/`);
-          const data = await res.json();
-          if (!data.erro) {
-            document.getElementById('clientLogradouro').value = data.logradouro || '';
-            document.getElementById('clientBairro').value = data.bairro || '';
-            document.getElementById('clientCity').value = data.localidade || '';
-            document.getElementById('clientEstado').value = data.uf || '';
-            document.getElementById('clientNumeroEnd').focus();
-          } else {
-            notify('CEP não encontrado.', true);
-          }
-        } catch (err) {
-          notify('Erro ao buscar CEP.', true);
-        } finally {
-          endLoad();
-        }
-      }
-    });
 
     // ====== BUSCA DE CEP - Endereços de Entrega ======
     document.getElementById('addrCep')?.addEventListener('input', async function() {
@@ -2185,7 +2158,6 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       document.getElementById('clientFormTitle').textContent = 'Cadastrar Cliente';
       clientFormPanel.hidden = false;
       clientFormPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      reanexarBuscaCep();
     });
 
     window.editClient = function(id) {
@@ -4145,45 +4117,41 @@ document.getElementById('topUserName').textContent = res.nome;
 
     document.getElementById('clientSearch')?.addEventListener('input', renderClients);
 
-    // ====== Força a reanexação do listener de CEP ======
-    function reanexarBuscaCep() {
-      const cepInput = document.getElementById('clientCep');
-      if (!cepInput) return;
-      
-      // Remove listeners antigos clonando o elemento (truque para garantir)
-      const novoInput = cepInput.cloneNode(true);
-      cepInput.parentNode.replaceChild(novoInput, cepInput);
-      
-      novoInput.addEventListener('input', async function() {
-        let v = this.value.replace(/\D/g, '');
-        if (v.length > 5) v = v.replace(/^(\d{5})(\d)/, '$1-$2');
-        this.value = v.slice(0, 9);
-
-        if (v.length === 8) {
-          try {
-            startLoad();
-            const res = await fetch(`https://viacep.com.br/ws/${v}/json/`);
-            const data = await res.json();
-            if (!data.erro) {
-              document.getElementById('clientLogradouro').value = data.logradouro || '';
-              document.getElementById('clientBairro').value = data.bairro || '';
-              document.getElementById('clientCity').value = data.localidade || '';
-              document.getElementById('clientEstado').value = data.uf || '';
-              document.getElementById('clientNumeroEnd').focus();
-              notify('Endereço preenchido automaticamente!');
-            } else {
-              notify('CEP não encontrado.', true);
-            }
-          } catch (err) {
-            notify('Erro ao buscar CEP.', true);
-          } finally {
-            endLoad();
-          }
-        }
-      });
-    }
 
     document.addEventListener('DOMContentLoaded', () => {
+      // Anexa a busca de CEP de forma limpa, depois que o DOM carregou
+      const cepInput = document.getElementById('clientCep');
+      if (cepInput && !cepInput.dataset.cepBound) {
+        cepInput.dataset.cepBound = 'true';
+        cepInput.addEventListener('input', async function() {
+          let v = this.value.replace(/\D/g, '');
+          if (v.length > 5) v = v.replace(/^(\d{5})(\d)/, '$1-$2');
+          this.value = v.slice(0, 9);
+
+          if (v.length === 8) {
+            try {
+              startLoad();
+              const res = await fetch(`https://viacep.com.br/ws/${v}/json/`);
+              const data = await res.json();
+              if (!data.erro) {
+                document.getElementById('clientLogradouro').value = data.logradouro || '';
+                document.getElementById('clientBairro').value = data.bairro || '';
+                document.getElementById('clientCity').value = data.localidade || '';
+                document.getElementById('clientEstado').value = data.uf || '';
+                document.getElementById('clientNumeroEnd').focus();
+                notify('Endereço preenchido automaticamente!');
+              } else {
+                notify('CEP não encontrado.', true);
+              }
+            } catch (err) {
+              notify('Erro ao buscar CEP.', true);
+            } finally {
+              endLoad();
+            }
+          }
+        });
+      }
+
       const tokenSalvo = sessionStorage.getItem('caminhara_token');
       const userSalvo = sessionStorage.getItem('caminhara_user');
       
