@@ -448,7 +448,8 @@
                 <div class="field">
                   <label for="reqClient">Cliente</label>
                   <div style="display:flex; gap:6px;">
-                    <select id="reqClient" style="flex:1"><option value="">— Consumidor Final —</option></select>
+                    <input id="reqClient" list="reqClientList" placeholder="Consumidor Final ou digite..." style="flex:1" />
+                    <datalist id="reqClientList"></datalist>
                     <button type="button" class="btn btn-light" id="quickAddReqClientBtn" style="white-space:nowrap;">＋ Novo</button>
                   </div>
                 </div>
@@ -494,6 +495,13 @@
                     <option>Em preparo</option><option>Aguardando Fornecedor</option><option>Pronto para Retirada</option>
                   </select>
                 </div>
+              </div>
+              <div style="margin-top:18px; padding:15px; border:1px solid var(--line); border-radius:10px; background:#fafbfc;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                  <h3 style="margin:0; font-size:13px;">Custos Extras</h3>
+                  <button type="button" class="btn btn-light" id="addReqCostBtn" style="padding:6px 10px; font-size:11px;">＋ Adicionar</button>
+                </div>
+                <div id="reqCostsList"></div>
               </div>
               <div class="form-actions">
                 <button class="btn btn-primary" type="submit">Salvar Pedido</button>
@@ -2585,10 +2593,30 @@ vendedor: usuarioLogado?.nome || 'Sistema',
     });
 
     function fillRequestClients() {
-      const sel = document.getElementById('reqClient');
-      if (!sel) return;
-      sel.innerHTML = '<option value="">— Consumidor Final —</option>' + clients.map(c => `<option value="${esc(c.nome)}">${esc(c.nome)}</option>`).join('');
+      const list = document.getElementById('reqClientList');
+      if (!list) return;
+      list.innerHTML = clients.map(c => `<option value="${esc(c.nome)}">`).join('');
     }
+
+    // Botão de adicionar custo extra no Pedido
+    document.getElementById('addReqCostBtn')?.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      const list = document.getElementById('reqCostsList');
+      if (!list) return;
+      const div = document.createElement('div');
+      div.style.display = 'flex';
+      div.style.gap = '10px';
+      div.style.marginBottom = '10px';
+      div.innerHTML = `
+        <input type="text" class="req-cost-desc" placeholder="Ex: Uber, Correio" style="flex: 2; padding: 8px; border: 1px solid var(--line); border-radius: 6px;" />
+        <input type="number" class="req-cost-val" placeholder="R$ 0,00" min="0" step="0.01" style="flex: 1; padding: 8px; border: 1px solid var(--line); border-radius: 6px;" />
+        <button type="button" class="btn btn-danger" style="padding: 8px;">X</button>
+      `;
+      div.querySelector('button').onclick = () => { div.remove(); calcularLucroPedido(); };
+      list.appendChild(div);
+    });
+
+    document.getElementById('reqProduct')?.addEventListener('change', function() {
 
     document.getElementById('reqProduct')?.addEventListener('change', function() {
       const prod = products.find(p => `${p.marca} ${p.modelo} ${p.cor ? '· ' + p.cor : ''} (${p.sku})` === this.value);
@@ -2627,8 +2655,21 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       const custo = Number(document.getElementById('reqCostUnit').value || 0);
       const obs = document.getElementById('reqNote').value;
       const status = document.getElementById('reqStatus').value;
-
       const p = prodObj;
+
+      // Captura custos extras
+      let somaCustosExtras = 0;
+      const custosParaSalvar = [];
+      document.querySelectorAll('#reqCostsList > div').forEach(div => {
+        const desc = div.querySelector('.req-cost-desc').value.trim();
+        const val = Number(div.querySelector('.req-cost-val').value);
+        if (desc && val > 0) {
+          somaCustosExtras += val;
+          custosParaSalvar.push({ descricao: desc, valor: val });
+        }
+      });
+      const custosString = custosParaSalvar.length ? JSON.stringify(custosParaSalvar) : '';
+
 
       try {
         startLoad();
@@ -2647,6 +2688,7 @@ vendedor: usuarioLogado?.nome || 'Sistema',
             data_pedido: new Date().toISOString(),
             status_pedido: status,
             endereco_entrega: document.getElementById('reqAddress')?.value || '',
+            custos_extras: custosString, // <-- NOVO
             observacao: obs
           }
         });
@@ -2711,10 +2753,13 @@ vendedor: usuarioLogado?.nome || 'Sistema',
             valor_venda: pedido.valor_total,
             data_venda: new Date().toISOString(),
             cliente: pedido.cliente,
+            endereco_entrega: pedido.endereco_entrega || '', // <-- NOVO
             observacao: pedido.observacao,
             custo_unitario: custoUnitario,
             lucro: lucro,
-            status_pagamento: 'OK'
+            status_pagamento: 'OK',
+            forma_pagamento: pedido.forma_pagamento || 'Não informada', // <-- NOVO
+            custos_extras: pedido.custos_extras || '' // <-- NOVO
           }
         });
 
