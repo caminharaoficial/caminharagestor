@@ -2910,14 +2910,17 @@ window.viewRequest = function(id) {
 
       const idVenda = editingSaleId;
       const vAntiga = sales.find(x => String(x.id) === String(idVenda));
+      
       const id_produto = document.getElementById('orderProduct').value;
       const numero = document.getElementById('orderNumber').value;
-      const qtd = Number(document.getElementById('orderQty').value);
+      const qtdNova = Number(document.getElementById('orderQty').value);
       const custo = Number(document.getElementById('orderCostUnit').value || 0);
       const total = Number(document.getElementById('orderPrice').value);
       const cliente = document.getElementById('orderClient').value.trim();
       const obs = document.getElementById('orderNote').value.trim();
       const status = document.getElementById('orderStatus').value;
+      const endereco = document.getElementById('orderAddress')?.value || '';
+      const baixarEstoque = document.getElementById('orderBaixarEstoque').checked;
 
       let extras = 0; const novosCustos = [];
       document.querySelectorAll('#orderCostsList > div').forEach(div => {
@@ -2926,30 +2929,81 @@ window.viewRequest = function(id) {
         if (d && v > 0) { extras += v; novosCustos.push({ descricao: d, valor: v }); }
       });
 
-      const lucro = total - (custo * qtd) - extras;
+      const lucro = total - (custo * qtdNova) - extras;
       const p = productById(id_produto);
       const custosString = novosCustos.length ? JSON.stringify(novosCustos) : '';
 
       try {
         startLoad();
+
+        // 1. Atualiza os dados da venda
         await apiPost({
           action: 'update', sheet: 'Vendas',
           data: {
             id: idVenda, id_produto,
             vendedor: usuarioLogado?.nome || 'Sistema',
             sku_variacao: `${p.sku}-${numero}`, numero,
-            quantidade: qtd, valor_venda: total,
+            quantidade: qtdNova, valor_venda: total,
             data_venda: vAntiga?.data_venda || new Date().toISOString(),
-            cliente, observacao: obs, custo_unitario: custo, lucro,
+            cliente, endereco_entrega: endereco, observacao: obs, custo_unitario: custo, lucro,
             status_pagamento: status,
             custos_extras: custosString
           }
         });
-        notify('Venda atualizada!');
+
+        // 2. Acerta o estoque, se a opção estiver marcada
+        if (baixarEstoque && vAntiga) {
+          const prodAntigo = vAntiga.id_produto;
+          const numAntigo = vAntiga.numero;
+          const qtdAntiga = Number(vAntiga.quantidade || 0);
+
+          // Passo A: Devolve a quantidade antiga ao estoque
+          const estoqueAntigo = stock.find(s => String(s.id_produto) === String(prodAntigo) && String(s.numero) === String(numAntigo));
+          if (estoqueAntigo) {
+            await apiPost({
+              action: 'update', sheet: 'Estoque',
+              data: {
+                ...estoqueAntigo,
+                vendedor: usuarioLogado?.nome || 'Sistema',
+                quantidade: Number(estoqueAntigo.quantidade) + qtdAntiga,
+                vendidos: Math.max(0, Number(estoqueAntigo.vendidos || 0) - qtdAntiga),
+                atualizado_em: new Date().toISOString()
+              }
+            });
+          }
+
+          // Passo B: Baixa a nova quantidade do estoque (pode ser o mesmo produto ou um novo)
+          // Recarrega o estoque para ter os valores mais recentes após o Passo A
+          const estoqueNovo = stock.find(s => String(s.id_produto) === String(id_produto) && String(s.numero) === String(numero));
+          if (estoqueNovo) {
+            // Precisa ser feito um novo fetch do estoque atualizado, então usamos os dados do estado local (que já foi atualizado no Passo A se for o mesmo item)
+            const qtdAtual = (String(estoqueNovo.id) === String(estoqueAntigo?.id)) 
+                             ? Number(estoqueAntigo.quantidade) + qtdAntiga 
+                             : Number(estoqueNovo.quantidade);
+            
+            const vendidosAtual = (String(estoqueNovo.id) === String(estoqueAntigo?.id)) 
+                             ? Math.max(0, Number(estoqueAntigo.vendidos || 0) - qtdAntiga) 
+                             : Number(estoqueNovo.vendidos || 0);
+
+            await apiPost({
+              action: 'update', sheet: 'Estoque',
+              data: {
+                ...estoqueNovo,
+                vendedor: usuarioLogado?.nome || 'Sistema',
+                quantidade: qtdAtual - qtdNova,
+                vendidos: vendidosAtual + qtdNova,
+                atualizado_em: new Date().toISOString()
+              }
+            });
+          }
+        }
+
+        notify('Venda atualizada e estoque ajustado!');
         editingSaleId = null; orderFormPanel.hidden = true;
         await loadAll();
       } catch (err) {
         notify('Erro ao atualizar: ' + err.message, true);
+      } finally {
         endLoad();
       }
     }, true);
