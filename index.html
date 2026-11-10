@@ -2617,8 +2617,6 @@ vendedor: usuarioLogado?.nome || 'Sistema',
     });
 
     document.getElementById('reqProduct')?.addEventListener('change', function() {
-
-    document.getElementById('reqProduct')?.addEventListener('change', function() {
       const prod = products.find(p => `${p.marca} ${p.modelo} ${p.cor ? '· ' + p.cor : ''} (${p.sku})` === this.value);
       
       const numSelect = document.getElementById('reqNumber');
