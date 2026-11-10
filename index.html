@@ -2898,15 +2898,18 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto excluído';
       const dataStr = v.data_venda ? new Date(v.data_venda).toLocaleString('pt-BR') : '—';
       
-      // Formata os custos extras
+      const cli = clients.find(c => String(c.nome).trim() === String(v.cliente).trim());
+      const cliCpf = cli && cli.cpf ? ` - CPF: ${esc(cli.cpf)}` : '';
+      
+      // Formata os custos extras (o que o cliente pagou a mais, ex: frete)
       let custosHtml = '';
       if (v.custos_extras) {
         try {
           const arr = JSON.parse(v.custos_extras);
           if (arr.length > 0) {
             custosHtml = `
-              <div style="margin-top:10px; font-size:12px; border-top:1px dashed #ccc; padding-top:5px;">
-                <strong>Custos Extras:</strong><br>
+              <div style="margin-top:10px; font-size:11px; border-top:1px dashed #ccc; padding-top:5px;">
+                <strong>Serviços / Acréscimos:</strong><br>
                 ${arr.map(c => `- ${esc(c.descricao)}: ${money(c.valor)}`).join('<br>')}
               </div>
             `;
@@ -2914,13 +2917,17 @@ vendedor: usuarioLogado?.nome || 'Sistema',
         } catch (e) {}
       }
 
+      const enderecoHtml = v.endereco_entrega 
+        ? `<div class="linha" style="margin-top:10px; font-size:11px;"><span><strong>Entrega:</strong></span><span style="text-align:right; width: 180px;">${esc(v.endereco_entrega)}</span></div>`
+        : '';
+
       const win = window.open('', '_blank');
       win.document.write(`
         <html>
         <head>
           <title>Comprovante - ${esc(v.id).slice(0, 8)}</title>
           <style>
-            body { font-family: sans-serif; padding: 20px; width: 300px; margin: auto; color: #000; }
+            body { font-family: sans-serif; padding: 20px; width: 320px; margin: auto; color: #000; }
             h2 { text-align: center; margin-bottom: 5px; }
             h4 { text-align: center; margin-top: 0; color: #555; font-weight: normal; font-size: 12px; }
             .linha { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
@@ -2931,27 +2938,34 @@ vendedor: usuarioLogado?.nome || 'Sistema',
         </head>
         <body>
           <h2>CAMINHARA</h2>
-          <h4>Loja Virtual</h4>
+          <h4>Recibo de Venda</h4>
           
-          <div style="text-align:center; font-size:11px; margin-bottom:15px;">
-            Data: ${dataStr}<br>
+          <div style="text-align:center; font-size:11px; margin-bottom:15px; border-bottom: 1px solid #ccc; padding-bottom:10px;">
+            <strong>${dataStr}</strong><br>
             Venda: #${esc(String(v.id).slice(0, 8))}
           </div>
 
-          <div class="linha"><span><strong>Produto:</strong></span><span style="text-align:right;">${nomeProd}</span></div>
-          <div class="linha"><span><strong>SKU:</strong></span><span>${esc(v.sku_variacao)}</span></div>
-          <div class="linha"><span><strong>Numeração:</strong></span><span>${esc(v.numero)}</span></div>
-          <div class="linha"><span><strong>Qtd:</strong></span><span>${v.quantidade}</span></div>
-          <div class="linha"><span><strong>Cliente:</strong></span><span>${esc(v.cliente || 'Consumidor Final')}</span></div>
-          <div class="linha"><span><strong>Pagamento:</strong></span><span>${esc(v.forma_pagamento || '—')}</span></div>
+          <div class="linha"><span><strong>Cliente:</strong></span><span style="text-align:right;">${esc(v.cliente || 'Consumidor Final')}${cliCpf}</span></div>
+          ${enderecoHtml}
+
+          <div style="margin-top:10px; border-top: 1px solid #ccc; padding-top:10px;">
+            <div class="linha"><span><strong>Produto:</strong></span><span style="text-align:right; width:180px;">${nomeProd}</span></div>
+            <div class="linha"><span><strong>SKU:</strong></span><span>${esc(v.sku_variacao)}</span></div>
+            <div class="linha"><span><strong>Numeração:</strong></span><span>${esc(v.numero)}</span></div>
+            <div class="linha"><span><strong>Quantidade:</strong></span><span>${v.quantidade}</span></div>
+            <div class="linha"><span><strong>Valor Unit.:</strong></span><span>${money(Number(v.valor_venda) / v.quantidade)}</span></div>
+          </div>
 
           ${custosHtml}
+
+          <div class="linha" style="margin-top:10px;"><span><strong>Forma Pagto:</strong></span><span>${esc(v.forma_pagamento || '—')}</span></div>
+          <div class="linha"><span><strong>Status:</strong></span><span>${v.status_pagamento === 'OK' ? 'Pago' : 'Pendente'}</span></div>
 
           <div class="total">Total: ${money(v.valor_venda)}</div>
           
           <div class="footer">
             Obrigado pela preferência!<br>
-            www.caminhara.com
+            CAMINHARA Loja Virtual
           </div>
           <script>
             window.onload = function() { window.print(); }
@@ -2962,27 +2976,32 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       win.document.close();
     }
 
+
     function enviarWhatsApp(v) {
       const p = productById(v.id_produto);
       const nomeProd = p ? `${p.marca} ${p.modelo}` : 'Produto';
       const dataStr = v.data_venda ? new Date(v.data_venda).toLocaleDateString('pt-BR') : '—';
       
-      const texto = `*CAMINHARA - Recibo de Compra*%0A%0A` +
-        `*Data:* ${dataStr}%0A` +
-        `*Produto:* ${nomeProd}%0A` +
-        `*Numeração:* ${v.numero}%0A` +
-        `*Qtd:* ${v.quantidade}%0A` +
-        `*Total:* ${money(v.valor_venda)}%0A%0A` +
-        `Obrigado pela preferência!`;
+      // Monta o texto com encodeURIComponent para não quebrar acentos ou emojis
+      const texto = encodeURIComponent(
+        `*CAMINHARA - Recibo de Compra*\n\n` +
+        `*Data:* ${dataStr}\n` +
+        `*Produto:* ${nomeProd}\n` +
+        `*Numeração:* ${v.numero}\n` +
+        `*Qtd:* ${v.quantidade}\n` +
+        `*Total:* ${money(v.valor_venda)}\n` +
+        (v.endereco_entrega ? `*Endereço:* ${v.endereco_entrega}\n` : '') +
+        `\nObrigado pela preferência!`
+      );
       
       // Busca o whatsapp do cliente
       const cli = clients.find(c => String(c.nome).trim() === String(v.cliente).trim());
       const numeroCli = cli && cli.whatsapp ? cli.whatsapp.replace(/\D/g, '') : '';
       
-      // Se o cliente tem número, envia direto para ele. Senão, abre a tela de escolha
+      // Usa a API correta do WhatsApp (api.whatsapp.com) que evita bloqueio de pop-up
       const url = numeroCli 
-        ? `https://wa.me/55${numeroCli}?text=${texto}` 
-        : `https://wa.me/?text=${texto}`;
+        ? `https://api.whatsapp.com/send?phone=55${numeroCli}&text=${texto}` 
+        : `https://api.whatsapp.com/send?text=${texto}`;
         
       window.open(url, '_blank');
     }
