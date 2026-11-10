@@ -1387,13 +1387,21 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
       
       if (cliente) {
         const enderecos = deliveryAddresses.filter(a => String(a.id_cliente).trim() === String(cliente.id).trim());
+        
         if (enderecos.length > 0) {
+          // Tem endereços na aba de entregas
           field.style.display = 'grid';
           select.innerHTML = '<option value="">— Selecione o endereço —</option>' + 
             enderecos.map(a => `<option value="${esc(a.logradouro)}, ${esc(a.numero_end)} - ${esc(a.bairro)} (${esc(a.cidade)}/${esc(a.estado)})" ${a.principal === 'Sim' ? 'selected' : ''}>${esc(a.apelido || 'Endereço')} - ${esc(a.logradouro)}, ${esc(a.numero_end)}</option>`).join('');
+        } else if (cliente.logradouro) {
+          // Não tem na aba de entregas, mas tem no cadastro do cliente
+          field.style.display = 'grid';
+          const enderecoFormatado = `${cliente.logradouro}, ${cliente.numero_end || 'S/N'} - ${cliente.bairro || ''} (${cliente.cidade}/${cliente.estado})`;
+          select.innerHTML = `<option value="${esc(enderecoFormatado)}" selected>Usar endereço do cadastro: ${esc(cliente.logradouro)}, ${esc(cliente.numero_end || 'S/N')}</option>`;
         } else {
-          field.style.display = 'grid'; // Mostra a div
-          select.innerHTML = '<option value="">— Cliente sem endereço cadastrado —</option>'; // Avisa
+          // Não tem endereço nenhum
+          field.style.display = 'grid';
+          select.innerHTML = '<option value="">— Cliente sem endereço cadastrado —</option>';
         }
       } else {
         field.style.display = 'none';
@@ -2289,14 +2297,19 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       const cliente = clients.find(c => String(c.nome).trim() === nomeCliente);
       
       if (cliente) {
-        const enderecos = deliveryAddresses.filter(a => String(a.id_cliente) === String(cliente.id));
+        const enderecos = deliveryAddresses.filter(a => String(a.id_cliente).trim() === String(cliente.id).trim());
+        
         if (enderecos.length > 0) {
           field.style.display = 'grid';
           select.innerHTML = '<option value="">— Selecione o endereço —</option>' + 
             enderecos.map(a => `<option value="${esc(a.logradouro)}, ${esc(a.numero_end)} - ${esc(a.bairro)} (${esc(a.cidade)}/${esc(a.estado)})" ${a.principal === 'Sim' ? 'selected' : ''}>${esc(a.apelido || 'Endereço')} - ${esc(a.logradouro)}, ${esc(a.numero_end)}</option>`).join('');
+        } else if (cliente.logradouro) {
+          field.style.display = 'grid';
+          const enderecoFormatado = `${cliente.logradouro}, ${cliente.numero_end || 'S/N'} - ${cliente.bairro || ''} (${cliente.cidade}/${cliente.estado})`;
+          select.innerHTML = `<option value="${esc(enderecoFormatado)}" selected>Usar endereço do cadastro: ${esc(cliente.logradouro)}, ${esc(cliente.numero_end || 'S/N')}</option>`;
         } else {
-          field.style.display = 'none';
-          select.innerHTML = '';
+          field.style.display = 'grid';
+          select.innerHTML = '<option value="">— Cliente sem endereço cadastrado —</option>';
         }
       } else {
         field.style.display = 'none';
