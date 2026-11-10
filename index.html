@@ -1267,6 +1267,7 @@
     };
 
     // Salva apenas uma numeração específica
+    // Salva apenas uma numeração específica
     window.saveSingleStock = async function(stockId, btnElement) {
       const item = stock.find(s => String(s.id) === String(stockId));
       if (!item) return;
@@ -1301,7 +1302,8 @@
         notify('Erro ao salvar: ' + err.message, true);
         btnElement.textContent = textoOriginal;
         btnElement.disabled = false;
-        endLoad();
+      } finally {
+        endLoad(); // <-- GARANTE QUE O OVERLAY FECHE, MESMO SE loadAll() FALHAR
       }
     };
 
