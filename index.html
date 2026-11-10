@@ -358,9 +358,9 @@
                 <div class="field"><label for="orderNumber">Numeração *</label><select id="orderNumber" required></select></div>
                 <div class="field"><label for="orderQty">Quantidade *</label><input id="orderQty" type="number" min="1" step="1" value="1" required /></div>
 
-                <div class="field"><label for="orderCostUnit">Custo Unitário (R$) *</label><input id="orderCostUnit" type="number" min="0" step="0.01" required placeholder="0,00"/></div>
+                <div class="field" id="orderCostField"><label for="orderCostUnit">Custo Unitário (R$) *</label><input id="orderCostUnit" type="number" min="0" step="0.01" required placeholder="0,00"/></div>
                 <div class="field"><label for="orderPrice">Valor Total (R$) *</label><input id="orderPrice" type="number" min="0" step="0.01" required placeholder="0,00"/></div>
-                <div class="field"><label>Lucro Real</label>
+                <div class="field" id="orderProfitField"><label>Lucro Real</label>
                   <input id="orderLucroReal" readonly style="background:#e6f4ea; color:#27775d; font-weight:700;" value="R$ 0,00"/>
                 </div>
                 <div class="field">
@@ -3677,25 +3677,53 @@ window.viewRequest = function(id) {
     // ====== Permissões ======
     function aplicarPermissoes() {
       const perfil = usuarioLogado?.perfil || 'vendedor';
-      
-      // Esconde menus proibidos para vendedores
+      const isGerente = perfil === 'gerente';
+
+      // 1. Esconde menus proibidos
       const menusProibidos = ['finance', 'activities', 'reports', 'settings'];
       menusProibidos.forEach(id => {
         const btn = document.querySelector(`.nav-btn[data-section="${id}"]`);
-        if (btn) btn.style.display = (perfil === 'gerente') ? 'flex' : 'none';
+        if (btn) btn.style.display = isGerente ? 'flex' : 'none';
       });
 
-      // Esconde todos os botões de Excluir da tela
+      // 2. Esconde botões de Exclusão (btn-danger) e Edição de custos
       const botoesExcluir = document.querySelectorAll('.btn-danger');
       botoesExcluir.forEach(btn => {
-        // Não esconde o botão "X" de remover custo extra, apenas os de exclusão em geral
+        // Mantém o botão "X" de remover custo extra visível
         if (!btn.textContent.includes('X')) {
-          btn.style.display = (perfil === 'gerente') ? 'inline-flex' : 'none';
+          btn.style.display = isGerente ? 'inline-flex' : 'none';
         }
       });
 
-      // Se o vendedor estava em uma tela proibida, manda pro Dashboard
-      if (perfil !== 'gerente') {
+      // 3. Esconde colunas de Custo e Lucro nas tabelas (Vendas e Pedidos)
+      const tabelas = document.querySelectorAll('table');
+      tabelas.forEach(tabela => {
+        const headers = tabela.querySelectorAll('th');
+        headers.forEach((th, index) => {
+          const text = th.textContent.toLowerCase();
+          if (text.includes('custo') || text.includes('lucro')) {
+            th.style.display = isGerente ? '' : 'none';
+            // Esconde todas as células dessa coluna no corpo da tabela
+            const rows = tabela.querySelectorAll('tbody tr');
+            rows.forEach(tr => {
+              if (tr.children[index]) tr.children[index].style.display = isGerente ? '' : 'none';
+            });
+          }
+        });
+      });
+
+      // 3.5. Esconde os campos de custo e lucro nos formulários
+      const camposCusto = ['orderCostField', 'orderProfitField', 'reqCostField', 'reqProfitField'];
+      camposCusto.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = isGerente ? 'grid' : 'none';
+      });
+
+      // 4. Se o vendedor estava em uma tela proibida, manda pro Dashboard
+      if (!isGerente) {
+
+      // 4. Se o vendedor estava em uma tela proibida, manda pro Dashboard
+      if (!isGerente) {
         const secaoAtiva = document.querySelector('.section.active');
         if (secaoAtiva && menusProibidos.includes(secaoAtiva.id)) {
           showSection('dashboard');
