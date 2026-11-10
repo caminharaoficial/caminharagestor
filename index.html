@@ -366,6 +366,10 @@
                     <button type="button" class="btn btn-light" id="quickAddClientBtn" style="white-space:nowrap;">＋ Novo</button>
                   </div>
                 </div>
+                <div class="field" id="orderAddressField" style="display:none;">
+                  <label for="orderAddress">Endereço de Entrega</label>
+                  <select id="orderAddress"></select>
+                </div>
                 <div class="field"><label for="orderPayment">Forma de Pagamento</label>
                   <select id="orderPayment">
                     <option value="Dinheiro">Dinheiro</option>
@@ -442,6 +446,10 @@
                     <select id="reqClient" style="flex:1"><option value="">— Consumidor Final —</option></select>
                     <button type="button" class="btn btn-light" id="quickAddReqClientBtn" style="white-space:nowrap;">＋ Novo</button>
                   </div>
+                </div>
+                <div class="field" id="reqAddressField" style="display:none;">
+                  <label for="reqAddress">Endereço de Entrega</label>
+                  <select id="reqAddress"></select>
                 </div>
                 <div class="field"><label for="reqProduct">Produto *</label><select id="reqProduct" required></select></div>
                 <div class="field"><label for="reqNumber">Numeração *</label><select id="reqNumber" required></select></div>
@@ -1369,6 +1377,30 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
     }
 
 
+    // Preenche o select de endereços na Venda
+    document.getElementById('orderClient')?.addEventListener('input', function() {
+      const nomeCliente = this.value.trim();
+      const field = document.getElementById('orderAddressField');
+      const select = document.getElementById('orderAddress');
+      
+      const cliente = clients.find(c => String(c.nome).trim() === nomeCliente);
+      
+      if (cliente) {
+        const enderecos = deliveryAddresses.filter(a => String(a.id_cliente) === String(cliente.id));
+        if (enderecos.length > 0) {
+          field.style.display = 'grid';
+          select.innerHTML = '<option value="">— Selecione o endereço —</option>' + 
+            enderecos.map(a => `<option value="${esc(a.logradouro)}, ${esc(a.numero_end)} - ${esc(a.bairro)} (${esc(a.cidade)}/${esc(a.estado)})" ${a.principal === 'Sim' ? 'selected' : ''}>${esc(a.apelido || 'Endereço')} - ${esc(a.logradouro)}, ${esc(a.numero_end)}</option>`).join('');
+        } else {
+          field.style.display = 'none';
+          select.innerHTML = '';
+        }
+      } else {
+        field.style.display = 'none';
+        select.innerHTML = '';
+      }
+    });
+
     document.getElementById('orderClientFilter')?.addEventListener('input', renderOrders);
     document.getElementById('productSearch').addEventListener('input', renderProducts);
     document.getElementById('stockSearch')?.addEventListener('input', renderStock); // <-- ADICIONE
@@ -1617,6 +1649,7 @@ vendedor: usuarioLogado?.nome || 'Sistema',
             valor_venda: valorTotal,
             data_venda: new Date().toISOString(),
             cliente: cliente,
+            endereco_entrega: document.getElementById('orderAddress')?.value || '',
             observacao: obs,
             custo_unitario: custoUnitario,
             lucro: lucroLiquido,
@@ -2243,6 +2276,30 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       sel.innerHTML = '<option value="">— Selecione —</option>' + products.map(p => `<option value="${esc(p.id)}">${esc(p.marca)} ${esc(p.modelo)}</option>`).join('');
     }
 
+    // Preenche o select de endereços no Pedido
+    document.getElementById('reqClient')?.addEventListener('change', function() {
+      const nomeCliente = this.value;
+      const field = document.getElementById('reqAddressField');
+      const select = document.getElementById('reqAddress');
+      
+      const cliente = clients.find(c => String(c.nome).trim() === nomeCliente);
+      
+      if (cliente) {
+        const enderecos = deliveryAddresses.filter(a => String(a.id_cliente) === String(cliente.id));
+        if (enderecos.length > 0) {
+          field.style.display = 'grid';
+          select.innerHTML = '<option value="">— Selecione o endereço —</option>' + 
+            enderecos.map(a => `<option value="${esc(a.logradouro)}, ${esc(a.numero_end)} - ${esc(a.bairro)} (${esc(a.cidade)}/${esc(a.estado)})" ${a.principal === 'Sim' ? 'selected' : ''}>${esc(a.apelido || 'Endereço')} - ${esc(a.logradouro)}, ${esc(a.numero_end)}</option>`).join('');
+        } else {
+          field.style.display = 'none';
+          select.innerHTML = '';
+        }
+      } else {
+        field.style.display = 'none';
+        select.innerHTML = '';
+      }
+    });
+
     function fillRequestClients() {
       const sel = document.getElementById('reqClient');
       if (!sel) return;
@@ -2299,6 +2356,7 @@ vendedor: usuarioLogado?.nome || 'Sistema',
             custo_unitario: custo,
             data_pedido: new Date().toISOString(),
             status_pedido: status,
+            endereco_entrega: document.getElementById('reqAddress')?.value || '',
             observacao: obs
           }
         });
