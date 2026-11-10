@@ -698,6 +698,41 @@
         <button class="btn btn-light" type="button" id="detailClose">✕</button>
       </div>
       <div id="detailBody"></div>
+      
+      <!-- Seção de Endereços de Entrega (só aparece para clientes) -->
+      <div id="clientAddressesSection" style="display:none; margin-top:20px; padding-top:20px; border-top:1px solid var(--line);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <h4 style="margin:0; font-size:13px; color:#202a35;">Endereços de Entrega</h4>
+          <button class="btn btn-light" type="button" id="btnShowNewAddress" style="padding:6px 10px; font-size:11px;">＋ Novo Endereço</button>
+        </div>
+        
+        <div id="clientAddressesList" style="font-size:12px; margin-bottom:10px;"></div>
+        
+        <!-- Mini Formulário de Novo Endereço -->
+        <div id="newAddressForm" style="display:none; background:#f8fafc; padding:12px; border-radius:8px; border:1px solid var(--line); margin-top:10px;">
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+            <div class="field"><label>Apelido (Ex: Casa, Trabalho)</label><input id="addrApelido" maxlength="30" /></div>
+            <div class="field"><label>CEP</label><input id="addrCep" maxlength="9" placeholder="00000-000"/></div>
+          </div>
+          <div class="form-grid" style="margin-bottom:10px;">
+            <div class="field" style="grid-column: span 2;"><label>Logradouro</label><input id="addrLogradouro" maxlength="100" /></div>
+            <div class="field"><label>Número</label><input id="addrNumero" maxlength="20" /></div>
+            <div class="field"><label>Complemento</label><input id="addrComplemento" maxlength="50" /></div>
+            <div class="field"><label>Bairro</label><input id="addrBairro" maxlength="60" /></div>
+            <div class="field"><label>Cidade</label><input id="addrCidade" maxlength="60" /></div>
+            <div class="field"><label>Estado (UF)</label><input id="addrEstado" maxlength="2" style="text-transform:uppercase" /></div>
+            <div class="field" style="display:flex; align-items:center; gap:8px; margin-top:15px;">
+              <input type="checkbox" id="addrPrincipal" style="width:18px; height:18px;" />
+              <label for="addrPrincipal" style="margin:0; cursor:pointer;">Endereço Principal</label>
+            </div>
+          </div>
+          <div class="form-actions" style="margin-top:0;">
+            <button class="btn btn-primary" type="button" id="btnSaveAddress" style="padding:8px 12px; font-size:11px;">Salvar Endereço</button>
+            <button class="btn btn-light" type="button" id="btnCancelAddress" style="padding:8px 12px; font-size:11px;">Cancelar</button>
+          </div>
+        </div>
+      </div>
+
       <div class="form-actions" style="margin-top:20px;">
         <button class="btn btn-light" type="button" id="detailDuplicateBtn" style="display:none; margin-right:auto;">📄 Duplicar</button>
         <button class="btn btn-primary" type="button" id="detailEditBtn">Editar</button>
@@ -1965,7 +2000,115 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       tbody.querySelectorAll('[data-view-client]').forEach(b => b.onclick = () => viewClient(b.dataset.viewClient));
     }
 
-     window.viewClient = function(id) {
+    // ====== Endereços de Entrega ======
+    document.getElementById('btnShowNewAddress')?.addEventListener('click', () => {
+      document.getElementById('newAddressForm').style.display = 'block';
+      document.getElementById('addrApelido').value = '';
+      document.getElementById('addrCep').value = '';
+      document.getElementById('addrLogradouro').value = '';
+      document.getElementById('addrNumero').value = '';
+      document.getElementById('addrComplemento').value = '';
+      document.getElementById('addrBairro').value = '';
+      document.getElementById('addrCidade').value = '';
+      document.getElementById('addrEstado').value = '';
+      document.getElementById('addrPrincipal').checked = false;
+      document.getElementById('addrApelido').focus();
+    });
+
+    document.getElementById('btnCancelAddress')?.addEventListener('click', () => {
+      document.getElementById('newAddressForm').style.display = 'none';
+    });
+
+    document.getElementById('addrCep')?.addEventListener('input', async function() {
+      let v = this.value.replace(/\D/g, '');
+      if (v.length > 5) v = v.replace(/^(\d{5})(\d)/, '$1-$2');
+      this.value = v.slice(0, 9);
+
+      if (v.length === 8) {
+        try {
+          startLoad();
+          const res = await fetch(`https://viacep.com.br/ws/${v}/json/`);
+          const data = await res.json();
+          if (!data.erro) {
+            document.getElementById('addrLogradouro').value = data.logradouro || '';
+            document.getElementById('addrBairro').value = data.bairro || '';
+            document.getElementById('addrCidade').value = data.localidade || '';
+            document.getElementById('addrEstado').value = data.uf || '';
+            document.getElementById('addrNumero').focus();
+          } else {
+            notify('CEP não encontrado.', true);
+          }
+        } catch (err) {
+          notify('Erro ao buscar CEP.', true);
+        } finally {
+          endLoad();
+        }
+      }
+    });
+
+    document.getElementById('btnSaveAddress')?.addEventListener('click', async () => {
+      const id_cliente = detailId;
+      if (!id_cliente) return;
+
+      const apelido = document.getElementById('addrApelido').value.trim();
+      const cep = document.getElementById('addrCep').value.trim();
+      const logradouro = document.getElementById('addrLogradouro').value.trim();
+      const numero_end = document.getElementById('addrNumero').value.trim();
+      const complemento = document.getElementById('addrComplemento').value.trim();
+      const bairro = document.getElementById('addrBairro').value.trim();
+      const cidade = document.getElementById('addrCidade').value.trim();
+      const estado = document.getElementById('addrEstado').value.trim();
+      const principal = document.getElementById('addrPrincipal').checked ? 'Sim' : 'Não';
+
+      if (!logradouro || !cidade || !estado) { notify('Preencha pelo menos logradouro, cidade e estado.', true); return; }
+
+      try {
+        startLoad();
+        // Se for principal, precisamos tirar o "principal" dos outros antes
+        if (principal === 'Sim') {
+          const existentes = deliveryAddresses.filter(a => String(a.id_cliente) === String(id_cliente) && a.principal === 'Sim');
+          for (const ex of existentes) {
+            await apiPost({ action: 'update', sheet: 'Enderecos_Entrega', data: { ...ex, principal: 'Não', vendedor: usuarioLogado?.nome || 'Sistema' } });
+          }
+        }
+
+        await apiPost({
+          action: 'append', sheet: 'Enderecos_Entrega',
+          data: {
+            id: uuid(), id_cliente, apelido, cep, logradouro, numero_end, complemento, bairro, cidade, estado, principal,
+            vendedor: usuarioLogado?.nome || 'Sistema', criado_em: new Date().toISOString()
+          }
+        });
+        notify('Endereço adicionado!');
+        document.getElementById('newAddressForm').style.display = 'none';
+        await loadAll();
+        // Reabre o modal do cliente para atualizar a lista na tela
+        viewClient(id_cliente);
+      } catch (err) {
+        notify('Erro ao salvar endereço: ' + err.message, true);
+      } finally {
+        endLoad();
+      }
+    });
+
+    window.deleteAddress = async function(idAddr) {
+      if (!confirm('Excluir este endereço?')) return;
+      const id_cliente = detailId;
+      try {
+        startLoad();
+        await apiPost({ action: 'delete', sheet: 'Enderecos_Entrega', id: idAddr, vendedor: usuarioLogado?.nome || 'Sistema' });
+        notify('Endereço excluído.');
+        await loadAll();
+        viewClient(id_cliente);
+      } catch (err) {
+        notify('Erro ao excluir endereço: ' + err.message, true);
+      } finally {
+        endLoad();
+      }
+    };
+    // ====================================
+
+    window.viewClient = function(id) {
       const c = clients.find(x => String(x.id) === String(id));
       if (!c) return;
       document.getElementById('detailDuplicateBtn').style.display = 'none';
@@ -2029,6 +2172,29 @@ vendedor: usuarioLogado?.nome || 'Sistema',
         </div>
       `;
       
+      // Lógica da Seção de Endereços
+      const secEnderecos = document.getElementById('clientAddressesSection');
+      const listEnderecos = document.getElementById('clientAddressesList');
+      secEnderecos.style.display = 'block';
+      document.getElementById('newAddressForm').style.display = 'none'; // Sempre esconde o form ao abrir a ficha
+
+      const enderecosCliente = deliveryAddresses.filter(a => String(a.id_cliente) === String(id));
+      
+      if (enderecosCliente.length > 0) {
+        listEnderecos.innerHTML = enderecosCliente.map(a => `
+          <div style="padding:10px; background:#fff; border:1px solid var(--line); border-radius:8px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:flex-start;">
+            <div>
+              <strong style="color:var(--navy);">${esc(a.apelido || 'Endereço')} ${a.principal === 'Sim' ? '<span class="tag" style="background:#e6f4ea; color:#27775d; padding:2px 6px; font-size:9px;">Principal</span>' : ''}</strong><br>
+              <span style="color:#738091;">${esc(a.logradouro)}, ${esc(a.numero_end || 'S/N')} ${a.complemento ? '- ' + esc(a.complemento) : ''}<br>
+              ${esc(a.bairro || '')} - ${esc(a.cidade)} / ${esc(a.estado)} - CEP: ${esc(a.cep || '—')}</span>
+            </div>
+            <button class="btn btn-danger" style="padding:4px 8px; font-size:10px;" onclick="deleteAddress('${esc(a.id)}')">Excluir</button>
+          </div>
+        `).join('');
+      } else {
+        listEnderecos.innerHTML = '<p style="color:#738091; font-size:12px; margin:0;">Nenhum endereço de entrega cadastrado.</p>';
+      }
+
       detailEditBtn.style.display = 'inline-flex';
       detailDeleteBtn.style.display = 'none';
 
@@ -2365,7 +2531,11 @@ vendedor: usuarioLogado?.nome || 'Sistema',
     let detailKind = null;
     let detailId = null;
 
-    function fecharDetail() { detailModal.style.display = 'none'; detailKind = null; detailId = null; }
+    function fecharDetail() { 
+      detailModal.style.display = 'none'; 
+      document.getElementById('clientAddressesSection').style.display = 'none';
+      detailKind = null; detailId = null; 
+    }
     document.getElementById('detailClose')?.addEventListener('click', fecharDetail);
 
     function renderDetailRows(rows) {
