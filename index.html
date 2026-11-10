@@ -349,11 +349,11 @@
             <div class="panel-head"><div><h2>Registrar nova venda</h2><div class="panel-desc">A baixa no estoque será automática.</div></div></div>
             <form id="orderForm">
               <div class="form-grid">
-                <div class="field">
-                  <label for="orderProduct">Produto *</label>
-                  <input id="orderProduct" list="orderProductList" placeholder="Digite para buscar..." required style="width:100%" />
-                  <datalist id="orderProductList"></datalist>
-                </div>
+<div class="field">
+  <label for="orderProduct">Produto *</label>
+  <input id="orderProduct" list="orderProductList" placeholder="Digite para buscar..." required style="width:100%" autocomplete="off" />
+  <datalist id="orderProductList"></datalist>
+</div>
                 <div class="field"><label for="orderNumber">Numeração *</label><select id="orderNumber" required></select></div>
                 <div class="field"><label for="orderQty">Quantidade *</label><input id="orderQty" type="number" min="1" step="1" value="1" required /></div>
 
@@ -455,11 +455,11 @@
                   <label for="reqAddress">Endereço de Entrega</label>
                   <select id="reqAddress"></select>
                 </div>
-                <div class="field">
-                  <label for="reqProduct">Produto *</label>
-                  <input id="reqProduct" list="reqProductList" placeholder="Digite para buscar..." required style="width:100%" />
-                  <datalist id="reqProductList"></datalist>
-                </div>
+<div class="field">
+  <label for="reqProduct">Produto *</label>
+  <input id="reqProduct" list="reqProductList" placeholder="Digite para buscar..." required style="width:100%" autocomplete="off" />
+  <datalist id="reqProductList"></datalist>
+</div>
                 <div class="field"><label for="reqNumber">Numeração *</label><select id="reqNumber" required></select></div>
                 <div class="field"><label for="reqQty">Qtd *</label><input id="reqQty" type="number" min="1" value="1" required/></div>
                 <div class="field"><label for="reqCostUnit">Custo Unitário (R$) *</label><input id="reqCostUnit" type="number" min="0" step="0.01" required/></div>
@@ -1539,35 +1539,31 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
       const list = document.getElementById('orderProductList');
       if (!list) return;
       list.innerHTML = products.map(p => {
-        // Cria uma string única para o autocomplete: "MARCA MODELO (SKU)"
-        const label = `${p.marca} ${p.modelo} ${p.cor ? '· ' + p.cor : ''} (${p.sku})`;
-        return `<option value="${esc(label)}" data-id="${esc(p.id)}">`;
+        return `<option value="${esc(p.marca)} ${esc(p.modelo)} ${p.cor ? '· ' + esc(p.cor) : ''} (${esc(p.sku)})"></option>`;
       }).join('');
     }
 
     // Atualiza as numerações disponíveis quando o produto é escolhido
     document.getElementById('orderProduct')?.addEventListener('change', function() {
-      // Encontra o produto pelo texto digitado na datalist
+      // Busca o produto cujo texto formatado bate com o que foi digitado
       const prod = products.find(p => `${p.marca} ${p.modelo} ${p.cor ? '· ' + p.cor : ''} (${p.sku})` === this.value);
-      const idProd = prod ? prod.id : '';
+      
       const numSelect = document.getElementById('orderNumber');
       const priceInput = document.getElementById('orderPrice');
+      const costInput = document.getElementById('orderCostUnit');
 
-      if (!idProd) {
+      if (!prod) {
         numSelect.innerHTML = '<option value="">— Escolha o produto primeiro —</option>';
         priceInput.value = '';
         return;
       }
 
-      const costInput = document.getElementById('orderCostUnit');
-      if (prod) {
-        priceInput.value = prod.preco_venda;
-        if (costInput) costInput.value = prod.custo || 0;
-      }
+      priceInput.value = prod.preco_venda;
+      if (costInput) costInput.value = prod.custo || 0;
 
-      // Une estoque + grade
-      const stockNums = stockForProduct(idProd).map(s => s.numero);
-      const gradeNums = prod ? String(prod.grade || '').split(',').map(n => n.trim()).filter(Boolean) : [];
+      // Grade + Estoque
+      const stockNums = stockForProduct(prod.id).map(s => s.numero);
+      const gradeNums = prod.grade ? String(prod.grade).split(',').map(n => n.trim()).filter(Boolean) : [];
       const todasNums = [...new Set([...stockNums, ...gradeNums])];
 
       if (todasNums.length === 0) {
@@ -1575,13 +1571,12 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
       } else {
         numSelect.innerHTML = '<option value="">— Selecione a Numeração —</option>' +
           todasNums.map(n => {
-            const emEstoque = stockForProduct(idProd).find(s => String(s.numero) === String(n));
+            const emEstoque = stockForProduct(prod.id).find(s => String(s.numero) === String(n));
             const qtd = emEstoque ? emEstoque.quantidade : 0;
             return `<option value="${esc(n)}">${esc(n)} (${qtd} em estoque)</option>`;
           }).join('');
       }
     });
-
 
 
     // SUBMIT DA VENDA (Atualizado com Custos e Opção de Estoque)
@@ -1615,7 +1610,11 @@ div.querySelector('button').onclick = () => { div.remove(); calcularLucroVenda()
     document.getElementById('orderForm')?.addEventListener('submit', async e => {
       if (editingSaleId) return; // edição tem listener próprio depois
       e.preventDefault();
-      const id_produto = document.getElementById('orderProduct').value;
+      
+      const prodText = document.getElementById('orderProduct').value;
+      const prodObj = products.find(x => `${x.marca} ${x.modelo} ${x.cor ? '· ' + x.cor : ''} (${x.sku})` === prodText);
+      const id_produto = prodObj ? prodObj.id : '';
+      
       const numero = document.getElementById('orderNumber').value;
       const qtdVendida = Number(document.getElementById('orderQty').value);
       const valorTotal = Number(document.getElementById('orderPrice').value);
@@ -1637,7 +1636,7 @@ div.querySelector('button').onclick = () => { div.remove(); calcularLucroVenda()
         if (!confirmar) return;
       }
 
-      const p = prodSelecionado;
+      const p = productById(id_produto);
       const skuVar = (estoqueItem ? estoqueItem.sku_variacao : null) || `${p.sku}-${numero}`;
       const custoUnitario = Number(document.getElementById('orderCostUnit').value || 0);
 
@@ -2299,8 +2298,7 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       const list = document.getElementById('reqProductList');
       if (!list) return;
       list.innerHTML = products.map(p => {
-        const label = `${p.marca} ${p.modelo} ${p.cor ? '· ' + p.cor : ''} (${p.sku})`;
-        return `<option value="${esc(label)}" data-id="${esc(p.id)}">`;
+        return `<option value="${esc(p.marca)} ${esc(p.modelo)} ${p.cor ? '· ' + esc(p.cor) : ''} (${esc(p.sku)})"></option>`;
       }).join('');
     }
 
@@ -2341,23 +2339,25 @@ vendedor: usuarioLogado?.nome || 'Sistema',
 
     document.getElementById('reqProduct')?.addEventListener('change', function() {
       const prod = products.find(p => `${p.marca} ${p.modelo} ${p.cor ? '· ' + p.cor : ''} (${p.sku})` === this.value);
-      const idProd = prod ? prod.id : '';
-      const numSelect = document.getElementById('reqNumber');
-      if (!idProd) { numSelect.innerHTML = '<option value="">—</option>'; return; }
       
-      const p = prod;
+      const numSelect = document.getElementById('reqNumber');
       const priceInput = document.getElementById('reqPrice');
       const costInput = document.getElementById('reqCostUnit');
-      if (p) {
-        if (priceInput) priceInput.value = p.preco_venda;
-        if (costInput) costInput.value = p.custo || 0;
+
+      if (!prod) { 
+        numSelect.innerHTML = '<option value="">—</option>'; 
+        return; 
       }
-      const gradeNums = p ? String(p.grade || '').split(',').map(n => n.trim()).filter(Boolean) : [];
-      const stockNums = stockForProduct(idProd).map(s => s.numero);
+
+      if (priceInput) priceInput.value = prod.preco_venda;
+      if (costInput) costInput.value = prod.custo || 0;
+
+      const gradeNums = prod.grade ? String(prod.grade).split(',').map(n => n.trim()).filter(Boolean) : [];
+      const stockNums = stockForProduct(prod.id).map(s => s.numero);
       const todasNums = [...new Set([...gradeNums, ...stockNums])];
-      const nums = todasNums.map(n => ({ numero: n }));
       
-      numSelect.innerHTML = '<option value="">— Selecione —</option>' + nums.map(s => `<option value="${esc(s.numero)}">${esc(s.numero)}</option>`).join('');
+      numSelect.innerHTML = '<option value="">— Selecione —</option>' + 
+        todasNums.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
     });
 
     document.getElementById('requestForm')?.addEventListener('submit', async e => {
@@ -2365,8 +2365,8 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       const cliente = document.getElementById('reqClient').value;
       
       const prodText = document.getElementById('reqProduct').value;
-      const p = products.find(x => `${x.marca} ${x.modelo} ${x.cor ? '· ' + x.cor : ''} (${x.sku})` === prodText);
-      const id_produto = p ? p.id : '';
+      const prodObj = products.find(x => `${x.marca} ${x.modelo} ${x.cor ? '· ' + x.cor : ''} (${x.sku})` === prodText);
+      const id_produto = prodObj ? prodObj.id : '';
       
       const numero = document.getElementById('reqNumber').value;
       const qtd = Number(document.getElementById('reqQty').value);
@@ -2375,7 +2375,7 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       const obs = document.getElementById('reqNote').value;
       const status = document.getElementById('reqStatus').value;
 
-      const p = productById(id_produto);
+      const p = prodObj;
 
       try {
         startLoad();
@@ -2931,10 +2931,7 @@ window.viewRequest = function(id) {
       const idVenda = editingSaleId;
       const vAntiga = sales.find(x => String(x.id) === String(idVenda));
       
-      const prodText = document.getElementById('orderProduct').value;
-      const prodSelecionado = products.find(x => `${x.marca} ${x.modelo} ${x.cor ? '· ' + x.cor : ''} (${x.sku})` === prodText);
-      const id_produto = prodSelecionado ? prodSelecionado.id : '';
-      
+      const id_produto = document.getElementById('orderProduct').value;
       const numero = document.getElementById('orderNumber').value;
       const qtdNova = Number(document.getElementById('orderQty').value);
       const custo = Number(document.getElementById('orderCostUnit').value || 0);
