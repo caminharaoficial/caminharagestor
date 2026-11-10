@@ -865,12 +865,23 @@
 
     // ====== Máscaras ======
     function maskCPF(value) {
-      return value
-        .replace(/\D/g, '')
-        .replace(/(\d{3})(\d)/, '$1.$2')
-        .replace(/(\d{3})(\d)/, '$1.$2')
-        .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
-        .slice(0, 14);
+      let v = value.replace(/\D/g, '');
+      if (v.length <= 11) {
+        // CPF: 000.000.000-00
+        return v
+          .replace(/(\d{3})(\d)/, '$1.$2')
+          .replace(/(\d{3})(\d)/, '$1.$2')
+          .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+          .slice(0, 14);
+      } else {
+        // CNPJ: 00.000.000/0000-00
+        return v
+          .replace(/^(\d{2})(\d)/, '$1.$2')
+          .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+          .replace(/\.(\d{3})(\d)/, '.$1/$2')
+          .replace(/(\d{4})(\d)/, '$1-$2')
+          .slice(0, 18);
+      }
     }
 
     function maskWhatsApp(value) {
@@ -1669,37 +1680,38 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
     }
 
     function preencherDadosCliente(cliente, tipo) {
-      // tipo = 'venda' ou 'pedido'
       const prefix = tipo === 'venda' ? 'order' : 'req';
-      
       const nomeInput = document.getElementById(`${prefix}Client`);
       const resumoDiv = document.getElementById(`${prefix}ClientInfo`);
 
       if (cliente) {
         nomeInput.value = cliente.nome;
         
-        // Monta o resumo visual
-        let enderecoTexto = 'Sem endereço principal cadastrado.';
+        let enderecoTexto = 'Não cadastrado.';
         if (cliente.logradouro) {
-          enderecoTexto = `${cliente.logradouro}, ${cliente.numero_end || 'S/N'} - ${cliente.bairro || ''}, ${cliente.cidade || ''}/${cliente.estado || ''}`;
+          enderecoTexto = `${cliente.logradouro}, ${cliente.numero_end || 'S/N'}${cliente.complemento ? ' - ' + cliente.complemento : ''}<br>${cliente.bairro || ''} - ${cliente.cidade || ''}/${cliente.estado || ''}${cliente.cep ? '<br>CEP: ' + cliente.cep : ''}`;
         }
-        
+
         resumoDiv.style.display = 'block';
         resumoDiv.innerHTML = `
-          <div style="background:#f8fafc; padding:10px; border-radius:8px; border:1px solid #e4e9ee; font-size:11px; line-height:1.6;">
-            <strong>Confirme os dados do cliente:</strong><br>
-            <span style="color:#526b83;">📞 ${esc(cliente.whatsapp || '—')}</span><br>
-            ${cliente.email ? `<span style="color:#526b83;">✉️ ${esc(cliente.email)}</span><br>` : ''}
-            <span style="color:#526b83;">📍 ${esc(enderecoTexto)}</span><br>
-            <small style="color:#b04545;">Se algo estiver errado, peça para atualizar no cadastro de Clientes.</small>
+          <div style="background:#f0f7f4; border-left: 4px solid #27775d; padding:12px 15px; border-radius:8px; font-size:12px; line-height:1.7; color:#202936;">
+            <div style="font-weight:800; font-size:11px; letter-spacing:0.05em; color:#27775d; margin-bottom:8px; text-transform:uppercase;">✅ Cliente Confirmado</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+              <div><strong>📱 WhatsApp:</strong> ${esc(cliente.whatsapp || '—')}</div>
+              <div><strong>💳 CPF:</strong> ${esc(cliente.cpf || '—')}</div>
+              ${cliente.email ? `<div style="grid-column: span 2;"><strong>✉️ E-mail:</strong> ${esc(cliente.email)}</div>` : ''}
+              <div style="grid-column: span 2;"><strong>📍 Endereço:</strong><br>${enderecoTexto}</div>
+              ${cliente.observacao ? `<div style="grid-column: span 2;"><strong>📝 Obs:</strong> ${esc(cliente.observacao)}</div>` : ''}
+            </div>
           </div>
         `;
       } else {
         nomeInput.value = '';
         resumoDiv.style.display = 'block';
         resumoDiv.innerHTML = `
-          <div style="background:#fce8e8; padding:10px; border-radius:8px; border:1px solid #f5c6cb; font-size:11px; color:#b04545;">
-            ❌ Cliente não encontrado. Por favor, cadastre o cliente antes de continuar.
+          <div style="background:#fce8e8; border-left: 4px solid #b04545; padding:12px 15px; border-radius:8px; font-size:12px; color:#b04545; font-weight:700;">
+            ❌ Cliente não encontrado.<br>
+            <span style="font-weight:400; color:#202936;">Cadastre o cliente antes de continuar.</span>
           </div>
         `;
       }
@@ -2109,12 +2121,10 @@ vendedor: usuarioLogado?.nome || 'Sistema',
 
     // Máscara e Busca de CEP (ViaCEP)
     document.getElementById('clientCep')?.addEventListener('input', async function() {
-      // Máscara visual
       let v = this.value.replace(/\D/g, '');
       if (v.length > 5) v = v.replace(/^(\d{5})(\d)/, '$1-$2');
       this.value = v.slice(0, 9);
 
-      // Busca automática quando tiver 8 dígitos
       if (v.length === 8) {
         try {
           startLoad();
@@ -2125,7 +2135,6 @@ vendedor: usuarioLogado?.nome || 'Sistema',
             document.getElementById('clientBairro').value = data.bairro || '';
             document.getElementById('clientCity').value = data.localidade || '';
             document.getElementById('clientEstado').value = data.uf || '';
-            // Foca no campo Número após preencher
             document.getElementById('clientNumeroEnd').focus();
           } else {
             notify('CEP não encontrado.', true);
@@ -2242,6 +2251,7 @@ vendedor: usuarioLogado?.nome || 'Sistema',
           <td>${esc(c.cidade || '—')}</td>
           <td>
             <button class="btn btn-light" data-view-client="${esc(c.id)}" style="padding:6px 9px">Ver</button>
+            <button class="btn btn-light" data-edit-client="${esc(c.id)}" style="padding:6px 9px; color:#526b83; border-color:#526b83;">Editar</button>
             <button class="btn btn-danger" data-del-client="${esc(c.id)}" style="padding:6px 9px">Excluir</button>
           </td>
         </tr>
@@ -2249,6 +2259,7 @@ vendedor: usuarioLogado?.nome || 'Sistema',
 
       tbody.querySelectorAll('[data-del-client]').forEach(b => b.onclick = () => deleteClient(b.dataset.delClient));
       tbody.querySelectorAll('[data-view-client]').forEach(b => b.onclick = () => viewClient(b.dataset.viewClient));
+      tbody.querySelectorAll('[data-edit-client]').forEach(b => b.onclick = () => editClient(b.dataset.editClient));
     }
 
     // ====== Endereços de Entrega ======
@@ -4080,6 +4091,13 @@ document.getElementById('topUserName').textContent = res.nome;
     forcarAbrirLista('orderProduct');
     forcarAbrirLista('reqClient');
     forcarAbrirLista('reqProduct');
+
+    document.getElementById('orderCpfCnpj')?.addEventListener('input', function() {
+      this.value = maskCPF(this.value);
+    });
+    document.getElementById('reqCpfCnpj')?.addEventListener('input', function() {
+      this.value = maskCPF(this.value);
+    });
 
     document.addEventListener('DOMContentLoaded', () => {
       const tokenSalvo = sessionStorage.getItem('caminhara_token');
