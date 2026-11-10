@@ -364,12 +364,15 @@
                   <input id="orderLucroReal" readonly style="background:#e6f4ea; color:#27775d; font-weight:700;" value="R$ 0,00"/>
                 </div>
                 <div class="field">
-                  <label for="orderClient">Cliente</label>
+                  <label for="orderCpfCnpj">CPF ou CNPJ *</label>
                   <div style="display:flex; gap:6px;">
-                    <input id="orderClient" list="orderClientList" placeholder="Consumidor Final ou digite..." style="flex:1" />
-                    <datalist id="orderClientList"></datalist>
+                    <input id="orderCpfCnpj" placeholder="Digite o CPF/CNPJ" style="flex:1" />
                     <button type="button" class="btn btn-light" id="quickAddClientBtn" style="white-space:nowrap;">＋ Novo</button>
                   </div>
+                </div>
+                <div class="field">
+                  <label for="orderClient">Cliente *</label>
+                  <input id="orderClient" readonly style="background:#f0f3f6; font-weight:700;" placeholder="Preenchido automaticamente" />
                 </div>
                 <div class="field" id="orderAddressField" style="display:none;">
                   <label for="orderAddress">Endereço de Entrega</label>
@@ -446,12 +449,15 @@
              <form id="requestForm">
               <div class="form-grid">
                 <div class="field">
-                  <label for="reqClient">Cliente</label>
+                  <label for="reqCpfCnpj">CPF ou CNPJ *</label>
                   <div style="display:flex; gap:6px;">
-                    <input id="reqClient" list="reqClientList" placeholder="Consumidor Final ou digite..." style="flex:1" />
-                    <datalist id="reqClientList"></datalist>
+                    <input id="reqCpfCnpj" placeholder="Digite o CPF/CNPJ" style="flex:1" />
                     <button type="button" class="btn btn-light" id="quickAddReqClientBtn" style="white-space:nowrap;">＋ Novo</button>
                   </div>
+                </div>
+                <div class="field">
+                  <label for="reqClient">Cliente *</label>
+                  <input id="reqClient" readonly style="background:#f0f3f6; font-weight:700;" placeholder="Preenchido automaticamente" />
                 </div>
                 <div class="field" id="reqAddressField" style="display:none;">
                   <label for="reqAddress">Endereço de Entrega</label>
