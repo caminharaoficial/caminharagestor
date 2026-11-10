@@ -667,12 +667,22 @@
           </section>
 
 
-          <section class="panel">
+          <section class="panel" style="margin-bottom: 20px;">
             <div class="panel-head"><div><h2>Resumo por Dia</h2><div class="panel-desc">Detalhamento diário do período selecionado.</div></div></div>
             <div class="table-wrap">
               <table>
                 <thead><tr><th>Data</th><th>Qtd. Vendas</th><th>Total Vendido</th><th>Lucro</th></tr></thead>
                 <tbody id="reportTable"><tr><td colspan="4" class="table-empty">Selecione o período e clique em Gerar Relatório.</td></tr></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><div><h2>Ranking de Clientes</h2><div class="panel-desc">Os clientes que mais compraram no período.</div></div></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Cliente</th><th>Qtd. Compras</th><th>Total Gasto</th><th>Ticket Médio</th></tr></thead>
+                <tbody id="reportClientTable"><tr><td colspan="4" class="table-empty">Gere um relatório para ver os dados.</td></tr></tbody>
               </table>
             </div>
           </section>
@@ -3158,6 +3168,30 @@ window.viewRequest = function(id) {
             </tr>`;
           }).join('')
         : '<tr><td colspan="3" class="table-empty">Nenhum pagamento registrado no período.</td></tr>';
+
+      // ====== RESUMO POR CLIENTE ======
+      const porCliente = {};
+      filtered.forEach(s => {
+        const cli = s.cliente ? String(s.cliente).trim() : 'Consumidor Final';
+        if (!porCliente[cli]) porCliente[cli] = { count: 0, valor: 0 };
+        porCliente[cli].count++;
+        porCliente[cli].valor += Number(s.valor_venda || 0);
+      });
+
+      const clientesOrdenados = Object.keys(porCliente).sort((a, b) => porCliente[b].valor - porCliente[a].valor);
+
+      document.getElementById('reportClientTable').innerHTML = clientesOrdenados.length
+        ? clientesOrdenados.map(cli => {
+            const d = porCliente[cli];
+            const ticketMedio = d.valor / d.count;
+            return `<tr>
+              <td><strong>${esc(cli)}</strong></td>
+              <td>${d.count}</td>
+              <td><strong style="color:#27775d">${money(d.valor)}</strong></td>
+              <td>${money(ticketMedio)}</td>
+            </tr>`;
+          }).join('')
+        : '<tr><td colspan="4" class="table-empty">Nenhuma venda registrada no período.</td></tr>';
 
     });
 
