@@ -183,7 +183,8 @@
           <button class="nav-btn" data-section="finance"><span class="nav-icon">◉</span> Financeiro</button>
           <button class="nav-btn" data-section="activities"><span class="nav-icon">📊</span> Atividades</button>
           <button class="nav-btn" data-section="reports"><span class="nav-icon">📈</span> Relatório</button>
-          <button class="nav-btn" data-section="contacts"><span class="nav-icon">♙</span> Clientes e fornecedores</button>
+          <button class="nav-btn" data-section="contacts"><span class="nav-icon">♙</span> Clientes</button>
+          <button class="nav-btn" data-section="suppliers"><span class="nav-icon">🏢</span> Fornecedores</button>
         </nav>
       </div>
       <div>
@@ -602,6 +603,45 @@
           </section>
         </section>
 
+        <!-- FORNECEDORES -->
+        <section class="section" id="suppliers">
+          <div class="page-heading">
+            <div><h1>Fornecedores</h1><p class="subtitle">Cadastro e gestão de parceiros e fornecedores.</p></div>
+            <button class="btn btn-primary" id="newSupplierBtn">＋ Novo Fornecedor</button>
+          </div>
+
+          <div class="panel" id="supplierFormPanel" style="margin-bottom:18px">
+            <div class="panel-head"><div><h2 id="supplierFormTitle">Cadastrar Fornecedor</h2><div class="panel-desc">Razão Social e CNPJ são obrigatórios.</div></div></div>
+            <form id="supplierForm">
+              <input type="hidden" id="supplierEditId" />
+              <div class="form-grid">
+                <div class="field"><label for="supplierRazao">Razão Social *</label><input id="supplierRazao" required maxlength="100" placeholder="Ex.: Calçados Silva LTDA"/></div>
+                <div class="field"><label for="supplierFantasia">Nome Fantasia</label><input id="supplierFantasia" maxlength="100" placeholder="Ex.: Silva Calçados"/></div>
+                <div class="field"><label for="supplierCnpj">CNPJ *</label><input id="supplierCnpj" required maxlength="18" placeholder="Ex.: 12.345.678/0001-90"/></div>
+                <div class="field"><label for="supplierPhone">Telefone / WhatsApp</label><input id="supplierPhone" maxlength="20" placeholder="Ex.: (11) 99999-9999"/></div>
+                <div class="field"><label for="supplierEmail">E-mail</label><input id="supplierEmail" type="email" maxlength="100" placeholder="Ex.: contato@fornecedor.com"/></div>
+                <div class="field"><label for="supplierCity">Cidade</label><input id="supplierCity" maxlength="60" placeholder="Ex.: São Paulo"/></div>
+                <div class="field"><label for="supplierState">Estado (UF)</label><input id="supplierState" maxlength="2" placeholder="Ex.: SP" style="text-transform:uppercase"/></div>
+                <div class="field" style="grid-column: span 2;"><label for="supplierObs">Observação Interna</label><input id="supplierObs" maxlength="200" placeholder="Ex.: Entrega em 5 dias úteis"/></div>
+              </div>
+              <div class="form-actions">
+                <button class="btn btn-primary" type="submit">Salvar Fornecedor</button>
+                <button class="btn btn-light" type="button" id="cancelSupplierBtn">Cancelar</button>
+              </div>
+            </form>
+          </div>
+
+          <section class="panel">
+            <div class="panel-head"><div><h2>Lista de Fornecedores</h2><div class="panel-desc">Parceiros cadastrados.</div></div></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Razão Social</th><th>Nome Fantasia</th><th>CNPJ</th><th>Telefone</th><th>Cidade/UF</th><th>Ações</th></tr></thead>
+                <tbody id="suppliersTable"><tr><td colspan="6" class="table-empty">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
         <!-- ATIVIDADES -->
         <section class="section" id="activities">
           <div class="page-heading">
@@ -780,7 +820,8 @@
     let clients = []; 
     let deliveryAddresses = []; // <-- NOVO
     let orderCosts = [];
-    let requests = []; // <-- ADICIONE
+    let requests = []; 
+    let suppliers = []; // <-- NOVO
     let connected = false;
 
     const money = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -887,8 +928,8 @@
       startLoad();
       try {
         setConnection(true);
-        const [p, s, v, d, c, oc, r, e] = await Promise.all([
-          apiRead('Produtos'), apiRead('Estoque'), apiRead('Vendas'), apiRead('Despesas'), apiRead('Clientes'), apiRead('Custos'), apiRead('Pedidos'), apiRead('Enderecos_Entrega')
+        const [p, s, v, d, c, oc, r, e, f] = await Promise.all([
+          apiRead('Produtos'), apiRead('Estoque'), apiRead('Vendas'), apiRead('Despesas'), apiRead('Clientes'), apiRead('Custos'), apiRead('Pedidos'), apiRead('Enderecos_Entrega'), apiRead('Fornecedores')
         ]);
         // ...
         requests = r.filter(x => x && x.id && String(x.id).trim() !== ''); // <-- ADICIONE
@@ -899,7 +940,8 @@
         sales = v.filter(x => x && x.id && String(x.id).trim() !== '');
         expenses = d.filter(x => x && x.id && String(x.id).trim() !== '');
         clients = c.filter(x => x && x.id && String(x.id).trim() !== ''); 
-        deliveryAddresses = e.filter(x => x && x.id && String(x.id).trim() !== ''); // <-- NOVO
+        deliveryAddresses = e.filter(x => x && x.id && String(x.id).trim() !== ''); 
+        suppliers = f.filter(x => x && x.id && String(x.id).trim() !== ''); // <-- NOVO
         
         setConnection(true);
         renderAll();
@@ -939,8 +981,8 @@
       fillOrderClients();      
       renderRequests();       // <-- ADICIONE
       fillRequestProducts();  // <-- ADICIONE    
+      renderSuppliers();      // <-- NOVO
 }
-
     function renderLowStockAlert() {
       const alertEl = document.getElementById('lowStockAlert');
       const titleEl = document.getElementById('lowStockTitle');
@@ -1246,7 +1288,7 @@
     };
 
     // ====== Navegação ======
-const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sales:'Vendas', orders:'Pedidos', finance:'Financeiro', contacts:'Clientes e fornecedores', activities:'Atividades', reports:'Relatório de Faturamento', settings:'Configurações' };
+const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sales:'Vendas', orders:'Pedidos', finance:'Financeiro', contacts:'Clientes', suppliers:'Fornecedores', activities:'Atividades', reports:'Relatório de Faturamento', settings:'Configurações' };
     function showSection(id) {
       document.querySelectorAll('.section').forEach(el => el.classList.toggle('active', el.id === id));
       document.querySelectorAll('.nav-btn[data-section]').forEach(el => el.classList.toggle('active', el.dataset.section === id));
@@ -2289,7 +2331,126 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       list.innerHTML = clients.map(c => `<option value="${esc(c.nome)}">`).join('');
     }
 
+    // ====== Fornecedores ======
+    const supplierFormPanel = document.getElementById('supplierFormPanel');
+
+    document.getElementById('newSupplierBtn')?.addEventListener('click', () => {
+      document.getElementById('supplierForm').reset();
+      document.getElementById('supplierEditId').value = '';
+      document.getElementById('supplierFormTitle').textContent = 'Cadastrar Fornecedor';
+      supplierFormPanel.hidden = false;
+      supplierFormPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    document.getElementById('cancelSupplierBtn')?.addEventListener('click', () => {
+      supplierFormPanel.hidden = true;
+    });
+
+    document.getElementById('supplierForm')?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const razao = document.getElementById('supplierRazao').value.trim();
+      const cnpj = document.getElementById('supplierCnpj').value.trim();
+      
+      if (!razao || !cnpj) { notify('Preencha Razão Social e CNPJ.', true); return; }
+
+      const editId = document.getElementById('supplierEditId').value;
+
+      try {
+        startLoad();
+        const payloadData = {
+          razao_social: razao,
+          nome_fantasia: document.getElementById('supplierFantasia').value.trim(),
+          cnpj: cnpj,
+          telefone: document.getElementById('supplierPhone').value.trim(),
+          email: document.getElementById('supplierEmail').value.trim(),
+          cidade: document.getElementById('supplierCity').value.trim(),
+          estado: document.getElementById('supplierState').value.trim(),
+          observacao: document.getElementById('supplierObs').value.trim(),
+          vendedor: usuarioLogado?.nome || 'Sistema'
+        };
+
+        if (editId) {
+          payloadData.id = editId;
+          await apiPost({ action: 'update', sheet: 'Fornecedores', data: payloadData });
+          notify('Fornecedor atualizado!');
+        } else {
+          payloadData.id = uuid();
+          payloadData.data_cadastro = new Date().toISOString();
+          await apiPost({ action: 'append', sheet: 'Fornecedores', data: payloadData });
+          notify('Fornecedor cadastrado!');
+        }
+
+        document.getElementById('supplierEditId').value = '';
+        document.getElementById('supplierFormTitle').textContent = 'Cadastrar Fornecedor';
+        supplierFormPanel.hidden = true;
+        await loadAll();
+      } catch (err) {
+        notify('Erro ao salvar fornecedor: ' + err.message, true);
+        endLoad();
+      }
+    });
+
+    window.editSupplier = function(id) {
+      const f = suppliers.find(x => String(x.id) === String(id));
+      if (!f) return;
+      
+      document.getElementById('supplierEditId').value = f.id;
+      document.getElementById('supplierRazao').value = f.razao_social || '';
+      document.getElementById('supplierFantasia').value = f.nome_fantasia || '';
+      document.getElementById('supplierCnpj').value = f.cnpj || '';
+      document.getElementById('supplierPhone').value = f.telefone || '';
+      document.getElementById('supplierEmail').value = f.email || '';
+      document.getElementById('supplierCity').value = f.cidade || '';
+      document.getElementById('supplierState').value = f.estado || '';
+      document.getElementById('supplierObs').value = f.observacao || '';
+      
+      document.getElementById('supplierFormTitle').textContent = 'Editar Fornecedor';
+      supplierFormPanel.hidden = false;
+      showSection('suppliers');
+      supplierFormPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
+    async function deleteSupplier(id) {
+      if (!confirm('Excluir este fornecedor permanentemente?')) return;
+      startLoad();
+      try {
+        await apiPost({ action: 'delete', sheet: 'Fornecedores', id, vendedor: usuarioLogado?.nome || 'Sistema' });
+        notify('Fornecedor excluído.');
+        await loadAll();
+      } catch (err) {
+        notify('Erro ao excluir fornecedor: ' + err.message, true);
+      } finally {
+        endLoad();
+      }
+    }
+
+    function renderSuppliers() {
+      const tbody = document.getElementById('suppliersTable');
+      if (!tbody) return;
+      
+      const sorted = [...suppliers].sort((a, b) => String(a.razao_social).localeCompare(String(b.razao_social)));
+      
+      tbody.innerHTML = sorted.length ? sorted.map(f => `
+        <tr>
+          <td><strong>${esc(f.razao_social)}</strong></td>
+          <td>${esc(f.nome_fantasia || '—')}</td>
+          <td>${esc(f.cnpj || '—')}</td>
+          <td>${esc(f.telefone || '—')}</td>
+          <td>${esc(f.cidade || '—')}${f.estado ? '/' + esc(f.estado) : ''}</td>
+          <td>
+            <button class="btn btn-light" data-edit-supplier="${esc(f.id)}" style="padding:6px 9px">Editar</button>
+            <button class="btn btn-danger" data-del-supplier="${esc(f.id)}" style="padding:6px 9px">Excluir</button>
+          </td>
+        </tr>
+      `).join('') : '<tr><td colspan="6" class="table-empty">Nenhum fornecedor cadastrado.</td></tr>';
+
+      tbody.querySelectorAll('[data-edit-supplier]').forEach(b => b.onclick = () => editSupplier(b.dataset.editSupplier));
+      tbody.querySelectorAll('[data-del-supplier]').forEach(b => b.onclick = () => deleteSupplier(b.dataset.delSupplier));
+    }
+    // ====================================
+
     // ====== Lógica de Pedidos ======
+
     const requestFormPanel = document.getElementById('requestFormPanel');
 
     document.getElementById('newRequestBtn')?.addEventListener('click', () => {
