@@ -884,6 +884,31 @@
       }
     }
 
+    function maskCNPJ(value) {
+      return value
+        .replace(/\D/g, '')
+        .replace(/^(\d{2})(\d)/, '$1.$2')
+        .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+        .replace(/\.(\d{3})(\d)/, '.$1/$2')
+        .replace(/(\d{4})(\d)/, '$1-$2')
+        .slice(0, 18);
+    }
+
+    function maskPhone(value) {
+      let v = value.replace(/\D/g, '');
+      if (v.length <= 10) {
+        return v
+          .replace(/^(\d{2})(\d)/, '($1) $2')
+          .replace(/(\d{4})(\d)/, '$1-$2')
+          .slice(0, 14);
+      } else {
+        return v
+          .replace(/^(\d{2})(\d)/, '($1) $2')
+          .replace(/(\d{5})(\d)/, '$1-$2')
+          .slice(0, 15);
+      }
+    }
+
 
     function notify(msg, isError) {
       const t = document.getElementById('toast');
@@ -2376,6 +2401,14 @@ vendedor: usuarioLogado?.nome || 'Sistema',
 
     // ====== Fornecedores ======
     const supplierFormPanel = document.getElementById('supplierFormPanel');
+
+    // Aplica as máscaras no formulário de fornecedor
+    document.getElementById('supplierCnpj')?.addEventListener('input', function() {
+      this.value = maskCNPJ(this.value);
+    });
+    document.getElementById('supplierPhone')?.addEventListener('input', function() {
+      this.value = maskPhone(this.value);
+    });
 
     document.getElementById('newSupplierBtn')?.addEventListener('click', () => {
       document.getElementById('supplierForm').reset();
