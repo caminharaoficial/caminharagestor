@@ -1326,6 +1326,7 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
       }
       catch (err) { 
         notify('Erro ao excluir: ' + err.message, true); 
+      } finally {
         endLoad();
       }
     }
@@ -1710,6 +1711,7 @@ tbody.querySelectorAll('[data-view-order]').forEach(b => b.onclick = () => viewO
         await loadAll();
       } catch (err) {
         notify('Erro ao excluir venda: ' + err.message, true);
+      } finally {
         endLoad();
       }
     }
@@ -1801,6 +1803,7 @@ vendedor: usuarioLogado?.nome || 'Sistema',
         await loadAll();
       } catch (err) {
         notify('Erro ao excluir despesa: ' + err.message, true);
+      } finally {
         endLoad();
       }
     }
@@ -2039,6 +2042,7 @@ vendedor: usuarioLogado?.nome || 'Sistema',
         await loadAll();
       } catch (err) {
         notify('Erro ao excluir cliente: ' + err.message, true);
+      } finally {
         endLoad();
       }
     }
