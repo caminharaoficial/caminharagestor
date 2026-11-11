@@ -370,7 +370,9 @@
                 <div class="field"><label for="orderQty">Quantidade *</label><input id="orderQty" type="number" min="1" step="1" value="1" required /></div>
 
                 <div class="field" id="orderCostField"><label for="orderCostUnit">Custo Unitário (R$) *</label><input id="orderCostUnit" type="number" min="0" step="0.01" required placeholder="0,00"/></div>
-                <div class="field"><label for="orderPrice">Valor Total (R$) *</label><input id="orderPrice" type="number" min="0" step="0.01" required placeholder="0,00"/></div>
+<div class="field"><label for="orderPrice">Valor Total (R$) *</label><input id="orderPrice" type="number" min="0" step="0.01" required placeholder="0,00"/></div>
+<div class="field"><label for="orderFreight">Valor do Frete (R$)</label><input id="orderFreight" type="number" min="0" step="0.01" placeholder="0,00"/></div>
+<div class="field"><label for="orderDiscount">Desconto (R$)</label><input id="orderDiscount" type="number" min="0" step="0.01" placeholder="0,00"/></div>
                 <div class="field" id="orderProfitField"><label>Lucro Real</label>
                   <input id="orderLucroReal" readonly style="background:#e6f4ea; color:#27775d; font-weight:700;" value="R$ 0,00"/>
                 </div>
@@ -490,7 +492,9 @@
                 <div class="field"><label for="reqNumber">Numeração *</label><select id="reqNumber" required></select></div>
                 <div class="field"><label for="reqQty">Qtd *</label><input id="reqQty" type="number" min="1" value="1" required/></div>
                 <div class="field"><label for="reqCostUnit">Custo Unitário (R$) *</label><input id="reqCostUnit" type="number" min="0" step="0.01" required/></div>
-                <div class="field"><label for="reqPrice">Valor Total (R$) *</label><input id="reqPrice" type="number" min="0" step="0.01" required/></div>
+<div class="field"><label for="reqPrice">Valor Total (R$) *</label><input id="reqPrice" type="number" min="0" step="0.01" required/></div>
+<div class="field"><label for="reqFreight">Valor do Frete (R$)</label><input id="reqFreight" type="number" min="0" step="0.01" placeholder="0,00"/></div>
+<div class="field"><label for="reqDiscount">Desconto (R$)</label><input id="reqDiscount" type="number" min="0" step="0.01" placeholder="0,00"/></div>
                 <div class="field"><label>Lucro Real</label>
                   <input id="reqLucroReal" readonly style="background:#e6f4ea; color:#27775d; font-weight:700;" value="R$ 0,00"/>
                 </div>
@@ -2002,6 +2006,8 @@ div.querySelector('button').onclick = () => { div.remove(); calcularLucroVenda()
       const numero = document.getElementById('orderNumber').value;
       const qtdVendida = Number(document.getElementById('orderQty').value);
       const valorTotal = Number(document.getElementById('orderPrice').value);
+const freteVenda = Number(document.getElementById('orderFreight').value || 0);
+const descontoVenda = Number(document.getElementById('orderDiscount').value || 0);
       const cliente = document.getElementById('orderClient').value.trim();
       const obs = document.getElementById('orderNote').value.trim();
       const statusPagamento = document.getElementById('orderStatus').value;
@@ -2037,7 +2043,7 @@ div.querySelector('button').onclick = () => { div.remove(); calcularLucroVenda()
       });
       const custosString = custosParaSalvar.length ? JSON.stringify(custosParaSalvar) : '';
 
-      const lucroLiquido = valorTotal - (custoUnitario * qtdVendida) - somaCustosExtras;
+      const lucroLiquido = valorTotal - (custoUnitario * qtdVendida) - somaCustosExtras - freteVenda - descontoVenda;
       const vendaId = uuid();
 
       try {
@@ -2057,12 +2063,15 @@ vendedor: usuarioLogado?.nome || 'Sistema',
             data_venda: new Date().toISOString(),
             cliente: cliente,
             endereco_entrega: document.getElementById('orderAddress')?.value || '',
-            observacao: obs,
+observacao: obs,
             custo_unitario: custoUnitario,
             lucro: lucroLiquido,
             status_pagamento: statusPagamento,
             forma_pagamento: formaPagamento,
             custos_extras: custosString
+,
+            valor_frete: freteVenda,
+            valor_desconto: descontoVenda
           }
         });
 
@@ -3157,6 +3166,8 @@ function renderSuppliers() {
       const numero = document.getElementById('reqNumber').value;
       const qtd = Number(document.getElementById('reqQty').value);
       const valor = Number(document.getElementById('reqPrice').value);
+const fretePedido = Number(document.getElementById('reqFreight').value || 0);
+const descontoPedido = Number(document.getElementById('reqDiscount').value || 0);
       const custo = Number(document.getElementById('reqCostUnit').value || 0);
       const obs = document.getElementById('reqNote').value;
       const status = document.getElementById('reqStatus').value;
@@ -3195,13 +3206,15 @@ vendedor: usuarioLogado?.nome || 'Sistema',
             data_pedido: new Date().toISOString(),
             status_pedido: status,
             endereco_entrega: document.getElementById('reqAddress')?.value || '',
-            custos_extras: custosString, // <-- NOVO
-codigo_rastreio: tracking,
-status_envio: shippingStatus,
-            observacao: obs
-          }
-        });
-        notify('Pedido registrado!');
+custos_extras: custosString,
+         codigo_rastreio: tracking,
+         status_envio: shippingStatus,
+         observacao: obs,
+         valor_frete: fretePedido,
+         valor_desconto: descontoPedido
+       }
+     });
+     notify('Pedido registrado!');
         requestFormPanel.hidden = true;
         await loadAll();
       } catch (err) {
@@ -3403,39 +3416,52 @@ status_envio: shippingStatus,
     });
 
     // ====== Lucro Real em tempo real ======
-    function calcularLucroVenda() {
-      const qtd = Number(document.getElementById('orderQty')?.value || 0);
-      const custo = Number(document.getElementById('orderCostUnit')?.value || 0);
-      const total = Number(document.getElementById('orderPrice')?.value || 0);
-      let extras = 0;
-      document.querySelectorAll('#orderCostsList > div').forEach(div => {
-        const val = Number(div.querySelector('.order-cost-val')?.value || 0);
-        if (val > 0) extras += val;
-      });
-      const lucro = total - (custo * qtd) - extras;
-      const el = document.getElementById('orderLucroReal');
-      if (el) {
-        el.value = money(lucro);
-        el.style.color = lucro >= 0 ? '#27775d' : '#b04545';
-        el.style.background = lucro >= 0 ? '#e6f4ea' : '#fce8e8';
-      }
-    }
+function calcularLucroVenda() {
+  const qtd = Number(document.getElementById('orderQty')?.value || 0);
+  const custo = Number(document.getElementById('orderCostUnit')?.value || 0);
+  const total = Number(document.getElementById('orderPrice')?.value || 0);
+  const frete = Number(document.getElementById('orderFreight')?.value || 0);
+  const desconto = Number(document.getElementById('orderDiscount')?.value || 0);
+  
+  let extras = 0;
+  document.querySelectorAll('#orderCostsList > div').forEach(div => {
+    const val = Number(div.querySelector('.order-cost-val')?.value || 0);
+    if (val > 0) extras += val;
+  });
+  
+  const lucro = total - (custo * qtd) - extras - frete - desconto;
+  const el = document.getElementById('orderLucroReal');
+  if (el) {
+    el.value = money(lucro);
+    el.style.color = lucro >= 0 ? '#27775d' : '#b04545';
+    el.style.background = lucro >= 0 ? '#e6f4ea' : '#fce8e8';
+  }
+}
 
-    function calcularLucroPedido() {
-      const qtd = Number(document.getElementById('reqQty')?.value || 0);
-      const custo = Number(document.getElementById('reqCostUnit')?.value || 0);
-      const total = Number(document.getElementById('reqPrice')?.value || 0);
-      const lucro = total - (custo * qtd);
-      const el = document.getElementById('reqLucroReal');
-      if (el) {
-        el.value = money(lucro);
-        el.style.color = lucro >= 0 ? '#27775d' : '#b04545';
-        el.style.background = lucro >= 0 ? '#e6f4ea' : '#fce8e8';
-      }
-    }
+function calcularLucroPedido() {
+  const qtd = Number(document.getElementById('reqQty')?.value || 0);
+  const custo = Number(document.getElementById('reqCostUnit')?.value || 0);
+  const total = Number(document.getElementById('reqPrice')?.value || 0);
+  const frete = Number(document.getElementById('reqFreight')?.value || 0);
+  const desconto = Number(document.getElementById('reqDiscount')?.value || 0);
+  
+  let extras = 0;
+  document.querySelectorAll('#reqCostsList > div').forEach(div => {
+    const val = Number(div.querySelector('.req-cost-val')?.value || 0);
+    if (val > 0) extras += val;
+  });
+  
+  const lucro = total - (custo * qtd) - extras - frete - desconto;
+  const el = document.getElementById('reqLucroReal');
+  if (el) {
+    el.value = money(lucro);
+    el.style.color = lucro >= 0 ? '#27775d' : '#b04545';
+    el.style.background = lucro >= 0 ? '#e6f4ea' : '#fce8e8';
+  }
+}
 
     // Eventos Vendas
-    ['orderQty','orderCostUnit','orderPrice'].forEach(id => {
+['orderQty','orderCostUnit','orderPrice','orderFreight','orderDiscount'].forEach(id => {
       document.getElementById(id)?.addEventListener('input', calcularLucroVenda);
     });
     document.getElementById('orderCostsList')?.addEventListener('input', calcularLucroVenda);
@@ -3443,7 +3469,7 @@ status_envio: shippingStatus,
     document.getElementById('addOrderCostBtn')?.addEventListener('click', () => setTimeout(calcularLucroVenda, 50));
 
     // Eventos Pedidos
-    ['reqQty','reqCostUnit','reqPrice'].forEach(id => {
+['reqQty','reqCostUnit','reqPrice','reqFreight','reqDiscount'].forEach(id => {
       document.getElementById(id)?.addEventListener('input', calcularLucroPedido);
     });
     // Atualiza quando escolhe o produto (o custo é preenchido automaticamente)
@@ -3823,6 +3849,8 @@ window.viewRequest = function(id) {
       document.getElementById('orderPrice').value = v.valor_venda || 0;
       document.getElementById('orderNote').value = v.observacao || '';
       document.getElementById('orderStatus').value = v.status_pagamento || 'OK';
+document.getElementById('orderFreight').value = v.valor_frete || 0;
+document.getElementById('orderDiscount').value = v.valor_desconto || 0;
       
       // AJUSTE: Como agora é um input, apenas preenche o valor
       document.getElementById('orderClient').value = v.cliente || '';
@@ -3897,6 +3925,8 @@ function editarPedidoExistente(r) {
   document.getElementById('reqPrice').value = r.valor_total || 0;
   document.getElementById('reqNote').value = r.observacao || '';
   document.getElementById('reqStatus').value = r.status_pedido || 'Em preparo';
+document.getElementById('reqFreight').value = r.valor_frete || 0;
+document.getElementById('reqDiscount').value = r.valor_desconto || 0;
 document.getElementById('reqTracking').value = r.codigo_rastreio || '';
 document.getElementById('reqShippingStatus').value = r.status_envio || 'Não enviado';
 
@@ -3973,7 +4003,10 @@ document.getElementById('reqShippingStatus').value = r.status_envio || 'Não env
         if (d && v > 0) { extras += v; novosCustos.push({ descricao: d, valor: v }); }
       });
 
-      const lucro = total - (custo * qtdNova) - extras;
+const freteEdit = Number(document.getElementById('orderFreight')?.value || 0);
+const descontoEdit = Number(document.getElementById('orderDiscount')?.value || 0);
+
+const lucro = total - (custo * qtdNova) - extras - freteEdit - descontoEdit;
       const p = productById(id_produto);
       const custosString = novosCustos.length ? JSON.stringify(novosCustos) : '';
 
@@ -3991,7 +4024,9 @@ document.getElementById('reqShippingStatus').value = r.status_envio || 'Não env
             data_venda: vAntiga?.data_venda || new Date().toISOString(),
             cliente, endereco_entrega: endereco, observacao: obs, custo_unitario: custo, lucro,
             status_pagamento: status,
-            custos_extras: custosString
+custos_extras: custosString,
+           valor_frete: freteEdit,
+           valor_desconto: descontoEdit
           }
         });
 
@@ -4082,10 +4117,12 @@ const shippingStatus = document.getElementById('reqShippingStatus').value;
             quantidade: qtd, valor_total: valor, custo_unitario: custo,
             data_pedido: antigo?.data_pedido || new Date().toISOString(),
 status_pedido: status, observacao: obs,
-          codigo_rastreio: tracking, status_envio: shippingStatus
-          }
-        });
-        notify('Pedido atualizado!');
+codigo_rastreio: tracking, status_envio: shippingStatus,
+         valor_frete: Number(document.getElementById('reqFreight')?.value || 0),
+         valor_desconto: Number(document.getElementById('reqDiscount')?.value || 0)
+       }
+     });
+     notify('Pedido atualizado!');
         editingRequestId = null; requestFormPanel.hidden = true;
         await loadAll();
       } catch (err) {
