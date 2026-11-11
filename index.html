@@ -916,6 +916,25 @@
       </div>
     </div>
   </div>
+
+<!-- Modal de Confirmação de Senha -->
+<div id="passwordModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:99999; align-items:center; justify-content:center; padding:16px;">
+  <div style="background:#fff; border-radius:14px; padding:24px; width:360px; max-width:100%; box-shadow:0 10px 30px rgba(0,0,0,0.2);">
+    <h3 style="margin:0 0 8px 0; font-size:16px; color:#202a35;">Confirmação de Segurança</h3>
+    <p style="margin:0 0 16px 0; font-size:12px; color:#738091;">Para excluir este registro, digite a senha do gerente.</p>
+    
+    <div class="field" style="margin-bottom:16px;">
+      <label for="confirmPassword">Senha do Gerente *</label>
+      <input id="confirmPassword" type="password" placeholder="Digite a senha" style="width:100%; padding:10px; border:1px solid #e4e9ee; border-radius:8px;" />
+    </div>
+    
+    <div class="form-actions" style="margin-top:0; display:flex; gap:8px; justify-content:flex-end;">
+      <button class="btn btn-light" type="button" id="cancelPasswordBtn">Cancelar</button>
+      <button class="btn btn-danger" type="button" id="confirmPasswordBtn">Confirmar Exclusão</button>
+    </div>
+  </div>
+</div>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script>
@@ -2154,46 +2173,42 @@ function renderOrders() {
   tbody.querySelectorAll('[data-view-order]').forEach(b => b.onclick = () => viewOrder(b.dataset.viewOrder));
 }
 
-    async function deleteOrder(idVenda) {
-      const venda = sales.find(v => String(v.id) === String(idVenda));
-      if (!venda) return;
+async function deleteOrder(idVenda) {
+  const venda = sales.find(v => String(v.id) === String(idVenda));
+  if (!venda) return;
 
-      if (!confirm(`Excluir esta venda de ${venda.quantidade}x ${venda.sku_variacao}?\n\nO estoque será DEVOLVIDO automaticamente.`)) return;
+  window.pedirSenhaGerente(async () => {
+    startLoad();
+    try {
+      await apiPost({ action: 'delete', sheet: 'Vendas', id: idVenda, vendedor: usuarioLogado?.nome || 'Sistema' });
+      await apiPost({ action: 'deleteWhere', sheet: 'Custos', coluna: 'id_venda', valor: idVenda, vendedor: usuarioLogado?.nome || 'Sistema' });
 
-      startLoad();
-      try {
-        // 1. Apaga a venda
-        await apiPost({ action: 'delete', sheet: 'Vendas', id: idVenda, vendedor: usuarioLogado?.nome || 'Sistema' });
+      const estoqueItem = stock.find(s => String(s.id_produto) === String(venda.id_produto) && String(s.numero) === String(venda.numero));
+      if (estoqueItem) {
+        const qtdDevolvida = Number(estoqueItem.quantidade) + Number(venda.quantidade);
+        const vendidosAtualizados = Math.max(0, Number(estoqueItem.vendidos) - Number(venda.quantidade));
         
-        // 2. Apaga os custos extras vinculados
-        await apiPost({ action: 'deleteWhere', sheet: 'Custos', coluna: 'id_venda', valor: idVenda, vendedor: usuarioLogado?.nome || 'Sistema' });
-
-        // 3. Devolve ao estoque (sempre devolve se achou o item, por segurança)
-        const estoqueItem = stock.find(s => String(s.id_produto) === String(venda.id_produto) && String(s.numero) === String(venda.numero));
-        if (estoqueItem) {
-          const qtdDevolvida = Number(estoqueItem.quantidade) + Number(venda.quantidade);
-          const vendidosAtualizados = Math.max(0, Number(estoqueItem.vendidos) - Number(venda.quantidade));
-          
-          await apiPost({
-            action: 'update', sheet: 'Estoque',
-            data: {
-              ...estoqueItem,
-              vendedor: usuarioLogado?.nome || 'Sistema', // <-- ADICIONE ESTA LINHA
-              quantidade: qtdDevolvida,
-              vendidos: vendidosAtualizados,
-              atualizado_em: new Date().toISOString()
-            }
-          });
-        }
-        
-        notify('Venda, custos e estoque atualizados.');
-        await loadAll();
-      } catch (err) {
-        notify('Erro ao excluir venda: ' + err.message, true);
-      } finally {
-        endLoad();
+        await apiPost({
+          action: 'update', sheet: 'Estoque',
+          data: {
+            ...estoqueItem,
+            vendedor: usuarioLogado?.nome || 'Sistema',
+            quantidade: qtdDevolvida,
+            vendidos: vendidosAtualizados,
+            atualizado_em: new Date().toISOString()
+          }
+        });
       }
+      
+      notify('Venda, custos e estoque atualizados.');
+      await loadAll();
+    } catch (err) {
+      notify('Erro ao excluir venda: ' + err.message, true);
+    } finally {
+      endLoad();
     }
+  });
+}
 
 
     // ====== Despesas (Financeiro) ======
@@ -2359,19 +2374,20 @@ function renderExpenses() {
   tbody.querySelectorAll('[data-edit-expense]').forEach(b => b.onclick = () => editExpense(b.dataset.editExpense));
 }
 
-    async function deleteExpense(id) {
-      if (!confirm('Excluir esta despesa permanentemente?')) return;
-      startLoad();
-      try {
-        await apiPost({ action: 'delete', sheet: 'Despesas', id, vendedor: usuarioLogado?.nome || 'Sistema' });
-        notify('Despesa excluída.');
-        await loadAll();
-      } catch (err) {
-        notify('Erro ao excluir despesa: ' + err.message, true);
-      } finally {
-        endLoad();
-      }
+async function deleteExpense(id) {
+  window.pedirSenhaGerente(async () => {
+    startLoad();
+    try {
+      await apiPost({ action: 'delete', sheet: 'Despesas', id, vendedor: usuarioLogado?.nome || 'Sistema' });
+      notify('Despesa excluída.');
+      await loadAll();
+    } catch (err) {
+      notify('Erro ao excluir despesa: ' + err.message, true);
+    } finally {
+      endLoad();
     }
+  });
+}
 
     // ====== Clientes ======
     const clientFormPanel = document.getElementById('clientFormPanel');
@@ -2578,21 +2594,25 @@ document.getElementById('newClientBtn')?.addEventListener('click', () => {
       }
     });
 
-    window.deleteAddress = async function(idAddr) {
-      if (!confirm('Excluir este endereço?')) return;
-      const id_cliente = detailId;
-      try {
-        startLoad();
-        await apiPost({ action: 'delete', sheet: 'Enderecos_Entrega', id: idAddr, vendedor: usuarioLogado?.nome || 'Sistema' });
-        notify('Endereço excluído.');
-        await loadAll();
-        viewClient(id_cliente);
-      } catch (err) {
-        notify('Erro ao excluir endereço: ' + err.message, true);
-      } finally {
-        endLoad();
-      }
-    };
+window.deleteAddress = async function(idAddr) {
+  const id_cliente = detailId;
+  if (!confirm('Excluir este endereço?')) return;
+  window.pedirSenhaGerente(async () => {
+    try {
+      startLoad();
+      await apiPost({ action: 'delete', sheet: 'Enderecos_Entrega', id: idAddr, vendedor: usuarioLogado?.nome || 'Sistema' });
+      notify('Endereço excluído.');
+      await loadAll();
+      viewClient(id_cliente);
+    } catch (err) {
+      notify('Erro ao excluir endereço: ' + err.message, true);
+    } finally {
+      endLoad();
+    }
+  });
+};
+
+
     // ====================================
 
     window.viewClient = function(id) {
@@ -2690,19 +2710,20 @@ document.getElementById('newClientBtn')?.addEventListener('click', () => {
       detailModal.style.display = 'flex';
     };
 
-    async function deleteClient(id) {
-      if (!confirm('Excluir este cliente permanentemente?')) return;
-      startLoad();
-      try {
-        await apiPost({ action: 'delete', sheet: 'Clientes', id, vendedor: usuarioLogado?.nome || 'Sistema' });
-        notify('Cliente excluído.');
-        await loadAll();
-      } catch (err) {
-        notify('Erro ao excluir cliente: ' + err.message, true);
-      } finally {
-        endLoad();
-      }
+async function deleteClient(id) {
+  window.pedirSenhaGerente(async () => {
+    startLoad();
+    try {
+      await apiPost({ action: 'delete', sheet: 'Clientes', id, vendedor: usuarioLogado?.nome || 'Sistema' });
+      notify('Cliente excluído.');
+      await loadAll();
+    } catch (err) {
+      notify('Erro ao excluir cliente: ' + err.message, true);
+    } finally {
+      endLoad();
     }
+  });
+}
 
     // Preenche a lista de clientes no formulário de venda
     function fillOrderClients() {
@@ -2715,6 +2736,48 @@ document.getElementById('newClientBtn')?.addEventListener('click', () => {
         list.appendChild(opt);
       });
     }
+
+// ====== Confirmação de Senha para Exclusão ======
+let _pendingDeleteCallback = null;
+
+window.pedirSenhaGerente = function(callback) {
+  _pendingDeleteCallback = callback;
+  document.getElementById('confirmPassword').value = '';
+  document.getElementById('passwordModal').style.display = 'flex';
+  setTimeout(() => document.getElementById('confirmPassword').focus(), 100);
+};
+
+document.getElementById('cancelPasswordBtn')?.addEventListener('click', () => {
+  document.getElementById('passwordModal').style.display = 'none';
+  _pendingDeleteCallback = null;
+});
+
+document.getElementById('confirmPasswordBtn')?.addEventListener('click', async () => {
+  const senha = document.getElementById('confirmPassword').value.trim();
+  if (!senha) { notify('Digite a senha.', true); return; }
+
+  // Busca um gerente ativo com essa senha
+  const gerente = users.find(u => 
+    String(u.perfil).toLowerCase() === 'gerente' &&
+    String(u.senha) === senha &&
+    (String(u.ativo).toLowerCase() === 'sim' || String(u.ativo).toLowerCase() === 'true' || String(u.ativo) === '1')
+  );
+
+  if (!gerente) {
+    notify('Senha incorreta. Tente novamente.', true);
+    return;
+  }
+
+  document.getElementById('passwordModal').style.display = 'none';
+  const cb = _pendingDeleteCallback;
+  _pendingDeleteCallback = null;
+  if (typeof cb === 'function') await cb();
+});
+
+// Permite apertar Enter para confirmar
+document.getElementById('confirmPassword')?.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') document.getElementById('confirmPasswordBtn').click();
+});
 
 // ====== Usuários ======
 function renderUsers() {
@@ -2799,18 +2862,21 @@ document.getElementById('saveUserBtn')?.addEventListener('click', async () => {
 });
 
 async function deleteUser(id) {
-  if (!confirm('Excluir este usuário permanentemente?')) return;
-  startLoad();
-  try {
-    await apiPost({ action: 'delete', sheet: 'Usuarios', id, vendedor: usuarioLogado?.nome || 'Sistema' });
-    notify('Usuário excluído.');
-    await loadAll();
-  } catch (err) {
-    notify('Erro ao excluir usuário: ' + err.message, true);
-  } finally {
-    endLoad();
-  }
+  window.pedirSenhaGerente(async () => {
+    startLoad();
+    try {
+      await apiPost({ action: 'delete', sheet: 'Usuarios', id, vendedor: usuarioLogado?.nome || 'Sistema' });
+      notify('Usuário excluído.');
+      await loadAll();
+    } catch (err) {
+      notify('Erro ao excluir usuário: ' + err.message, true);
+    } finally {
+      endLoad();
+    }
+  });
 }
+
+ 
 // ====================================
 
 
@@ -2911,19 +2977,20 @@ document.getElementById('supplierForm')?.addEventListener('submit', async e => {
       supplierFormPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
 
-    async function deleteSupplier(id) {
-      if (!confirm('Excluir este fornecedor permanentemente?')) return;
-      startLoad();
-      try {
-        await apiPost({ action: 'delete', sheet: 'Fornecedores', id, vendedor: usuarioLogado?.nome || 'Sistema' });
-        notify('Fornecedor excluído.');
-        await loadAll();
-      } catch (err) {
-        notify('Erro ao excluir fornecedor: ' + err.message, true);
-      } finally {
-        endLoad();
-      }
+async function deleteSupplier(id) {
+  window.pedirSenhaGerente(async () => {
+    startLoad();
+    try {
+      await apiPost({ action: 'delete', sheet: 'Fornecedores', id, vendedor: usuarioLogado?.nome || 'Sistema' });
+      notify('Fornecedor excluído.');
+      await loadAll();
+    } catch (err) {
+      notify('Erro ao excluir fornecedor: ' + err.message, true);
+    } finally {
+      endLoad();
     }
+  });
+}
 
 function renderSuppliers() {
   const tbody = document.getElementById('suppliersTable');
@@ -3093,6 +3160,8 @@ function renderSuppliers() {
       const custo = Number(document.getElementById('reqCostUnit').value || 0);
       const obs = document.getElementById('reqNote').value;
       const status = document.getElementById('reqStatus').value;
+const tracking = document.getElementById('reqTracking').value.trim();
+const shippingStatus = document.getElementById('reqShippingStatus').value;
       const p = prodObj;
 
       // Captura custos extras
