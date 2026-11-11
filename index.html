@@ -4089,6 +4089,8 @@ function preencherEnderecoPorCep(data, prefixo) {
   }
 }
 
+alert('TESTE: O código novo de CEP está carregado!');
+
 document.addEventListener('input', async function(e) {
   const id = e.target && e.target.id;
   if (id !== 'clientCep' && id !== 'addrCep') return;
