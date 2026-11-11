@@ -821,6 +821,44 @@
             </div>
             <div class="form-actions"><button class="btn btn-light" id="reloadSettingsBtn">Recarregar dados do Sheets</button></div>
           </div>
+<div class="panel" style="margin-top: 20px;">
+          <div class="panel-head">
+            <div><h2>Usuários do Sistema</h2><div class="panel-desc">Gerencie quem tem acesso ao sistema.</div></div>
+            <button class="btn btn-primary" id="newUserBtn">＋ Novo Usuário</button>
+          </div>
+          
+          <!-- Formulário de Usuário -->
+          <div id="userFormPanel" style="display:none; background:#f8fafc; padding:16px; border-radius:10px; border:1px solid var(--line); margin-bottom:16px;">
+            <input type="hidden" id="userEditId" />
+            <div class="form-grid">
+              <div class="field"><label for="userNome">Nome *</label><input id="userNome" required placeholder="Ex.: Bruno" /></div>
+              <div class="field"><label for="userSenha">Senha *</label><input id="userSenha" type="text" required placeholder="Ex.: 1234" /></div>
+              <div class="field"><label for="userPerfil">Perfil</label>
+                <select id="userPerfil">
+                  <option value="vendedor">Vendedor</option>
+                  <option value="gerente">Gerente</option>
+                </select>
+              </div>
+              <div class="field"><label for="userAtivo">Ativo?</label>
+                <select id="userAtivo">
+                  <option value="Sim">Sim</option>
+                  <option value="Não">Não</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-actions" style="margin-top:12px;">
+              <button class="btn btn-primary" id="saveUserBtn" type="button">Salvar Usuário</button>
+              <button class="btn btn-light" id="cancelUserBtn" type="button">Cancelar</button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Nome</th><th>Perfil</th><th>Ativo</th><th>Ações</th></tr></thead>
+              <tbody id="usersTable"><tr><td colspan="4" class="table-empty">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
         </section>
       </div>
     </main>
@@ -894,6 +932,7 @@
     let orderCosts = [];
     let requests = []; 
     let suppliers = []; // <-- NOVO
+let users = [];
     let connected = false;
 
     const money = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -1050,6 +1089,7 @@
         clients = c.filter(x => x && x.id && String(x.id).trim() !== ''); 
         deliveryAddresses = e.filter(x => x && x.id && String(x.id).trim() !== ''); 
         suppliers = f.filter(x => x && x.id && String(x.id).trim() !== ''); // <-- NOVO
+users = (await apiRead('Usuarios')).filter(x => x && x.id && String(x.id).trim() !== '');
         
         setConnection(true);
         renderAll();
@@ -1090,7 +1130,8 @@ renderZeroStockAlert();
       fillOrderClients();      
       renderRequests();       
       fillRequestProducts();  
-      renderSuppliers();      
+      renderSuppliers();
+renderUsers();      
 }
 
 function renderZeroStockAlert() {
@@ -2674,6 +2715,104 @@ document.getElementById('newClientBtn')?.addEventListener('click', () => {
         list.appendChild(opt);
       });
     }
+
+// ====== Usuários ======
+function renderUsers() {
+  const tbody = document.getElementById('usersTable');
+  if (!tbody) return;
+
+  const sorted = [...users].sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
+
+  tbody.innerHTML = sorted.length ? sorted.map(u => `
+    <tr>
+      <td><strong>${esc(u.nome)}</strong></td>
+      <td>${esc(u.perfil || 'vendedor')}</td>
+      <td>${u.ativo === 'Sim' || u.ativo === 'true' || u.ativo === '1' 
+        ? '<span style="color:#27775d;font-weight:700;background:#e6f4ea;padding:4px 8px;border-radius:6px">Ativo</span>' 
+        : '<span style="color:#b04545;font-weight:700;background:#fce8e8;padding:4px 8px;border-radius:6px">Inativo</span>'}</td>
+      <td>
+        <button class="btn btn-light" data-edit-user="${esc(u.id)}" style="padding:6px 9px">Editar</button>
+        <button class="btn btn-danger" data-del-user="${esc(u.id)}" style="padding:6px 9px">Excluir</button>
+      </td>
+    </tr>
+  `).join('') : '<tr><td colspan="4" class="table-empty">Nenhum usuário cadastrado.</td></tr>';
+
+  tbody.querySelectorAll('[data-edit-user]').forEach(b => b.onclick = () => editUser(b.dataset.editUser));
+  tbody.querySelectorAll('[data-del-user]').forEach(b => b.onclick = () => deleteUser(b.dataset.delUser));
+}
+
+document.getElementById('newUserBtn')?.addEventListener('click', () => {
+  document.getElementById('userEditId').value = '';
+  document.getElementById('userNome').value = '';
+  document.getElementById('userSenha').value = '';
+  document.getElementById('userPerfil').value = 'vendedor';
+  document.getElementById('userAtivo').value = 'Sim';
+  document.getElementById('userFormPanel').style.display = 'block';
+  document.getElementById('userNome').focus();
+});
+
+document.getElementById('cancelUserBtn')?.addEventListener('click', () => {
+  document.getElementById('userFormPanel').style.display = 'none';
+});
+
+function editUser(id) {
+  const u = users.find(x => String(x.id) === String(id));
+  if (!u) return;
+  document.getElementById('userEditId').value = u.id;
+  document.getElementById('userNome').value = u.nome || '';
+  document.getElementById('userSenha').value = u.senha || '';
+  document.getElementById('userPerfil').value = u.perfil || 'vendedor';
+  document.getElementById('userAtivo').value = (u.ativo === 'Sim' || u.ativo === 'true' || u.ativo === '1') ? 'Sim' : 'Não';
+  document.getElementById('userFormPanel').style.display = 'block';
+  document.getElementById('userNome').focus();
+}
+
+document.getElementById('saveUserBtn')?.addEventListener('click', async () => {
+  const id = document.getElementById('userEditId').value;
+  const nome = document.getElementById('userNome').value.trim();
+  const senha = document.getElementById('userSenha').value.trim();
+  const perfil = document.getElementById('userPerfil').value;
+  const ativo = document.getElementById('userAtivo').value;
+
+  if (!nome || !senha) { notify('Preencha nome e senha.', true); return; }
+
+  try {
+    startLoad();
+    const payload = { nome, senha, perfil, ativo, vendedor: usuarioLogado?.nome || 'Sistema' };
+    
+    if (id) {
+      payload.id = id;
+      await apiPost({ action: 'update', sheet: 'Usuarios', data: payload });
+      notify('Usuário atualizado!');
+    } else {
+      payload.id = uuid();
+      await apiPost({ action: 'append', sheet: 'Usuarios', data: payload });
+      notify('Usuário cadastrado!');
+    }
+    
+    document.getElementById('userFormPanel').style.display = 'none';
+    await loadAll();
+  } catch (err) {
+    notify('Erro ao salvar usuário: ' + err.message, true);
+    endLoad();
+  }
+});
+
+async function deleteUser(id) {
+  if (!confirm('Excluir este usuário permanentemente?')) return;
+  startLoad();
+  try {
+    await apiPost({ action: 'delete', sheet: 'Usuarios', id, vendedor: usuarioLogado?.nome || 'Sistema' });
+    notify('Usuário excluído.');
+    await loadAll();
+  } catch (err) {
+    notify('Erro ao excluir usuário: ' + err.message, true);
+  } finally {
+    endLoad();
+  }
+}
+// ====================================
+
 
     // ====== Fornecedores ======
     const supplierFormPanel = document.getElementById('supplierFormPanel');
