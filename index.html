@@ -664,8 +664,11 @@
           </div>
 
           <section class="panel">
-            <div class="panel-head"><div><h2>Lista de Fornecedores</h2><div class="panel-desc">Parceiros cadastrados.</div></div></div>
-            <div class="table-wrap">
+<div class="panel-head">
+           <div><h2>Lista de Fornecedores</h2><div class="panel-desc">Parceiros cadastrados.</div></div>
+           <input class="search" id="supplierSearch" placeholder="Buscar por razão, CNPJ, cidade..." style="max-width: 250px;" />
+         </div>
+         <div class="table-wrap">
               <table>
                 <thead><tr><th>Razão Social</th><th>Nome Fantasia</th><th>CNPJ</th><th>Telefone</th><th>Cidade/UF</th><th>Ações</th></tr></thead>
                 <tbody id="suppliersTable"><tr><td colspan="6" class="table-empty">Carregando...</td></tr></tbody>
@@ -2576,49 +2579,59 @@ document.getElementById('newClientBtn')?.addEventListener('click', () => {
       supplierFormPanel.hidden = true;
     });
 
-    document.getElementById('supplierForm')?.addEventListener('submit', async e => {
-      e.preventDefault();
-      const razao = document.getElementById('supplierRazao').value.trim();
-      const cnpj = document.getElementById('supplierCnpj').value.trim();
-      
-      if (!razao || !cnpj) { notify('Preencha Razão Social e CNPJ.', true); return; }
+document.getElementById('supplierForm')?.addEventListener('submit', async e => {
+  e.preventDefault();
+  const razao = document.getElementById('supplierRazao').value.trim();
+  const cnpj = document.getElementById('supplierCnpj').value.trim();
+  
+  if (!razao || !cnpj) { notify('Preencha Razão Social e CNPJ.', true); return; }
 
-      const editId = document.getElementById('supplierEditId').value;
+  const editId = document.getElementById('supplierEditId').value;
 
-      try {
-        startLoad();
-        const payloadData = {
-          razao_social: razao,
-          nome_fantasia: document.getElementById('supplierFantasia').value.trim(),
-          cnpj: cnpj,
-          telefone: document.getElementById('supplierPhone').value.trim(),
-          email: document.getElementById('supplierEmail').value.trim(),
-          cidade: document.getElementById('supplierCity').value.trim(),
-          estado: document.getElementById('supplierState').value.trim(),
-          observacao: document.getElementById('supplierObs').value.trim(),
-          vendedor: usuarioLogado?.nome || 'Sistema'
-        };
+  // Validação de Duplicidade (ignora pontuação e verifica se é edição do mesmo)
+  const cnpjLimpo = cnpj.replace(/\D/g, '');
+  const duplicado = suppliers.find(s => String(s.cnpj).replace(/\D/g, '') === cnpjLimpo && String(s.id) !== String(editId));
+  
+  if (duplicado) {
+    notify(`Atenção: O CNPJ/CPF já está cadastrado para o fornecedor "${duplicado.razao_social}".`, true);
+    return;
+  }
 
-        if (editId) {
-          payloadData.id = editId;
-          await apiPost({ action: 'update', sheet: 'Fornecedores', data: payloadData });
-          notify('Fornecedor atualizado!');
-        } else {
-          payloadData.id = uuid();
-          payloadData.data_cadastro = new Date().toISOString();
-          await apiPost({ action: 'append', sheet: 'Fornecedores', data: payloadData });
-          notify('Fornecedor cadastrado!');
-        }
+  try {
+    startLoad();
+    const payloadData = {
+      razao_social: razao,
+      nome_fantasia: document.getElementById('supplierFantasia').value.trim(),
+      cnpj: cnpj,
+      telefone: document.getElementById('supplierPhone').value.trim(),
+      email: document.getElementById('supplierEmail').value.trim(),
+      cidade: document.getElementById('supplierCity').value.trim(),
+      estado: document.getElementById('supplierState').value.trim(),
+      observacao: document.getElementById('supplierObs').value.trim(),
+      vendedor: usuarioLogado?.nome || 'Sistema'
+    };
 
-        document.getElementById('supplierEditId').value = '';
-        document.getElementById('supplierFormTitle').textContent = 'Cadastrar Fornecedor';
-        supplierFormPanel.hidden = true;
-        await loadAll();
-      } catch (err) {
-        notify('Erro ao salvar fornecedor: ' + err.message, true);
-        endLoad();
-      }
-    });
+    if (editId) {
+      payloadData.id = editId;
+      await apiPost({ action: 'update', sheet: 'Fornecedores', data: payloadData });
+      notify('Fornecedor atualizado!');
+    } else {
+      payloadData.id = uuid();
+      payloadData.data_cadastro = new Date().toISOString();
+      await apiPost({ action: 'append', sheet: 'Fornecedores', data: payloadData });
+      notify('Fornecedor cadastrado!');
+    }
+
+    document.getElementById('supplierEditId').value = '';
+    document.getElementById('supplierFormTitle').textContent = 'Cadastrar Fornecedor';
+    supplierFormPanel.hidden = true;
+    await loadAll();
+  } catch (err) {
+    notify('Erro ao salvar fornecedor: ' + err.message, true);
+    endLoad();
+  }
+});
+
 
     window.editSupplier = function(id) {
       const f = suppliers.find(x => String(x.id) === String(id));
@@ -2654,29 +2667,42 @@ document.getElementById('newClientBtn')?.addEventListener('click', () => {
       }
     }
 
-    function renderSuppliers() {
-      const tbody = document.getElementById('suppliersTable');
-      if (!tbody) return;
-      
-      const sorted = [...suppliers].sort((a, b) => String(a.razao_social).localeCompare(String(b.razao_social)));
-      
-      tbody.innerHTML = sorted.length ? sorted.map(f => `
-        <tr>
-          <td><strong>${esc(f.razao_social)}</strong></td>
-          <td>${esc(f.nome_fantasia || '—')}</td>
-          <td>${esc(f.cnpj || '—')}</td>
-          <td>${esc(f.telefone || '—')}</td>
-          <td>${esc(f.cidade || '—')}${f.estado ? '/' + esc(f.estado) : ''}</td>
-          <td>
-            <button class="btn btn-light" data-edit-supplier="${esc(f.id)}" style="padding:6px 9px">Editar</button>
-            <button class="btn btn-danger" data-del-supplier="${esc(f.id)}" style="padding:6px 9px">Excluir</button>
-          </td>
-        </tr>
-      `).join('') : '<tr><td colspan="6" class="table-empty">Nenhum fornecedor cadastrado.</td></tr>';
+function renderSuppliers() {
+  const tbody = document.getElementById('suppliersTable');
+  if (!tbody) return;
+  
+  const q = (document.getElementById('supplierSearch')?.value || '').trim().toLowerCase();
+  let lista = [...suppliers];
 
-      tbody.querySelectorAll('[data-edit-supplier]').forEach(b => b.onclick = () => editSupplier(b.dataset.editSupplier));
-      tbody.querySelectorAll('[data-del-supplier]').forEach(b => b.onclick = () => deleteSupplier(b.dataset.delSupplier));
-    }
+  if (q) {
+    lista = lista.filter(f => 
+      String(f.razao_social || '').toLowerCase().includes(q) ||
+      String(f.nome_fantasia || '').toLowerCase().includes(q) ||
+      String(f.cnpj || '').replace(/\D/g, '').includes(q.replace(/\D/g, '')) ||
+      String(f.cidade || '').toLowerCase().includes(q)
+    );
+  }
+  
+  const sorted = lista.sort((a, b) => String(a.razao_social).localeCompare(String(b.razao_social)));
+  
+  tbody.innerHTML = sorted.length ? sorted.map(f => `
+    <tr>
+      <td><strong>${esc(f.razao_social)}</strong></td>
+      <td>${esc(f.nome_fantasia || '—')}</td>
+      <td>${esc(f.cnpj || '—')}</td>
+      <td>${esc(f.telefone || '—')}</td>
+      <td>${esc(f.cidade || '—')}${f.estado ? '/' + esc(f.estado) : ''}</td>
+      <td>
+        <button class="btn btn-light" data-edit-supplier="${esc(f.id)}" style="padding:6px 9px">Editar</button>
+        <button class="btn btn-danger" data-del-supplier="${esc(f.id)}" style="padding:6px 9px">Excluir</button>
+      </td>
+    </tr>
+  `).join('') : `<tr><td colspan="6" class="table-empty">${q ? 'Nenhum fornecedor encontrado com este termo.' : 'Nenhum fornecedor cadastrado.'}</td></tr>`;
+
+  tbody.querySelectorAll('[data-edit-supplier]').forEach(b => b.onclick = () => editSupplier(b.dataset.editSupplier));
+  tbody.querySelectorAll('[data-del-supplier]').forEach(b => b.onclick = () => deleteSupplier(b.dataset.delSupplier));
+}
+
     // ====================================
 
     // ====== Lógica de Pedidos ======
@@ -3284,37 +3310,7 @@ window.viewOrder = function(id) {
   detailModal.style.display = 'flex';
 };
 
-window.viewRequest = function(id) {
-  const r = requests.find(x => String(x.id) === String(id));
-  if (!r) return;
 
-  detailEditBtn.style.display = 'inline-flex';
-  detailDeleteBtn.style.display = 'inline-flex';
-  
-  document.getElementById('detailDuplicateBtn').style.display = 'none';
-  document.getElementById('detailPrintBtn').style.display = 'none';
-  document.getElementById('detailWhatsBtn').style.display = 'none';
-
-  detailKind = 'request'; detailId = id; detailTitle.textContent = 'Detalhes do Pedido';
-  const p = productById(r.id_produto);
-  const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto excluído';
-  const custo = Number(r.custo_unitario || 0);
-  const lucro = Number(r.valor_total || 0) - (custo * Number(r.quantidade || 0));
-  const rows = [
-    ['ID', `<span style="font-family:monospace; user-select:all;">${esc(r.id)}</span>`],
-    ['Data', r.data_pedido ? new Date(r.data_pedido).toLocaleString('pt-BR') : '—'],
-    ['Cliente', esc(r.cliente || 'Consumidor Final')],
-    ['Produto', nomeProd], ['SKU', esc(r.sku_variacao || '—')],
-    ['Numeração', esc(r.numero || '—')], ['Quantidade', r.quantidade || 0],
-    ['Custo Unitário', money(custo)],
-    ['Valor Total', `<span style="color:#27775d">${money(r.valor_total)}</span>`],
-    ['Lucro Real', `<span style="color:#27775d">${money(lucro)}</span>`],
-    ['Status', esc(r.status_pedido || '—')],
-    ['Observação', esc(r.observacao || '—')],
-  ];
-  detailBody.innerHTML = `<table style="width:100%; border-collapse:collapse;">${renderDetailRows(rows)}</table>`;
-  detailModal.style.display = 'flex';
-};
 
 window.viewRequest = function(id) {
   const r = requests.find(x => String(x.id) === String(id));
@@ -3513,40 +3509,69 @@ window.viewRequest = function(id) {
     }
 
 
-    function editarPedidoExistente(r) {
-      editingRequestId = r.id;
-      showSection('orders');
-      requestFormPanel.hidden = false;
-      const selProd = document.getElementById('reqProduct');
-      selProd.value = r.id_produto;
-      selProd.dispatchEvent(new Event('change', { bubbles: true }));
-      document.getElementById('reqNumber').value = r.numero || '';
-      document.getElementById('reqQty').value = r.quantidade || 1;
-      document.getElementById('reqCostUnit').value = r.custo_unitario || 0;
-      document.getElementById('reqPrice').value = r.valor_total || 0;
-      document.getElementById('reqNote').value = r.observacao || '';
-      document.getElementById('reqStatus').value = r.status_pedido || 'Em preparo';
-      
-      // AJUSTE: Como agora é um input, apenas preenche o valor
-      document.getElementById('reqClient').value = r.cliente || '';
+function editarPedidoExistente(r) {
+  editingRequestId = r.id;
+  showSection('orders');
+  requestFormPanel.hidden = false;
+  
+  // Preenche os dados básicos
+  document.getElementById('reqClient').value = r.cliente || '';
+  document.getElementById('reqProduct').value = r.id_produto;
+  document.getElementById('reqProduct').dispatchEvent(new Event('change', { bubbles: true }));
+  
+  document.getElementById('reqNumber').value = r.numero || '';
+  document.getElementById('reqQty').value = r.quantidade || 1;
+  document.getElementById('reqCostUnit').value = r.custo_unitario || 0;
+  document.getElementById('reqPrice').value = r.valor_total || 0;
+  document.getElementById('reqNote').value = r.observacao || '';
+  document.getElementById('reqStatus').value = r.status_pedido || 'Em preparo';
 
-      calcularLucroPedido();
-      setTimeout(() => document.getElementById('requestFormPanel').scrollIntoView({ behavior:'smooth', block:'start' }), 50);
+  // Lê e recria os custos extras
+  let custosArr = [];
+  if (r.custos_extras) {
+    try { custosArr = JSON.parse(r.custos_extras); } catch (e) {
+      custosArr = String(r.custos_extras).split('|').map(s => {
+        const [d, val] = s.split(':');
+        return { descricao: d, valor: Number(val) };
+      }).filter(c => c.descricao);
     }
+  }
 
-    detailEditBtn?.addEventListener('click', () => {
-      const k = detailKind, id = detailId;
-      fecharDetail();
-      if (k === 'client') { editClient(id); return; }
-      if (k === 'order') {
-        const v = sales.find(x => String(x.id) === String(id));
-        if (v) editarVendaExistente(v);
-      }
-      if (k === 'request') {
-        const r = requests.find(x => String(x.id) === String(id));
-        if (r) editarPedidoExistente(r);
-      }
-    });
+  const lista = document.getElementById('reqCostsList');
+  lista.innerHTML = '';
+  custosArr.forEach(c => {
+    const div = document.createElement('div');
+    div.style.display = 'flex'; div.style.gap = '10px'; div.style.marginBottom = '10px';
+    
+    const inputDesc = document.createElement('input');
+    inputDesc.type = 'text';
+    inputDesc.className = 'req-cost-desc';
+    inputDesc.value = c.descricao || '';
+    inputDesc.style.cssText = 'flex:2; padding:8px; border:1px solid var(--line); border-radius:6px;';
+
+    const inputVal = document.createElement('input');
+    inputVal.type = 'number';
+    inputVal.className = 'req-cost-val';
+    inputVal.value = Number(c.valor || 0);
+    inputVal.min = '0'; inputVal.step = '0.01';
+    inputVal.style.cssText = 'flex:1; padding:8px; border:1px solid var(--line); border-radius:6px;';
+
+    const btnDel = document.createElement('button');
+    btnDel.type = 'button';
+    btnDel.className = 'btn btn-danger';
+    btnDel.textContent = 'X';
+    btnDel.style.cssText = 'padding:8px;';
+    btnDel.onclick = () => { div.remove(); calcularLucroPedido(); };
+
+    div.appendChild(inputDesc);
+    div.appendChild(inputVal);
+    div.appendChild(btnDel);
+    lista.appendChild(div);
+  });
+
+  calcularLucroPedido();
+  setTimeout(() => document.getElementById('requestFormPanel').scrollIntoView({ behavior:'smooth', block:'start' }), 50);
+}
 
     // ===== Submit em modo EDIÇÃO — Venda =====
     document.getElementById('orderForm').addEventListener('submit', async e => {
@@ -4187,6 +4212,7 @@ document.querySelectorAll('[data-section="finance"]').forEach(btn => {
     });
 
     document.getElementById('clientSearch')?.addEventListener('input', renderClients);
+document.getElementById('supplierSearch')?.addEventListener('input', renderSuppliers);
 
 // ====== BUSCA DE CEP (delegação de evento — funciona em qualquer painel) ======
 async function buscarViaCep(cepValue) {
@@ -4251,12 +4277,7 @@ document.addEventListener('blur', async function(e) {
   }
 }, true); 
 
-   document.addEventListener('DOMContentLoaded', () => {
-  // Função única de busca de CEP via ViaCEP
-
-  // Roda uma vez no carregamento
-  window.rebindCep();
-
+document.addEventListener('DOMContentLoaded', () => {
   const tokenSalvo = sessionStorage.getItem('caminhara_token');
   const userSalvo = sessionStorage.getItem('caminhara_user');
   
