@@ -4093,31 +4093,38 @@ document.addEventListener('blur', async function(e) {
   const id = e.target && e.target.id;
   if (id !== 'clientCep' && id !== 'addrCep') return;
 
-  let v = e.target.value.replace(/\D/g, '');
-  if (v.length > 5) v = v.replace(/^(\d{5})(\d)/, '$1-$2');
-  e.target.value = v.slice(0, 9);
+  // Pega só os números
+  const numeros = e.target.value.replace(/\D/g, '');
+  
+  // Formata visualmente de volta (00000-000)
+  if (numeros.length > 5) {
+    e.target.value = numeros.replace(/^(\d{5})(\d)/, '$1-$2');
+  } else {
+    e.target.value = numeros;
+  }
 
-  if (v.length !== 8) {
-    if (v.length > 0) notify('CEP incompleto. Digite os 8 números.', true);
+  // Verifica se tem 8 números
+  if (numeros.length !== 8) {
+    if (numeros.length > 0) notify('CEP inválido. Digite os 8 números.', true);
     return;
   }
 
   const prefixo = id === 'clientCep' ? 'client' : 'addr';
   try {
     startLoad();
-    const data = await buscarViaCep(v);
+    const data = await buscarViaCep(numeros);
     if (data) {
       preencherEnderecoPorCep(data, prefixo);
       notify('Endereço preenchido automaticamente!');
     } else {
-      notify('CEP não encontrado.', true);
+      notify('CEP não encontrado na base dos Correios.', true);
     }
   } catch (err) {
-    notify('Erro ao buscar CEP.', true);
+    notify('Erro de conexão ao buscar CEP.', true);
   } finally {
     endLoad();
   }
-}, true); // O 'true' no final é muito importante para capturar o evento antes de outros
+}, true); 
 
    document.addEventListener('DOMContentLoaded', () => {
   // Função única de busca de CEP via ViaCEP
