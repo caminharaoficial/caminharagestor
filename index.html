@@ -564,16 +564,29 @@
             </form>
           </div>
 
-          <!-- Histórico de Despesas -->
-          <section class="panel">
-            <div class="panel-head"><div><h2>Histórico de Despesas</h2><div class="panel-desc">Gastos registrados.</div></div></div>
-            <div class="table-wrap">
-              <table>
-                <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Valor</th><th>Status</th><th>Ações</th></tr></thead>
-                <tbody id="expensesTable"><tr><td colspan="6" class="table-empty">Carregando...</td></tr></tbody>
-              </table>
-            </div>
-          </section>
+       <!-- Histórico de Despesas -->
+       <section class="panel">
+         <div class="panel-head">
+           <div><h2>Histórico de Despesas</h2><div class="panel-desc">Gastos registrados (por padrão, últimos 7 dias).</div></div>
+         </div>
+         
+         <div class="toolbar" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom: 16px;">
+           <input type="date" id="expFilterStart" class="search" style="flex:1; max-width:150px;" title="Data inicial" />
+           <input type="date" id="expFilterEnd" class="search" style="flex:1; max-width:150px;" title="Data final" />
+           <select id="expFilterUser" class="search" style="flex:1; min-width:150px; max-width:200px;">
+             <option value="">Todos os Vendedores</option>
+           </select>
+           <button class="btn btn-primary" id="expFilterBtn">Filtrar</button>
+           <button class="btn btn-light" id="expClearFilterBtn">Limpar Filtros</button>
+         </div>
+
+         <div class="table-wrap">
+           <table>
+             <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Valor</th><th>Status</th><th>Ações</th></tr></thead>
+             <tbody id="expensesTable"><tr><td colspan="6" class="table-empty">Carregando...</td></tr></tbody>
+           </table>
+         </div>
+       </section>
         </section>
 
         <section class="section" id="contacts">
@@ -2023,79 +2036,165 @@ tbody.querySelectorAll('[data-view-order]').forEach(b => b.onclick = () => viewO
     // ====== Despesas (Financeiro) ======
     const expenseFormPanel = document.getElementById('expenseFormPanel');
 
+// Função para abrir o formulário no modo de edição
+window.editExpense = function(id) {
+  const d = expenses.find(x => String(x.id) === String(id));
+  if (!d) return;
+
+  document.getElementById('expenseDesc').value = d.descricao || '';
+  document.getElementById('expenseCategory').value = d.categoria || '';
+  document.getElementById('expenseValue').value = d.valor || '';
+  document.getElementById('expenseDate').value = d.data_vencimento || '';
+  document.getElementById('expenseStatus').value = d.status_pagamento || 'Pago';
+  
+  // Guarda o ID num input hidden para sabermos que é edição
+  let hiddenId = document.getElementById('expenseEditId');
+  if (!hiddenId) {
+    hiddenId = document.createElement('input');
+    hiddenId.type = 'hidden';
+    hiddenId.id = 'expenseEditId';
+    document.getElementById('expenseForm').appendChild(hiddenId);
+  }
+  hiddenId.value = d.id;
+
+  // Muda o botão de salvar para "Atualizar"
+  const submitBtn = document.querySelector('#expenseForm button[type="submit"]');
+  if (submitBtn) submitBtn.textContent = 'Atualizar Despesa';
+
+  expenseFormPanel.hidden = false;
+  expenseFormPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
     // Abrir/Fechar formulário
-    document.getElementById('newExpenseBtn')?.addEventListener('click', () => {
-      document.getElementById('expenseForm').reset();
-      expenseFormPanel.hidden = false;
-      expenseFormPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
+document.getElementById('newExpenseBtn')?.addEventListener('click', () => {
+  document.getElementById('expenseForm').reset();
+  const hiddenId = document.getElementById('expenseEditId');
+  if (hiddenId) hiddenId.value = '';
+  const submitBtn = document.querySelector('#expenseForm button[type="submit"]');
+  if (submitBtn) submitBtn.textContent = 'Salvar Despesa';
+  
+  expenseFormPanel.hidden = false;
+  expenseFormPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
 
     document.getElementById('cancelExpenseBtn')?.addEventListener('click', () => { 
       expenseFormPanel.hidden = true; 
     });
 
     // SUBMIT DA DESPESA
-    document.getElementById('expenseForm')?.addEventListener('submit', async e => {
-      e.preventDefault();
-      const desc = document.getElementById('expenseDesc').value.trim();
-      const cat = document.getElementById('expenseCategory').value;
-      const valor = Number(document.getElementById('expenseValue').value);
-      const dataVenc = document.getElementById('expenseDate').value || new Date().toISOString().split('T')[0];
-      const status = document.getElementById('expenseStatus').value;
+document.getElementById('expenseForm')?.addEventListener('submit', async e => {
+  e.preventDefault();
+  const desc = document.getElementById('expenseDesc').value.trim();
+  const cat = document.getElementById('expenseCategory').value;
+  const valor = Number(document.getElementById('expenseValue').value);
+  const dataVenc = document.getElementById('expenseDate').value || new Date().toISOString().split('T')[0];
+  const status = document.getElementById('expenseStatus').value;
+  const editId = document.getElementById('expenseEditId')?.value;
 
-      if (!desc || !cat || valor <= 0) { 
-        notify('Preencha descrição, categoria e valor.', true); 
-        return; 
-      }
+  if (!desc || !cat || valor <= 0) { 
+    notify('Preencha descrição, categoria e valor.', true); 
+    return; 
+  }
 
-      try {
-        startLoad();
-        await apiPost({
-          action: 'append', sheet: 'Despesas',
-          data: {
-            id: uuid(),
-vendedor: usuarioLogado?.nome || 'Sistema',
-            descricao: desc,
-            categoria: cat,
-            valor: valor,
-            data_vencimento: dataVenc,
-            status_pagamento: status
-          }
-        });
-        notify('Despesa registrada!');
-        expenseFormPanel.hidden = true;
-        await loadAll(); 
-      } catch (err) {
-        notify('Erro ao registrar despesa: ' + err.message, true);
-        endLoad();
-      }
-    });
+  try {
+    startLoad();
+    const payload = {
+      descricao: desc,
+      categoria: cat,
+      valor: valor,
+      data_vencimento: dataVenc,
+      status_pagamento: status,
+      vendedor: usuarioLogado?.nome || 'Sistema'
+    };
+
+    if (editId) {
+      payload.id = editId;
+      await apiPost({ action: 'update', sheet: 'Despesas', data: payload });
+      notify('Despesa atualizada com sucesso!');
+    } else {
+      payload.id = uuid();
+      await apiPost({ action: 'append', sheet: 'Despesas', data: payload });
+      notify('Despesa registrada!');
+    }
+
+    // Limpa o formulário
+    document.getElementById('expenseForm').reset();
+    const hiddenId = document.getElementById('expenseEditId');
+    if (hiddenId) hiddenId.value = '';
+    const submitBtn = document.querySelector('#expenseForm button[type="submit"]');
+    if (submitBtn) submitBtn.textContent = 'Salvar Despesa';
+
+    expenseFormPanel.hidden = true;
+    await loadAll(); 
+  } catch (err) {
+    notify('Erro ao salvar despesa: ' + err.message, true);
+    endLoad();
+  }
+});
 
     // Renderiza a tabela de despesas
-    function renderExpenses() {
-      const tbody = document.getElementById('expensesTable');
-      if (!tbody) return;
-      
-      const sorted = [...expenses].sort((a, b) => new Date(b.data_vencimento) - new Date(a.data_vencimento));
-      
-      tbody.innerHTML = sorted.length ? sorted.map(d => {
-        const dataStr = d.data_vencimento ? new Date(d.data_vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
-        const statusBadge = d.status_pagamento === 'Pago'
-          ? '<span style="color:#27775d;font-weight:700;background:#e6f4ea;padding:4px 8px;border-radius:6px">Pago</span>'
-          : '<span style="color:#b04545;font-weight:700;background:#fce8e8;padding:4px 8px;border-radius:6px">Pendente</span>';
-        
-        return `<tr>
-          <td>${dataStr}</td>
-          <td><strong>${esc(d.descricao)}</strong></td>
-          <td>${esc(d.categoria)}</td>
-          <td><strong style="color:#b04545">${money(d.valor)}</strong></td>
-          <td>${statusBadge}</td>
-          <td><button class="btn btn-danger" data-del-expense="${esc(d.id)}" style="padding:6px 9px">Excluir</button></td>
-        </tr>`;
-      }).join('') : '<tr><td colspan="6" class="table-empty">Nenhuma despesa registrada.</td></tr>';
+function renderExpenses() {
+  const tbody = document.getElementById('expensesTable');
+  if (!tbody) return;
 
-      tbody.querySelectorAll('[data-del-expense]').forEach(b => b.onclick = () => deleteExpense(b.dataset.delExpense));
-    }
+  // 1. Pega os valores dos filtros (se existirem)
+  const startInput = document.getElementById('expFilterStart')?.value;
+  const endInput = document.getElementById('expFilterEnd')?.value;
+  const userFilter = document.getElementById('expFilterUser')?.value || '';
+
+  // 2. Define o padrão: se não houver data de início, mostra os últimos 7 dias
+  let startDate, endDate;
+  if (!startInput) {
+    startDate = new Date();
+    startDate.setDate(startDate.getDate() - 7);
+    startDate.setHours(0, 0, 0, 0);
+  } else {
+    startDate = new Date(startInput + 'T00:00:00');
+  }
+
+  if (!endInput) {
+    endDate = new Date();
+    endDate.setHours(23, 59, 59, 999);
+  } else {
+    endDate = new Date(endInput + 'T23:59:59');
+  }
+
+  // 3. Filtra a lista
+  let lista = expenses.filter(d => {
+    if (!d.data_vencimento) return false;
+    const dataDespesa = new Date(d.data_vencimento + 'T12:00:00');
+    const passaData = dataDespesa >= startDate && dataDespesa <= endDate;
+    const passaUser = userFilter ? String(d.vendedor).trim() === userFilter : true;
+    return passaData && passaUser;
+  });
+
+  // 4. Ordena da mais recente para a mais antiga
+  const sorted = lista.sort((a, b) => new Date(b.data_vencimento) - new Date(a.data_vencimento));
+
+  // 5. Renderiza na tela
+  tbody.innerHTML = sorted.length ? sorted.map(d => {
+    const dataStr = d.data_vencimento ? new Date(d.data_vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
+    const statusBadge = d.status_pagamento === 'Pago'
+      ? '<span style="color:#27775d;font-weight:700;background:#e6f4ea;padding:4px 8px;border-radius:6px">Pago</span>'
+      : '<span style="color:#b04545;font-weight:700;background:#fce8e8;padding:4px 8px;border-radius:6px">Pendente</span>';
+    
+    return `<tr>
+      <td>${dataStr}</td>
+      <td><strong>${esc(d.descricao)}</strong></td>
+      <td>${esc(d.categoria)}</td>
+      <td><strong style="color:#b04545">${money(d.valor)}</strong></td>
+      <td>${statusBadge}</td>
+      <td>
+        <button class="btn btn-light" data-edit-expense="${esc(d.id)}" style="padding:6px 9px">Editar</button>
+        <button class="btn btn-danger" data-del-expense="${esc(d.id)}" style="padding:6px 9px">Excluir</button>
+      </td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="6" class="table-empty">Nenhuma despesa encontrada neste período.</td></tr>';
+
+  // 6. Adiciona os eventos de clique
+  tbody.querySelectorAll('[data-del-expense]').forEach(b => b.onclick = () => deleteExpense(b.dataset.delExpense));
+  tbody.querySelectorAll('[data-edit-expense]').forEach(b => b.onclick = () => editExpense(b.dataset.editExpense));
+}
 
     async function deleteExpense(id) {
       if (!confirm('Excluir esta despesa permanentemente?')) return;
@@ -4011,6 +4110,32 @@ document.getElementById('topUserName').textContent = res.nome;
     }
 
     document.getElementById('actFilterBtn')?.addEventListener('click', carregarAtividades);
+// ====== Filtros de Despesas ======
+async function fillExpenseUsers() {
+  try {
+    const users = await apiRead('Usuarios');
+    const sel = document.getElementById('expFilterUser');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">Todos os Vendedores</option>' + 
+      users.filter(u => u.nome).map(u => `<option value="${esc(u.nome)}">${esc(u.nome)}</option>`).join('');
+  } catch(e) {}
+}
+
+document.getElementById('expFilterBtn')?.addEventListener('click', () => renderExpenses());
+
+document.getElementById('expClearFilterBtn')?.addEventListener('click', () => {
+  document.getElementById('expFilterStart').value = '';
+  document.getElementById('expFilterEnd').value = '';
+  document.getElementById('expFilterUser').value = '';
+  renderExpenses();
+});
+
+// Quando clicar no menu "Financeiro", carrega a lista de usuários no filtro
+document.querySelectorAll('[data-section="finance"]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    fillExpenseUsers();
+  });
+});
     
     // Quando clicar no menu "Atividades", limpa e carrega
     document.querySelectorAll('[data-section="activities"]').forEach(btn => {
