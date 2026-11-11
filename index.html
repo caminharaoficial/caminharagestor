@@ -4089,10 +4089,12 @@ function preencherEnderecoPorCep(data, prefixo) {
   }
 }
 
-alert('TESTE: O código novo de CEP está carregado!');
 
 document.addEventListener('input', async function(e) {
-  const id = e.target && e.target.id;
+const id = e.target && e.target.id;
+console.log('1. Evento disparado. ID do campo:', id);
+if (id !== 'clientCep' && id !== 'addrCep') return;
+console.log('2. Passou no filtro do ID. Iniciando busca para o CEP:', e.target.value);
   if (id !== 'clientCep' && id !== 'addrCep') return;
   console.log('[CEP] input disparado no campo:', id, 'valor:', e.target.value);
 
@@ -4106,8 +4108,10 @@ document.addEventListener('input', async function(e) {
   const prefixo = id === 'clientCep' ? 'client' : 'addr';
   try {
     startLoad();
-    const data = await buscarViaCep(v);
-    if (data) {
+const data = await buscarViaCep(v);
+if (data) {
+  console.log('3. Dados recebidos do ViaCEP com sucesso:', data);
+  preencherEnderecoPorCep(data, prefixo);
       preencherEnderecoPorCep(data, prefixo);
       notify('Endereço preenchido automaticamente!');
     } else {
