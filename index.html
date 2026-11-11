@@ -423,9 +423,15 @@
           </div>
 
           <section class="panel">
-            <div class="panel-head">
-              <div><h2>Histórico de Vendas</h2><div class="panel-desc">Últimas transações registradas.</div></div>
-              <input class="search" id="orderClientFilter" placeholder="Filtrar por cliente..." style="max-width:250px;" />
+<div class="panel-head" style="flex-wrap: wrap;">
+              <div><h2>Histórico de Vendas</h2><div class="panel-desc">Exibindo por padrão os últimos 30 dias.</div></div>
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <input type="date" id="orderFilterStart" class="search" style="max-width:130px;" title="Data inicial" />
+                <input type="date" id="orderFilterEnd" class="search" style="max-width:130px;" title="Data final" />
+                <input class="search" id="orderClientFilter" placeholder="Filtrar por cliente..." style="max-width:200px;" />
+                <button class="btn btn-primary" id="orderFilterBtn" style="padding:8px 12px;">Filtrar</button>
+                <button class="btn btn-light" id="orderClearFilterBtn" style="padding:8px 12px;">Limpar</button>
+              </div>
             </div>
             <div class="table-wrap">
               <table>
@@ -752,8 +758,28 @@
             </div>
           </section>
 
-          <section class="panel">
-            <div class="panel-head"><div><h2>Ranking de Clientes</h2><div class="panel-desc">Os clientes que mais compraram no período.</div></div></div>
+       <section class="panel" style="margin-bottom: 20px;">
+         <div class="panel-head"><div><h2>Ranking de Vendedores</h2><div class="panel-desc">Desempenho da equipe no período selecionado.</div></div></div>
+         <div class="table-wrap">
+           <table>
+             <thead><tr><th>Vendedor</th><th>Qtd. Vendas</th><th>Total Vendido</th><th>Lucro Gerado</th></tr></thead>
+             <tbody id="reportSellerTable"><tr><td colspan="4" class="table-empty">Gere um relatório para ver os dados.</td></tr></tbody>
+           </table>
+         </div>
+       </section>
+
+<section class="panel" style="margin-bottom: 20px;">
+         <div class="panel-head"><div><h2>Ranking de Produtos</h2><div class="panel-desc">Os produtos com maior saída no período selecionado.</div></div></div>
+         <div class="table-wrap">
+           <table>
+             <thead><tr><th>Produto</th><th>Qtd. Vendida</th><th>Total Vendido</th><th>Lucro Gerado</th></tr></thead>
+             <tbody id="reportProductTable"><tr><td colspan="4" class="table-empty">Gere um relatório para ver os dados.</td></tr></tbody>
+           </table>
+         </div>
+       </section>
+
+       <section class="panel">
+         <div class="panel-head"><div><h2>Ranking de Clientes</h2><div class="panel-desc">Os clientes que mais compraram no período.</div></div></div>
             <div class="table-wrap">
               <table>
                 <thead><tr><th>Cliente</th><th>Qtd. Compras</th><th>Total Gasto</th><th>Ticket Médio</th></tr></thead>
@@ -1581,6 +1607,13 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
     document.getElementById('orderClient')?.addEventListener('change', atualizarEnderecoVenda);
 
     document.getElementById('orderClientFilter')?.addEventListener('input', renderOrders);
+document.getElementById('orderFilterBtn')?.addEventListener('click', renderOrders);
+document.getElementById('orderClearFilterBtn')?.addEventListener('click', () => {
+  document.getElementById('orderFilterStart').value = '';
+  document.getElementById('orderFilterEnd').value = '';
+  document.getElementById('orderClientFilter').value = '';
+  renderOrders();
+});
     document.getElementById('productSearch').addEventListener('input', renderProducts);
     document.getElementById('stockSearch')?.addEventListener('input', renderStock); // <-- ADICIONE
 
@@ -1935,64 +1968,85 @@ vendedor: usuarioLogado?.nome || 'Sistema',
     });
 
     // Renderiza a tabela de histórico de vendas
-    function renderOrders() {
-      const tbody = document.getElementById('ordersTable');
-      if (!tbody) return;
-      
-      const filtroCliente = (document.getElementById('orderClientFilter')?.value || '').trim().toLowerCase();
-      
-      let lista = [...sales];
-      if (filtroCliente) {
-        lista = lista.filter(v => String(v.cliente || '').toLowerCase().includes(filtroCliente));
-      }
-      
-      const sorted = lista.sort((a, b) => new Date(b.data_venda) - new Date(a.data_venda));
-      
-      tbody.innerHTML = sorted.length ? sorted.map(v => {
-        const p = productById(v.id_produto);
-        const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto Excluído';
-        const dataStr = v.data_venda ? new Date(v.data_venda).toLocaleString('pt-BR') : '—';
-        const custo = Number(v.custo_unitario || 0);
-        const lucro = Number(v.lucro || 0);
-        
-        // Busca os custos extras desta venda
-let custosArr = [];
-if (v.custos_extras) {
-  try { custosArr = JSON.parse(v.custos_extras); } catch (e) { custosArr = []; }
-}
-if (!custosArr.length && typeof v.custos_extras === 'string' && v.custos_extras.includes(':')) {
-  custosArr = String(v.custos_extras).split('|').map(s => {
-    const [d, val] = s.split(':');
-    return { descricao: d, valor: Number(val) };
-  }).filter(c => c.descricao);
-}
-const txtCustos = custosArr.map(c => `${esc(c.descricao)}: ${money(c.valor)}`).join('<br>') || '—';
-        
-        const status = v.status_pagamento === 'OK' 
-          ? '<span style="color:#27775d;font-weight:700;background:#e6f4ea;padding:4px 8px;border-radius:6px">OK</span>' 
-          : '<span style="color:#b04545;font-weight:700;background:#fce8e8;padding:4px 8px;border-radius:6px">Pendente</span>';
-        
-        return `<tr>
-          <td><small title="${esc(v.id)}" style="font-family: monospace; color:#738091; cursor:pointer;" onclick="navigator.clipboard.writeText('${esc(v.id)}'); notify('ID copiado!')">${esc(String(v.id).slice(0,8))}</small></td>
-          <td>${dataStr}</td>
-          <td><strong>${nomeProd}</strong><br><small style="color:#738091">${esc(v.sku_variacao)}</small></td>
-          <td>${esc(v.numero)}</td>
-          <td>${v.quantidade}</td>
-          <td>${money(custo)}</td>
-          <td><small>${txtCustos}</small></td>
-          <td><strong>${money(v.valor_venda)}</strong></td>
-          <td style="color:#27775d;font-weight:700">${money(lucro)}</td>
-          <td>${status}</td>
-<td>
-  <button class="btn btn-light" data-view-order="${esc(v.id)}" style="padding:6px 9px">Ver</button>
-  <button class="btn btn-danger" data-del-order="${esc(v.id)}" style="padding:6px 9px">Excluir</button>
-</td>
-        </tr>`;
-      }).join('') : '<tr><td colspan="11" class="table-empty">Nenhuma venda registrada ainda.</td></tr>';
+function renderOrders() {
+  const tbody = document.getElementById('ordersTable');
+  if (!tbody) return;
+  
+  const filtroCliente = (document.getElementById('orderClientFilter')?.value || '').trim().toLowerCase();
+  const startInput = document.getElementById('orderFilterStart')?.value;
+  const endInput = document.getElementById('orderFilterEnd')?.value;
 
-      tbody.querySelectorAll('[data-del-order]').forEach(b => b.onclick = () => deleteOrder(b.dataset.delOrder));
-tbody.querySelectorAll('[data-view-order]').forEach(b => b.onclick = () => viewOrder(b.dataset.viewOrder));
+  // Regra padrão: se não houver data de início, mostra os últimos 30 dias
+  let startDate, endDate;
+  if (!startInput) {
+    startDate = new Date();
+    startDate.setDate(startDate.getDate() - 30);
+    startDate.setHours(0, 0, 0, 0);
+  } else {
+    startDate = new Date(startInput + 'T00:00:00');
+  }
+
+  if (!endInput) {
+    endDate = new Date();
+    endDate.setHours(23, 59, 59, 999);
+  } else {
+    endDate = new Date(endInput + 'T23:59:59');
+  }
+  
+  let lista = sales.filter(v => {
+    if (!v.data_venda) return false;
+    const dataVenda = new Date(v.data_venda);
+    const passaData = dataVenda >= startDate && dataVenda <= endDate;
+    const passaCliente = filtroCliente ? String(v.cliente || '').toLowerCase().includes(filtroCliente) : true;
+    return passaData && passaCliente;
+  });
+  
+  const sorted = lista.sort((a, b) => new Date(b.data_venda) - new Date(a.data_venda));
+  
+  tbody.innerHTML = sorted.length ? sorted.map(v => {
+    const p = productById(v.id_produto);
+    const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto Excluído';
+    const dataStr = v.data_venda ? new Date(v.data_venda).toLocaleString('pt-BR') : '—';
+    const custo = Number(v.custo_unitario || 0);
+    const lucro = Number(v.lucro || 0);
+    
+    let custosArr = [];
+    if (v.custos_extras) {
+      try { custosArr = JSON.parse(v.custos_extras); } catch (e) { custosArr = []; }
     }
+    if (!custosArr.length && typeof v.custos_extras === 'string' && v.custos_extras.includes(':')) {
+      custosArr = String(v.custos_extras).split('|').map(s => {
+        const [d, val] = s.split(':');
+        return { descricao: d, valor: Number(val) };
+      }).filter(c => c.descricao);
+    }
+    const txtCustos = custosArr.map(c => `${esc(c.descricao)}: ${money(c.valor)}`).join('<br>') || '—';
+    
+    const status = v.status_pagamento === 'OK' 
+      ? '<span style="color:#27775d;font-weight:700;background:#e6f4ea;padding:4px 8px;border-radius:6px">OK</span>' 
+      : '<span style="color:#b04545;font-weight:700;background:#fce8e8;padding:4px 8px;border-radius:6px">Pendente</span>';
+    
+    return `<tr>
+      <td><small title="${esc(v.id)}" style="font-family: monospace; color:#738091; cursor:pointer;" onclick="navigator.clipboard.writeText('${esc(v.id)}'); notify('ID copiado!')">${esc(String(v.id).slice(0,8))}</small></td>
+      <td>${dataStr}</td>
+      <td><strong>${nomeProd}</strong><br><small style="color:#738091">${esc(v.sku_variacao)}</small></td>
+      <td>${esc(v.numero)}</td>
+      <td>${v.quantidade}</td>
+      <td>${money(custo)}</td>
+      <td><small>${txtCustos}</small></td>
+      <td><strong>${money(v.valor_venda)}</strong></td>
+      <td style="color:#27775d;font-weight:700">${money(lucro)}</td>
+      <td>${status}</td>
+      <td>
+        <button class="btn btn-light" data-view-order="${esc(v.id)}" style="padding:6px 9px">Ver</button>
+        <button class="btn btn-danger" data-del-order="${esc(v.id)}" style="padding:6px 9px">Excluir</button>
+      </td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="11" class="table-empty">Nenhuma venda encontrada neste período.</td></tr>';
+
+  tbody.querySelectorAll('[data-del-order]').forEach(b => b.onclick = () => deleteOrder(b.dataset.delOrder));
+  tbody.querySelectorAll('[data-view-order]').forEach(b => b.onclick = () => viewOrder(b.dataset.viewOrder));
+}
 
     async function deleteOrder(idVenda) {
       const venda = sales.find(v => String(v.id) === String(idVenda));
@@ -3146,112 +3200,154 @@ vendedor: usuarioLogado?.nome || 'Sistema',
       `).join('');
     }
 
-    function gerarComprovante(v) {
-      const p = productById(v.id_produto);
-      const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto excluído';
-      const dataStr = v.data_venda ? new Date(v.data_venda).toLocaleString('pt-BR') : '—';
-      
-      const cli = clients.find(c => String(c.nome).trim() === String(v.cliente).trim());
-      const cliCpf = cli && cli.cpf ? ` - CPF: ${esc(cli.cpf)}` : '';
-      
-      let custosHtml = '';
-      if (v.custos_extras) {
-        try {
-          const arr = JSON.parse(v.custos_extras);
-          if (arr.length > 0) {
-            custosHtml = `
-              <div style="margin-top:10px; font-size:11px; border-top:1px dashed #ccc; padding-top:5px;">
-                <strong>Serviços / Acréscimos:</strong><br>
-                ${arr.map(c => `- ${esc(c.descricao)}: ${money(c.valor)}`).join('<br>')}
-              </div>
-            `;
-          }
-        } catch (e) {}
+function gerarComprovante(v) {
+  const p = productById(v.id_produto);
+  const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto excluído';
+  const dataStr = v.data_venda ? new Date(v.data_venda).toLocaleString('pt-BR') : '—';
+  
+  const cli = clients.find(c => String(c.nome).trim() === String(v.cliente).trim());
+  const cliCpf = cli && cli.cpf ? ` - CPF: ${esc(cli.cpf)}` : '';
+  const cliWpp = cli && cli.whatsapp ? ` - WhatsApp: ${esc(cli.whatsapp)}` : '';
+  
+  let custosHtml = '';
+  if (v.custos_extras) {
+    try {
+      const arr = JSON.parse(v.custos_extras);
+      if (arr.length > 0) {
+        custosHtml = `
+          <div style="margin-top:15px; font-size:11px; border-top:1px dashed #ccc; padding-top:8px;">
+            <strong>Serviços / Acréscimos:</strong><br>
+            ${arr.map(c => `• ${esc(c.descricao)}: ${money(c.valor)}`).join('<br>')}
+          </div>
+        `;
       }
+    } catch (e) {}
+  }
 
-      const enderecoHtml = v.endereco_entrega 
-        ? `<div class="linha" style="margin-top:10px; font-size:11px;"><span><strong>Entrega:</strong></span><span style="text-align:right; width: 180px;">${esc(v.endereco_entrega)}</span></div>`
-        : '';
+  const enderecoHtml = v.endereco_entrega 
+    ? `<div class="linha" style="margin-top:10px; font-size:11px;"><span><strong>Entrega:</strong></span><span style="text-align:right; width: 180px;">${esc(v.endereco_entrega)}</span></div>`
+    : '';
 
-      const win = window.open('', '_blank');
-      win.document.write(`
-        <html>
-        <head>
-          <title>Comprovante - ${esc(v.id).slice(0, 8)}</title>
-          <style>
-            body { font-family: sans-serif; padding: 20px; width: 320px; margin: auto; color: #000; }
-            h2 { text-align: center; margin-bottom: 5px; }
-            h4 { text-align: center; margin-top: 0; color: #555; font-weight: normal; font-size: 12px; }
-            .linha { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
-            .total { font-size: 16px; font-weight: bold; margin-top: 10px; border-top: 1px solid #000; border-bottom: 1px solid #000; padding: 5px 0; text-align: center; }
-            .footer { text-align: center; font-size: 10px; color: #777; margin-top: 20px; }
-          </style>
-        </head>
-        <body>
-          <h2>CAMINHARA</h2>
-          <h4>Recibo de Venda</h4>
-          
-          <div style="text-align:center; font-size:11px; margin-bottom:15px; border-bottom: 1px solid #ccc; padding-bottom:10px;">
-            <strong>${dataStr}</strong><br>
-            Venda: #${esc(String(v.id).slice(0, 8))}
-          </div>
+  const win = window.open('', '_blank');
+  win.document.write(`
+    <html>
+    <head>
+      <title>Comprovante - ${esc(String(v.id).slice(0, 8))}</title>
+      <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; width: 350px; margin: auto; color: #333; }
+        .header { text-align: center; border-bottom: 2px solid #202a35; padding-bottom: 10px; margin-bottom: 15px; }
+        .logo { font-family: Georgia, serif; font-size: 32px; color: #202a35; font-weight: bold; margin-bottom: 5px; }
+        .loja-nome { font-size: 16px; font-weight: bold; letter-spacing: 1px; }
+        .loja-dados { font-size: 10px; color: #666; margin-top: 5px; line-height: 1.4; }
+        .recibo-titulo { text-align: center; font-size: 12px; font-weight: bold; background: #f0f3f6; padding: 5px; border-radius: 4px; margin-bottom: 15px; }
+        .linha { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }
+        .total { font-size: 18px; font-weight: bold; margin-top: 15px; border-top: 2px solid #202a35; border-bottom: 2px solid #202a35; padding: 10px 0; text-align: center; color: #202a35; }
+        .footer { text-align: center; font-size: 10px; color: #777; margin-top: 25px; border-top: 1px solid #eee; padding-top: 10px; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div class="logo">C</div>
+        <div class="loja-nome">CAMINHARA</div>
+        <div class="loja-dados">
+          CNPJ: 00.000.000/0001-00<br>
+          Rua das Flores, 123 - Centro<br>
+          WhatsApp: (11) 99999-9999
+        </div>
+      </div>
 
-          <div class="linha"><span><strong>Cliente:</strong></span><span style="text-align:right;">${esc(v.cliente || 'Consumidor Final')}${cliCpf}</span></div>
-          ${enderecoHtml}
-
-          <div style="margin-top:10px; border-top: 1px solid #ccc; padding-top:10px;">
-            <div class="linha"><span><strong>Produto:</strong></span><span style="text-align:right; width:180px;">${nomeProd}</span></div>
-            <div class="linha"><span><strong>SKU:</strong></span><span>${esc(v.sku_variacao)}</span></div>
-            <div class="linha"><span><strong>Numeração:</strong></span><span>${esc(v.numero)}</span></div>
-            <div class="linha"><span><strong>Quantidade:</strong></span><span>${v.quantidade}</span></div>
-            <div class="linha"><span><strong>Valor Unit.:</strong></span><span>${money(Number(v.valor_venda) / v.quantidade)}</span></div>
-          </div>
-
-          ${custosHtml}
-
-          <div class="linha" style="margin-top:10px;"><span><strong>Forma Pagto:</strong></span><span>${esc(v.forma_pagamento || '—')}</span></div>
-          <div class="linha"><span><strong>Status:</strong></span><span>${v.status_pagamento === 'OK' ? 'Pago' : 'Pendente'}</span></div>
-
-          <div class="total">Total: ${money(v.valor_venda)}</div>
-          
-          <div class="footer">
-            Obrigado pela preferência!<br>
-            CAMINHARA Loja Virtual
-          </div>
-          <script>
-            window.onload = function() { window.print(); }
-          <\/script>
-        </body>
-        </html>
-      `);
-      win.document.close();
-    }
-
-    function enviarWhatsApp(v) {
-      const p = productById(v.id_produto);
-      const nomeProd = p ? `${p.marca} ${p.modelo}` : 'Produto';
-      const dataStr = v.data_venda ? new Date(v.data_venda).toLocaleDateString('pt-BR') : '—';
+      <div class="recibo-titulo">RECIBO DE VENDA #${esc(String(v.id).slice(0, 8)).toUpperCase()}</div>
       
-      const texto = encodeURIComponent(
-        `*CAMINHARA - Recibo de Compra*\n\n` +
-        `*Data:* ${dataStr}\n` +
-        `*Produto:* ${nomeProd}\n` +
-        `*Numeração:* ${v.numero}\n` +
-        `*Qtd:* ${v.quantidade}\n` +
-        `*Total:* ${money(v.valor_venda)}\n` +
-        (v.endereco_entrega ? `*Endereço:* ${v.endereco_entrega}\n` : '') +
-        `\nObrigado pela preferência!`
-      );
+      <div style="text-align:center; font-size:11px; margin-bottom:15px; color:#555;">
+        <strong>Data:</strong> ${dataStr}
+      </div>
+
+      <div class="linha"><span><strong>Cliente:</strong></span><span style="text-align:right; width: 200px;">${esc(v.cliente || 'Consumidor Final')}</span></div>
+      ${cliCpf ? `<div class="linha"><span><strong>CPF:</strong></span><span>${esc(cli.cpf)}</span></div>` : ''}
+      ${cliWpp ? `<div class="linha"><span><strong>WhatsApp:</strong></span><span>${esc(cli.whatsapp)}</span></div>` : ''}
+      ${enderecoHtml}
+
+      <div style="margin-top:15px; border-top: 1px solid #eee; padding-top:10px;">
+        <div class="linha"><span><strong>Produto:</strong></span><span style="text-align:right; width:200px;">${nomeProd}</span></div>
+        <div class="linha"><span><strong>SKU:</strong></span><span>${esc(v.sku_variacao)}</span></div>
+        <div class="linha"><span><strong>Numeração:</strong></span><span>${esc(v.numero)}</span></div>
+        <div class="linha"><span><strong>Quantidade:</strong></span><span>${v.quantidade}</span></div>
+        <div class="linha"><span><strong>Valor Unit.:</strong></span><span>${money(Number(v.valor_venda) / v.quantidade)}</span></div>
+      </div>
+
+      ${custosHtml}
+
+      <div class="linha" style="margin-top:15px;"><span><strong>Forma Pagto:</strong></span><span>${esc(v.forma_pagamento || '—')}</span></div>
+      <div class="linha"><span><strong>Status:</strong></span><span>${v.status_pagamento === 'OK' ? 'Pago' : 'Pendente'}</span></div>
+
+      <div class="total">Total: ${money(v.valor_venda)}</div>
       
-      const cli = clients.find(c => String(c.nome).trim() === String(v.cliente).trim());
-      const numeroCli = cli && cli.whatsapp ? cli.whatsapp.replace(/\D/g, '') : '';
-      
-      const url = numeroCli 
-        ? `https://api.whatsapp.com/send?phone=55${numeroCli}&text=${texto}` 
-        : `https://api.whatsapp.com/send?text=${texto}`;
-        
-      window.open(url, '_blank');
-    }
+      <div class="footer">
+        Obrigado pela preferência!<br>
+        CAMINHARA Loja Virtual<br>
+        www.caminhara.com.br
+      </div>
+      <script>
+        window.onload = function() { window.print(); }
+      <\/script>
+    </body>
+    </html>
+  `);
+  win.document.close();
+}
+
+
+function enviarWhatsApp(v) {
+  const p = productById(v.id_produto);
+  const nomeProd = p ? `${p.marca} ${p.modelo}` : 'Produto';
+  const dataStr = v.data_venda ? new Date(v.data_venda).toLocaleDateString('pt-BR') : '—';
+  
+  // Monta a mensagem formatada
+  let texto = `*🛍️ CAMINHARA - Recibo de Compra*\n\n`;
+  texto += `Olá, *${v.cliente || 'Cliente'}*! Tudo bem?\n`;
+  texto += `Aqui está o resumo da sua compra:\n\n`;
+  
+  texto += `*📅 Data:* ${dataStr}\n`;
+  texto += `*👟 Produto:* ${nomeProd}\n`;
+  texto += `*🔢 Numeração:* ${v.numero}\n`;
+  texto += `*📦 Quantidade:* ${v.quantidade}\n`;
+  
+  // Adiciona custos extras se houver
+  if (v.custos_extras) {
+    try {
+      const arr = JSON.parse(v.custos_extras);
+      if (arr.length > 0) {
+        texto += `\n*➕ Acréscimos:*\n`;
+        arr.forEach(c => {
+          texto += `• ${c.descricao}: ${money(c.valor)}\n`;
+        });
+      }
+    } catch (e) {}
+  }
+
+  texto += `\n*💳 Forma de Pagto:* ${v.forma_pagamento || 'Não informada'}\n`;
+  texto += `*✅ Status:* ${v.status_pagamento === 'OK' ? 'Pago' : 'Pendente'}\n`;
+  
+  if (v.endereco_entrega) {
+    texto += `\n*📍 Endereço de Entrega:*\n${v.endereco_entrega}\n`;
+  }
+
+  texto += `\n*💰 Total:* ${money(v.valor_venda)}\n`;
+  texto += `\n_Agradecemos a preferência! Volte sempre._ ❤️\n`;
+  texto += `*CAMINHARA Loja Virtual*`;
+
+  const textoEncoded = encodeURIComponent(texto);
+  
+  const cli = clients.find(c => String(c.nome).trim() === String(v.cliente).trim());
+  const numeroCli = cli && cli.whatsapp ? cli.whatsapp.replace(/\D/g, '') : '';
+  
+  const url = numeroCli 
+    ? `https://api.whatsapp.com/send?phone=55${numeroCli}&text=${textoEncoded}` 
+    : `https://api.whatsapp.com/send?text=${textoEncoded}`;
+    
+  window.open(url, '_blank');
+}
+
 
 window.viewOrder = function(id) {
   const v = sales.find(x => String(x.id) === String(id));
@@ -3817,6 +3913,58 @@ function editarPedidoExistente(r) {
         porCliente[cli].count++;
         porCliente[cli].valor += Number(s.valor_venda || 0);
       });
+
+// ====== RESUMO POR VENDEDOR ======
+const porVendedor = {};
+filtered.forEach(s => {
+  const vend = s.vendedor ? String(s.vendedor).trim() : 'Sistema';
+  if (!porVendedor[vend]) porVendedor[vend] = { count: 0, valor: 0, lucro: 0 };
+  porVendedor[vend].count++;
+  porVendedor[vend].valor += Number(s.valor_venda || 0);
+  porVendedor[vend].lucro += Number(s.lucro || 0);
+});
+
+// ====== RESUMO POR PRODUTO ======
+const porProduto = {};
+filtered.forEach(s => {
+  const prodId = s.id_produto;
+  if (!prodId) return;
+  if (!porProduto[prodId]) porProduto[prodId] = { count: 0, qtd: 0, valor: 0, lucro: 0 };
+  porProduto[prodId].count++;
+  porProduto[prodId].qtd += Number(s.quantidade || 0);
+  porProduto[prodId].valor += Number(s.valor_venda || 0);
+  porProduto[prodId].lucro += Number(s.lucro || 0);
+});
+
+const produtosOrdenados = Object.keys(porProduto).sort((a, b) => porProduto[b].qtd - porProduto[a].qtd);
+
+document.getElementById('reportProductTable').innerHTML = produtosOrdenados.length
+  ? produtosOrdenados.map(prodId => {
+      const p = productById(prodId);
+      const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)} ${p.cor ? '· ' + esc(p.cor) : ''}` : 'Produto excluído';
+      const d = porProduto[prodId];
+      return `<tr>
+        <td><strong>${nomeProd}</strong></td>
+        <td>${d.qtd}</td>
+        <td><strong style="color:#27775d">${money(d.valor)}</strong></td>
+        <td>${money(d.lucro)}</td>
+      </tr>`;
+    }).join('')
+  : '<tr><td colspan="4" class="table-empty">Nenhuma venda registrada no período.</td></tr>';
+
+const vendedoresOrdenados = Object.keys(porVendedor).sort((a, b) => porVendedor[b].valor - porVendedor[a].valor);
+
+document.getElementById('reportSellerTable').innerHTML = vendedoresOrdenados.length
+  ? vendedoresOrdenados.map(vend => {
+      const d = porVendedor[vend];
+      return `<tr>
+        <td><strong>${esc(vend)}</strong></td>
+        <td>${d.count}</td>
+        <td><strong style="color:#27775d">${money(d.valor)}</strong></td>
+        <td>${money(d.lucro)}</td>
+      </tr>`;
+    }).join('')
+  : '<tr><td colspan="4" class="table-empty">Nenhuma venda registrada no período.</td></tr>';
 
       const clientesOrdenados = Object.keys(porCliente).sort((a, b) => porCliente[b].valor - porCliente[a].valor);
 
