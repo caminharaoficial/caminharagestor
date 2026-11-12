@@ -2697,8 +2697,10 @@ document.getElementById('orderClearFilterBtn')?.addEventListener('click', () => 
     // Listener do botão Adicionar Custo
     document.getElementById('cancelOrderBtn')?.addEventListener('click', () => {
       document.getElementById('orderForm').reset();
+      document.getElementById('orderItemsList').innerHTML = '';
       document.getElementById('orderCostsList').innerHTML = '';
       editingSaleId = null;
+      window._editingSaleIdCompra = null;
       orderFormPanel.hidden = true;
       calcularLucroVenda();
     });
@@ -2947,12 +2949,11 @@ div.querySelector('button').onclick = () => { div.remove(); calcularLucroVenda()
 function renderOrders() {
   const tbody = document.getElementById('ordersTable');
   if (!tbody) return;
-  
+
   const filtroCliente = (document.getElementById('orderClientFilter')?.value || '').trim().toLowerCase();
   const startInput = document.getElementById('orderFilterStart')?.value;
   const endInput = document.getElementById('orderFilterEnd')?.value;
 
-  // Regra padrão: se não houver data de início, mostra os últimos 30 dias
   let startDate, endDate;
   if (!startInput) {
     startDate = new Date();
@@ -2961,14 +2962,13 @@ function renderOrders() {
   } else {
     startDate = new Date(startInput + 'T00:00:00');
   }
-
   if (!endInput) {
     endDate = new Date();
     endDate.setHours(23, 59, 59, 999);
   } else {
     endDate = new Date(endInput + 'T23:59:59');
   }
-  
+
   let lista = sales.filter(v => {
     if (!v.data_venda) return false;
     const dataVenda = new Date(v.data_venda);
@@ -2976,53 +2976,125 @@ function renderOrders() {
     const passaCliente = filtroCliente ? String(v.cliente || '').toLowerCase().includes(filtroCliente) : true;
     return passaData && passaCliente;
   });
-  
-  const sorted = lista.sort((a, b) => new Date(b.data_venda) - new Date(a.data_venda));
-  
-  tbody.innerHTML = sorted.length ? sorted.map(v => {
-    const p = productById(v.id_produto);
-    const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto Excluído';
-    const dataStr = v.data_venda ? new Date(v.data_venda).toLocaleString('pt-BR') : '—';
-    const custo = Number(v.custo_unitario || 0);
-    const lucro = Number(v.lucro || 0);
-    
+
+  // Agrupa por id_compra (ou por id, se for venda antiga sem id_compra)
+  const grupos = {};
+  lista.forEach(v => {
+    const chave = (v.id_compra && String(v.id_compra).trim()) ? String(v.id_compra).trim() : 'solo-' + v.id;
+    if (!grupos[chave]) grupos[chave] = [];
+    grupos[chave].push(v);
+  });
+
+  // Ordena grupos por data da primeira linha (mais recente primeiro)
+  const chavesOrdenadas = Object.keys(grupos).sort((a, b) => {
+    const da = new Date(grupos[a][0].data_venda || 0);
+    const db = new Date(grupos[b][0].data_venda || 0);
+    return db - da;
+  });
+
+  if (chavesOrdenadas.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="11" class="table-empty">Nenhuma venda encontrada neste período.</td></tr>';
+    return;
+  }
+
+  let html = '';
+  chavesOrdenadas.forEach(chave => {
+    const itens = grupos[chave];
+    const mae = itens[0]; // linha "mãe" (a primeira que foi salva, tem frete/desconto/custos extras)
+    const isMulti = itens.length > 1 || (mae.id_compra && String(mae.id_compra).trim());
+
+    const totalQtd = itens.reduce((s, v) => s + Number(v.quantidade || 0), 0);
+    const totalVenda = itens.reduce((s, v) => s + (Number(v.valor_venda || 0) * Number(v.quantidade || 0)), 0)
+                     + Number(mae.valor_frete || 0) - Number(mae.valor_desconto || 0);
+    const totalLucro = itens.reduce((s, v) => s + Number(v.lucro || 0), 0);
+    const custoTotal = itens.reduce((s, v) => s + (Number(v.custo_unitario || 0) * Number(v.quantidade || 0)), 0);
+    const dataStr = mae.data_venda ? new Date(mae.data_venda).toLocaleString('pt-BR') : '—';
+
     let custosArr = [];
-    if (v.custos_extras) {
-      try { custosArr = JSON.parse(v.custos_extras); } catch (e) { custosArr = []; }
-    }
-    if (!custosArr.length && typeof v.custos_extras === 'string' && v.custos_extras.includes(':')) {
-      custosArr = String(v.custos_extras).split('|').map(s => {
-        const [d, val] = s.split(':');
-        return { descricao: d, valor: Number(val) };
-      }).filter(c => c.descricao);
+    if (mae.custos_extras) {
+      try { custosArr = JSON.parse(mae.custos_extras); } catch (e) {}
+      if (!custosArr.length && typeof mae.custos_extras === 'string' && mae.custos_extras.includes(':')) {
+        custosArr = String(mae.custos_extras).split('|').map(s => {
+          const [d, val] = s.split(':');
+          return { descricao: d, valor: Number(val) };
+        }).filter(c => c.descricao);
+      }
     }
     const txtCustos = custosArr.map(c => `${esc(c.descricao)}: ${money(c.valor)}`).join('<br>') || '—';
-    
-    const status = v.status_pagamento === 'OK' 
-      ? '<span style="color:#27775d;font-weight:700;background:#e6f4ea;padding:4px 8px;border-radius:6px">OK</span>' 
+
+    const status = mae.status_pagamento === 'OK'
+      ? '<span style="color:#27775d;font-weight:700;background:#e6f4ea;padding:4px 8px;border-radius:6px">OK</span>'
       : '<span style="color:#b04545;font-weight:700;background:#fce8e8;padding:4px 8px;border-radius:6px">Pendente</span>';
-    
-    return `<tr>
-      <td><small title="${esc(v.id)}" style="font-family: monospace; color:#738091; cursor:pointer;" onclick="navigator.clipboard.writeText('${esc(v.id)}'); notify('ID copiado!')">${esc(String(v.id).slice(0,8))}</small></td>
+
+    // Identifica o "id principal" para ações (usa o id da mãe)
+    const idMae = mae.id;
+    const qtdItens = itens.length;
+    const labelItens = qtdItens > 1
+      ? `<span style="cursor:pointer; color:#526b83; font-weight:700;" data-toggle-compra="${esc(chave)}">🛍 ${qtdItens} itens ▾</span>`
+      : (() => {
+          const p = productById(mae.id_produto);
+          return p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto Excluído';
+        })();
+
+    html += `<tr data-compra-row="${esc(chave)}">
+      <td><small title="${esc(idMae)}" style="font-family: monospace; color:#738091; cursor:pointer;" onclick="navigator.clipboard.writeText('${esc(idMae)}'); notify('ID copiado!')">${esc(String(idMae).slice(0,8))}</small></td>
       <td>${dataStr}</td>
-      <td><strong>${nomeProd}</strong><br><small style="color:#738091">${esc(v.sku_variacao)}</small></td>
-      <td>${esc(v.numero)}</td>
-      <td>${v.quantidade}</td>
-      <td>${money(custo)}</td>
+      <td>${labelItens}</td>
+      <td>${isMulti ? '—' : esc(mae.numero)}</td>
+      <td>${totalQtd}</td>
+      <td>${money(custoTotal)}</td>
       <td><small>${txtCustos}</small></td>
-      <td><strong>${money(v.valor_venda)}</strong></td>
-      <td style="color:#27775d;font-weight:700">${money(lucro)}</td>
+      <td><strong>${money(totalVenda)}</strong></td>
+      <td style="color:#27775d;font-weight:700">${money(totalLucro)}</td>
       <td>${status}</td>
       <td>
-        <button class="btn btn-light" data-view-order="${esc(v.id)}" style="padding:6px 9px">Ver</button>
-        <button class="btn btn-danger" data-del-order="${esc(v.id)}" style="padding:6px 9px">Excluir</button>
+        <button class="btn btn-light" data-view-order="${esc(idMae)}" style="padding:6px 9px">Ver</button>
+        <button class="btn btn-danger" data-del-order="${esc(idMae)}" style="padding:6px 9px">Excluir</button>
       </td>
     </tr>`;
-  }).join('') : '<tr><td colspan="11" class="table-empty">Nenhuma venda encontrada neste período.</td></tr>';
 
+    // Sub-tabela de itens (só se multi)
+    if (isMulti) {
+      html += `<tr data-compra-items="${esc(chave)}" style="display:none; background:#fafbfc;">
+        <td colspan="11" style="padding: 0;">
+          <table style="margin:0;">
+            <thead><tr>
+              <th style="padding-left:32px;">Produto</th><th>Num.</th><th>Qtd.</th><th>Valor Un.</th><th>Subtotal</th><th>Lucro</th>
+            </tr></thead>
+            <tbody>
+              ${itens.map(v => {
+                const p = productById(v.id_produto);
+                const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto Excluído';
+                return `<tr>
+                  <td style="padding-left:32px;">${nomeProd}<br><small style="color:#738091">${esc(v.sku_variacao)}</small></td>
+                  <td>${esc(v.numero)}</td>
+                  <td>${v.quantidade}</td>
+                  <td>${money(v.valor_venda)}</td>
+                  <td><strong>${money(Number(v.valor_venda||0) * Number(v.quantidade||0))}</strong></td>
+                  <td style="color:#27775d;">${money(v.lucro)}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </td>
+      </tr>`;
+    }
+  });
+
+  tbody.innerHTML = html;
+
+  // Listeners
   tbody.querySelectorAll('[data-del-order]').forEach(b => b.onclick = () => deleteOrder(b.dataset.delOrder));
   tbody.querySelectorAll('[data-view-order]').forEach(b => b.onclick = () => viewOrder(b.dataset.viewOrder));
+  tbody.querySelectorAll('[data-toggle-compra]').forEach(el => {
+    el.onclick = () => {
+      const chave = el.dataset.toggleCompra;
+      const sub = tbody.querySelector(`[data-compra-items="${CSS.escape(chave)}"]`);
+      if (sub) sub.style.display = (sub.style.display === 'none') ? '' : 'none';
+    };
+  });
 }
+
 
 async function deleteOrder(idVenda) {
   const venda = sales.find(v => String(v.id) === String(idVenda));
@@ -5011,61 +5083,100 @@ window.viewOrder = function(id) {
   const v = sales.find(x => String(x.id) === String(id));
   if (!v) return;
 
+  // Descobre todas as linhas da mesma compra
+  const idCompra = v.id_compra ? String(v.id_compra).trim() : '';
+  const itens = idCompra
+    ? sales.filter(x => String(x.id_compra || '').trim() === idCompra)
+    : [v];
+
+  const mae = itens[0];
+
   detailEditBtn.style.display = 'inline-flex';
   detailDeleteBtn.style.display = 'inline-flex';
-  
-  // Mostra os botões de comprovante, etiqueta e whatsapp
+
   document.getElementById('detailPrintBtn').style.display = 'inline-flex';
   document.getElementById('detailLabelBtn').style.display = 'inline-flex';
-  document.getElementById('detailLabelBtn').onclick = () => gerarEtiquetaEnvio(v, 'venda');
+  document.getElementById('detailLabelBtn').onclick = () => gerarEtiquetaEnvio(mae, 'venda');
   document.getElementById('detailWhatsBtn').style.display = 'inline-flex';
-  document.getElementById('detailPrintBtn').onclick = () => gerarComprovante(v);
-  document.getElementById('detailWhatsBtn').onclick = () => enviarWhatsApp(v);
-  
+  document.getElementById('detailPrintBtn').onclick = () => gerarComprovante(mae);
+  document.getElementById('detailWhatsBtn').onclick = () => enviarWhatsApp(mae);
+
   const dupBtn = document.getElementById('detailDuplicateBtn');
   dupBtn.style.display = 'inline-flex';
-  dupBtn.onclick = () => { fecharDetail(); duplicarVenda(v); };
+  dupBtn.onclick = () => { fecharDetail(); duplicarVenda(mae); };
 
   detailKind = 'order'; detailId = id; detailTitle.textContent = 'Detalhes da Venda';
-  const p = productById(v.id_produto);
-  const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto excluído';
-
-  let custosArr = [];
-  if (v.custos_extras) {
-    try { custosArr = JSON.parse(v.custos_extras); } catch (e) { custosArr = []; }
-  }
-  if ((!custosArr || custosArr.length === 0) && typeof v.custos_extras === 'string' && v.custos_extras.includes(':')) {
-    custosArr = v.custos_extras.split('|').map(s => {
-      const [d, val] = s.split(':');
-      return { descricao: d, valor: Number(val) };
-    }).filter(c => c.descricao);
-  }
-  if ((!custosArr || custosArr.length === 0)) {
-    const antigos = orderCosts.filter(c => String(c.id_venda).trim() === String(v.id).trim());
-    if (antigos.length) custosArr = antigos.map(c => ({ descricao: c.descricao, valor: Number(c.valor) }));
-  }
-
-  const txtCustos = custosArr.length
-    ? custosArr.map(c => `• ${esc(c.descricao)}: ${money(c.valor)}`).join('<br>')
-    : '<span style="color:#b04545">Nenhum custo extra</span>';
 
   const rows = [
-    ['ID', `<span style="font-family:monospace; user-select:all;">${esc(v.id)}</span>`],
-    ['Data', v.data_venda ? new Date(v.data_venda).toLocaleString('pt-BR') : '—'],
-    ['Produto', nomeProd], ['SKU', esc(v.sku_variacao || '—')],
-    ['Numeração', esc(v.numero || '—')], ['Quantidade', v.quantidade || 0],
-    ['Cliente', esc(v.cliente || 'Consumidor Final')],
-    ['Custo Unitário', money(v.custo_unitario)],
-    ['Valor Total', `<span style="color:#27775d">${money(v.valor_venda)}</span>`],
-    ['Lucro Real', `<span style="color:#27775d">${money(v.lucro)}</span>`],
-    ['Status', v.status_pagamento === 'OK' ? 'Recebido' : 'Pendente'],
-    ['Observação', esc(v.observacao || '—')],
-    ['Custos Extras', txtCustos],
+    ['ID', `<span style="font-family:monospace; user-select:all;">${esc(mae.id)}</span>`],
+    ['Data', mae.data_venda ? new Date(mae.data_venda).toLocaleString('pt-BR') : '—'],
+    ['Cliente', esc(mae.cliente || 'Consumidor Final')],
+    ['Status', mae.status_pagamento === 'OK' ? 'Recebido' : 'Pendente'],
+    ['Forma Pagto', esc(mae.forma_pagamento || '—')],
+    ['Endereço de Entrega', esc(mae.endereco_entrega || '—')],
+    ['Observação', esc(mae.observacao || '—')],
   ];
-  detailBody.innerHTML = `<table style="width:100%; border-collapse:collapse;">${renderDetailRows(rows)}</table>`;
+
+  // Custos extras (da mãe)
+  let custosArr = [];
+  if (mae.custos_extras) {
+    try { custosArr = JSON.parse(mae.custos_extras); } catch (e) {}
+    if (!custosArr.length && typeof mae.custos_extras === 'string' && mae.custos_extras.includes(':')) {
+      custosArr = String(mae.custos_extras).split('|').map(s => {
+        const [d, val] = s.split(':');
+        return { descricao: d, valor: Number(val) };
+      }).filter(c => c.descricao);
+    }
+  }
+  if (custosArr.length) {
+    rows.push(['Custos Extras', custosArr.map(c => `• ${esc(c.descricao)}: ${money(c.valor)}`).join('<br>')]);
+  }
+
+  // Tabela de itens
+  const subtotal = itens.reduce((s, it) => s + (Number(it.valor_venda || 0) * Number(it.quantidade || 0)), 0);
+  const lucroTotal = itens.reduce((s, it) => s + Number(it.lucro || 0), 0);
+  const frete = Number(mae.valor_frete || 0);
+  const desconto = Number(mae.valor_desconto || 0);
+  const totalFinal = subtotal + frete - desconto;
+
+  const itensHtml = `
+    <div style="margin-top:16px;">
+      <h4 style="margin:0 0 8px 0; font-size:13px; color:#202a35;">Itens da Venda (${itens.length})</h4>
+      <table style="width:100%; border-collapse:collapse; font-size:12px;">
+        <thead><tr style="background:#fafbfc; text-align:left;">
+          <th style="padding:8px;">Produto</th><th>Num.</th><th>Qtd.</th><th>Valor Un.</th><th>Subtotal</th><th>Lucro</th>
+        </tr></thead>
+        <tbody>
+          ${itens.map(it => {
+            const p = productById(it.id_produto);
+            const nome = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Excluído';
+            return `<tr>
+              <td style="padding:8px 0; border-bottom:1px solid var(--line);">${nome}<br><small style="color:#738091">${esc(it.sku_variacao)}</small></td>
+              <td style="border-bottom:1px solid var(--line);">${esc(it.numero)}</td>
+              <td style="border-bottom:1px solid var(--line);">${it.quantidade}</td>
+              <td style="border-bottom:1px solid var(--line);">${money(it.valor_venda)}</td>
+              <td style="border-bottom:1px solid var(--line);"><strong>${money(Number(it.valor_venda||0) * Number(it.quantidade||0))}</strong></td>
+              <td style="border-bottom:1px solid var(--line); color:#27775d;">${money(it.lucro)}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+      <div style="margin-top:12px; padding-top:10px; border-top:1px dashed var(--line); font-size:12px;">
+        <div style="display:flex; justify-content:space-between;"><span>Subtotal:</span><strong>${money(subtotal)}</strong></div>
+        ${frete > 0 ? `<div style="display:flex; justify-content:space-between;"><span>Frete:</span><strong>${money(frete)}</strong></div>` : ''}
+        ${desconto > 0 ? `<div style="display:flex; justify-content:space-between;"><span>Desconto:</span><strong style="color:#b04545;">− ${money(desconto)}</strong></div>` : ''}
+        <div style="display:flex; justify-content:space-between; margin-top:6px; padding-top:6px; border-top:1px solid var(--line); font-size:14px;"><span><strong>Total:</strong></span><strong style="color:#27775d;">${money(totalFinal)}</strong></div>
+        <div style="display:flex; justify-content:space-between; margin-top:4px;"><span><strong>Lucro:</strong></span><strong style="color:#27775d;">${money(lucroTotal)}</strong></div>
+      </div>
+    </div>
+  `;
+
+  detailBody.innerHTML = `
+    <table style="width:100%; border-collapse:collapse;">${renderDetailRows(rows)}</table>
+    ${itensHtml}
+  `;
   detailModal.style.display = 'flex';
 };
-
 
 
 window.viewRequest = function(id) {
@@ -5311,75 +5422,106 @@ window.viewRequest = function(id) {
 
 
     function editarVendaExistente(v) {
-      editingSaleId = v.id;
+      // Descobre todas as linhas da compra
+      const idCompra = v.id_compra ? String(v.id_compra).trim() : '';
+      const itens = idCompra
+        ? sales.filter(x => String(x.id_compra || '').trim() === idCompra)
+        : [v];
+      const mae = itens[0];
+
+      // Guarda a referência para o submit saber que é edição multi-item
+      editingSaleId = mae.id;
+      window._editingSaleIdCompra = idCompra || ('solo-' + mae.id);
+
       showSection('sales');
       orderFormPanel.hidden = false;
-      const selProd = document.getElementById('orderProduct');
-      selProd.value = v.id_produto;
-      selProd.dispatchEvent(new Event('change', { bubbles: true }));
-      document.getElementById('orderNumber').value = v.numero || '';
-      document.getElementById('orderQty').value = v.quantidade || 1;
-      document.getElementById('orderCostUnit').value = v.custo_unitario || 0;
-      document.getElementById('orderPrice').value = v.valor_venda || 0;
-      document.getElementById('orderNote').value = v.observacao || '';
-      document.getElementById('orderStatus').value = v.status_pagamento || 'OK';
-document.getElementById('orderFreight').value = v.valor_frete || 0;
-document.getElementById('orderDiscount').value = v.valor_desconto || 0;
-      
-      // AJUSTE: Como agora é um input, apenas preenche o valor
-      document.getElementById('orderClient').value = v.cliente || '';
 
-      // Lê custos embutidos na venda
+      // Preenche cabeçalho (cliente, cpf, endereço, pagamento, obs, status, frete, desconto)
+      document.getElementById('orderClient').value = mae.cliente || '';
+      document.getElementById('orderCpfCnpj').value = (() => {
+        const cli = clients.find(c => String(c.nome).trim() === String(mae.cliente || '').trim());
+        return cli ? (cli.cpf || '') : '';
+      })();
+      document.getElementById('orderPayment').value = mae.forma_pagamento || 'Dinheiro';
+      document.getElementById('orderNote').value = mae.observacao || '';
+      document.getElementById('orderStatus').value = mae.status_pagamento || 'OK';
+      document.getElementById('orderFreight').value = mae.valor_frete || 0;
+      document.getElementById('orderDiscount').value = mae.valor_desconto || 0;
+      // Marca frete como manual para não sobrescrever durante edição
+      document.getElementById('orderFreight').dataset.manual = 'true';
+
+      // Reconstrói endereço (se houver)
+      setTimeout(() => {
+        atualizarEnderecoVenda();
+        if (mae.endereco_entrega) {
+          const sel = document.getElementById('orderAddress');
+          if (sel) {
+            // Tenta selecionar a opção que bate; se não existir, adiciona
+            let achou = false;
+            for (const opt of sel.options) {
+              if (String(opt.value).trim() === String(mae.endereco_entrega).trim()) { sel.value = opt.value; achou = true; break; }
+            }
+            if (!achou) {
+              const novaOpt = new Option(mae.endereco_entrega, mae.endereco_entrega, true, true);
+              sel.add(novaOpt);
+            }
+          }
+        }
+      }, 100);
+
+      // Limpa listas
+      document.getElementById('orderItemsList').innerHTML = '';
+      document.getElementById('orderCostsList').innerHTML = '';
+
+      // Cria uma linha por item
+      itens.forEach(it => {
+        addOrderItemRow();
+        const rows = document.querySelectorAll('#orderItemsList .order-item-row');
+        const row = rows[rows.length - 1];
+        const prodObj = productById(it.id_produto);
+        if (!prodObj) return;
+
+        // Preenche produto, dispara change para carregar numerações
+        const prodInput = row.querySelector('.item-product');
+        prodInput.value = `${prodObj.marca} ${prodObj.modelo} ${prodObj.cor ? '· ' + prodObj.cor : ''} (${prodObj.sku})`;
+        prodInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+        // Após o change preencher numerações, seta numero/qtd/custo/valor
+        setTimeout(() => {
+          row.querySelector('.item-number').value = it.numero || '';
+          row.querySelector('.item-qty').value = it.quantidade || 1;
+          row.querySelector('.item-cost').value = it.custo_unitario || 0;
+          row.querySelector('.item-price').value = it.valor_venda || 0;
+          calcularLucroVenda();
+        }, 60);
+      });
+
+      // Reconstrói custos extras
       let custosArr = [];
-      if (v.custos_extras) {
-        try { custosArr = JSON.parse(v.custos_extras); } catch (e) {
-          custosArr = String(v.custos_extras).split('|').map(s => {
+      if (mae.custos_extras) {
+        try { custosArr = JSON.parse(mae.custos_extras); } catch (e) {}
+        if (!custosArr.length && typeof mae.custos_extras === 'string' && mae.custos_extras.includes(':')) {
+          custosArr = String(mae.custos_extras).split('|').map(s => {
             const [d, val] = s.split(':');
             return { descricao: d, valor: Number(val) };
           }).filter(c => c.descricao);
         }
       }
-      if (!custosArr.length) {
-        custosArr = orderCosts
-          .filter(c => String(c.id_venda).trim() === String(v.id).trim())
-          .map(c => ({ descricao: c.descricao, valor: Number(c.valor) }));
-      }
-
-      const lista = document.getElementById('orderCostsList');
-      lista.innerHTML = '';
+      const listaCustos = document.getElementById('orderCostsList');
       custosArr.forEach(c => {
         const div = document.createElement('div');
-        div.style.display = 'flex'; div.style.gap = '10px'; div.style.marginBottom = '10px';
-        
-        const inputDesc = document.createElement('input');
-        inputDesc.type = 'text';
-        inputDesc.className = 'order-cost-desc';
-        inputDesc.value = c.descricao || '';
-        inputDesc.style.cssText = 'flex:2; padding:8px; border:1px solid var(--line); border-radius:6px;';
-
-        const inputVal = document.createElement('input');
-        inputVal.type = 'number';
-        inputVal.className = 'order-cost-val';
-        inputVal.value = Number(c.valor || 0);
-        inputVal.min = '0';
-        inputVal.step = '0.01';
-        inputVal.style.cssText = 'flex:1; padding:8px; border:1px solid var(--line); border-radius:6px;';
-
-        const btnDel = document.createElement('button');
-        btnDel.type = 'button';
-        btnDel.className = 'btn btn-danger';
-        btnDel.textContent = 'X';
-        btnDel.style.cssText = 'padding:8px;';
-        btnDel.onclick = () => { div.remove(); calcularLucroVenda(); };
-
-        div.appendChild(inputDesc);
-        div.appendChild(inputVal);
-        div.appendChild(btnDel);
-        lista.appendChild(div);
+        div.style.cssText = 'display:flex; gap:10px; margin-bottom:10px;';
+        div.innerHTML = `
+          <input type="text" class="order-cost-desc" value="${esc(c.descricao||'')}" style="flex:2; padding:8px; border:1px solid var(--line); border-radius:6px;" />
+          <input type="number" class="order-cost-val" value="${Number(c.valor||0)}" min="0" step="0.01" style="flex:1; padding:8px; border:1px solid var(--line); border-radius:6px;" />
+          <button type="button" class="btn btn-danger" style="padding:8px;">X</button>
+        `;
+        div.querySelector('button').onclick = () => { div.remove(); calcularLucroVenda(); };
+        listaCustos.appendChild(div);
       });
 
       calcularLucroVenda();
-      setTimeout(() => document.getElementById('orderFormPanel').scrollIntoView({ behavior:'smooth', block:'start' }), 50);
+      setTimeout(() => document.getElementById('orderFormPanel').scrollIntoView({ behavior:'smooth', block:'start' }), 100);
     }
 
 
@@ -5451,115 +5593,142 @@ document.getElementById('reqShippingStatus').value = r.status_envio || 'Não env
   setTimeout(() => document.getElementById('requestFormPanel').scrollIntoView({ behavior:'smooth', block:'start' }), 50);
 }
 
-    // ===== Submit em modo EDIÇÃO — Venda =====
+    // ===== Submit em modo EDIÇÃO — Venda multi-item =====
     document.getElementById('orderForm').addEventListener('submit', async e => {
       if (!editingSaleId) return;
       e.preventDefault(); e.stopImmediatePropagation();
 
-      const idVenda = editingSaleId;
-      const vAntiga = sales.find(x => String(x.id) === String(idVenda));
-      
-      const id_produto = document.getElementById('orderProduct').value;
-      const numero = document.getElementById('orderNumber').value;
-      const qtdNova = Number(document.getElementById('orderQty').value);
-      const custo = Number(document.getElementById('orderCostUnit').value || 0);
-      const total = Number(document.getElementById('orderPrice').value);
       const cliente = document.getElementById('orderClient').value.trim();
       const obs = document.getElementById('orderNote').value.trim();
       const status = document.getElementById('orderStatus').value;
+      const forma = document.getElementById('orderPayment').value;
       const endereco = document.getElementById('orderAddress')?.value || '';
+      const freteEdit = Number(document.getElementById('orderFreight')?.value || 0);
+      const descontoEdit = Number(document.getElementById('orderDiscount')?.value || 0);
       const baixarEstoque = document.getElementById('orderBaixarEstoque').checked;
 
-      let extras = 0; const novosCustos = [];
+      const rows = document.querySelectorAll('#orderItemsList .order-item-row');
+      if (rows.length === 0) { notify('Adicione pelo menos um item.', true); return; }
+
+      const itens = [];
+      for (const row of rows) {
+        const prodText = row.querySelector('.item-product').value.trim();
+        const prodObj = products.find(x => `${x.marca} ${x.modelo} ${x.cor ? '· ' + x.cor : ''} (${x.sku})` === prodText);
+        const numero = row.querySelector('.item-number').value;
+        const qtd = Number(row.querySelector('.item-qty').value || 0);
+        const custo = Number(row.querySelector('.item-cost').value || 0);
+        const valor = Number(row.querySelector('.item-price').value || 0);
+        if (!prodObj || !numero || qtd <= 0 || valor <= 0) {
+          notify('Preencha todos os itens corretamente.', true);
+          return;
+        }
+        itens.push({ prodObj, numero, qtd, custo, valor });
+      }
+
+      let somaCustosExtras = 0;
+      const custosParaSalvar = [];
       document.querySelectorAll('#orderCostsList > div').forEach(div => {
-        const d = div.querySelector('.order-cost-desc').value.trim();
-        const v = Number(div.querySelector('.order-cost-val').value);
-        if (d && v > 0) { extras += v; novosCustos.push({ descricao: d, valor: v }); }
+        const desc = div.querySelector('.order-cost-desc').value.trim();
+        const val = Number(div.querySelector('.order-cost-val').value);
+        if (desc && val > 0) { somaCustosExtras += val; custosParaSalvar.push({ descricao: desc, valor: val }); }
       });
-
-const freteEdit = Number(document.getElementById('orderFreight')?.value || 0);
-const descontoEdit = Number(document.getElementById('orderDiscount')?.value || 0);
-
-const lucro = total - (custo * qtdNova) - extras - freteEdit - descontoEdit;
-      const p = productById(id_produto);
-      const custosString = novosCustos.length ? JSON.stringify(novosCustos) : '';
+      const custosString = custosParaSalvar.length ? JSON.stringify(custosParaSalvar) : '';
 
       try {
         startLoad();
 
-        // 1. Atualiza os dados da venda
-        await apiPost({
-          action: 'update', sheet: 'Vendas',
-          data: {
-            id: idVenda, id_produto,
-            vendedor: usuarioLogado?.nome || 'Sistema',
-            sku_variacao: `${p.sku}-${numero}`, numero,
-            quantidade: qtdNova, valor_venda: total,
-            data_venda: vAntiga?.data_venda || new Date().toISOString(),
-            cliente, endereco_entrega: endereco, observacao: obs, custo_unitario: custo, lucro,
-            status_pagamento: status,
-custos_extras: custosString,
-           valor_frete: freteEdit,
-           valor_desconto: descontoEdit
+        // 1. Descobre linhas antigas da compra
+        const idCompraAntiga = window._editingSaleIdCompra || ('solo-' + editingSaleId);
+        const linhasAntigas = idCompraAntiga.startsWith('solo-')
+          ? sales.filter(x => String(x.id) === String(editingSaleId))
+          : sales.filter(x => String(x.id_compra || '').trim() === idCompraAntiga);
+
+        const dataOriginal = linhasAntigas[0]?.data_venda || new Date().toISOString();
+        const idCompraNova = idCompraAntiga.startsWith('solo-') ? uuid() : idCompraAntiga;
+
+        // 2. Devolve estoque dos itens antigos (se baixar estoque marcado)
+        if (baixarEstoque) {
+          for (const la of linhasAntigas) {
+            const est = stock.find(s => String(s.id_produto) === String(la.id_produto) && String(s.numero) === String(la.numero));
+            if (est) {
+              await apiPost({
+                action: 'update', sheet: 'Estoque',
+                data: {
+                  ...est,
+                  vendedor: usuarioLogado?.nome || 'Sistema',
+                  quantidade: Number(est.quantidade) + Number(la.quantidade || 0),
+                  vendidos: Math.max(0, Number(est.vendidos || 0) - Number(la.quantidade || 0)),
+                  atualizado_em: new Date().toISOString()
+                }
+              });
+            }
           }
-        });
+        }
 
-        // 2. Acerta o estoque, se a opção estiver marcada
-        if (baixarEstoque && vAntiga) {
-          const prodAntigo = vAntiga.id_produto;
-          const numAntigo = vAntiga.numero;
-          const qtdAntiga = Number(vAntiga.quantidade || 0);
+        // 3. Apaga linhas antigas
+        for (const la of linhasAntigas) {
+          await apiPost({ action: 'delete', sheet: 'Vendas', id: la.id, vendedor: usuarioLogado?.nome || 'Sistema' });
+          await apiPost({ action: 'deleteWhere', sheet: 'Custos', coluna: 'id_venda', valor: la.id, vendedor: usuarioLogado?.nome || 'Sistema' });
+        }
 
-          // Passo A: Devolve a quantidade antiga ao estoque
-          const estoqueAntigo = stock.find(s => String(s.id_produto) === String(prodAntigo) && String(s.numero) === String(numAntigo));
-          if (estoqueAntigo) {
+        // 4. Salva as novas linhas (mesmo id_compra; linha mãe com frete/desconto/custos extras)
+        for (let i = 0; i < itens.length; i++) {
+          const it = itens[i];
+          const ehMae = i === 0;
+          const est = stock.find(s => String(s.id_produto) === String(it.prodObj.id) && String(s.numero) === String(it.numero));
+          const skuVar = (est ? est.sku_variacao : null) || `${it.prodObj.sku}-${it.numero}`;
+          const freteL = ehMae ? freteEdit : 0;
+          const descL = ehMae ? descontoEdit : 0;
+          const custosL = ehMae ? custosString : '';
+          const extrasL = ehMae ? somaCustosExtras : 0;
+          const lucroL = (it.valor * it.qtd) - (it.custo * it.qtd) - extrasL - freteL - descL;
+
+          await apiPost({
+            action: 'append', sheet: 'Vendas',
+            data: {
+              id: uuid(), id_compra: idCompraNova,
+              vendedor: usuarioLogado?.nome || 'Sistema',
+              id_produto: it.prodObj.id, sku_variacao: skuVar,
+              numero: it.numero, quantidade: it.qtd, valor_venda: it.valor,
+              data_venda: dataOriginal,
+              cliente: cliente, endereco_entrega: endereco, observacao: obs,
+              custo_unitario: it.custo, lucro: lucroL,
+              status_pagamento: status, forma_pagamento: forma,
+              custos_extras: custosL,
+              valor_frete: freteL, valor_desconto: descL
+            }
+          });
+
+          // Baixa estoque novo
+          if (baixarEstoque && est) {
             await apiPost({
               action: 'update', sheet: 'Estoque',
               data: {
-                ...estoqueAntigo,
+                ...est,
                 vendedor: usuarioLogado?.nome || 'Sistema',
-                quantidade: Number(estoqueAntigo.quantidade) + qtdAntiga,
-                vendidos: Math.max(0, Number(estoqueAntigo.vendidos || 0) - qtdAntiga),
-                atualizado_em: new Date().toISOString()
-              }
-            });
-          }
-
-          // Passo B: Baixa a nova quantidade do estoque (pode ser o mesmo produto ou um novo)
-          // Recarrega o estoque para ter os valores mais recentes após o Passo A
-          const estoqueNovo = stock.find(s => String(s.id_produto) === String(id_produto) && String(s.numero) === String(numero));
-          if (estoqueNovo) {
-            // Precisa ser feito um novo fetch do estoque atualizado, então usamos os dados do estado local (que já foi atualizado no Passo A se for o mesmo item)
-            const qtdAtual = (String(estoqueNovo.id) === String(estoqueAntigo?.id)) 
-                             ? Number(estoqueAntigo.quantidade) + qtdAntiga 
-                             : Number(estoqueNovo.quantidade);
-            
-            const vendidosAtual = (String(estoqueNovo.id) === String(estoqueAntigo?.id)) 
-                             ? Math.max(0, Number(estoqueAntigo.vendidos || 0) - qtdAntiga) 
-                             : Number(estoqueNovo.vendidos || 0);
-
-            await apiPost({
-              action: 'update', sheet: 'Estoque',
-              data: {
-                ...estoqueNovo,
-                vendedor: usuarioLogado?.nome || 'Sistema',
-                quantidade: qtdAtual - qtdNova,
-                vendidos: vendidosAtual + qtdNova,
+                quantidade: Number(est.quantidade) - it.qtd,
+                vendidos: Number(est.vendidos || 0) + it.qtd,
                 atualizado_em: new Date().toISOString()
               }
             });
           }
         }
 
-        notify('Venda atualizada e estoque ajustado!');
-        editingSaleId = null; orderFormPanel.hidden = true;
+        notify(`Venda atualizada (${itens.length} item${itens.length > 1 ? 's' : ''})!`);
+        editingSaleId = null;
+        window._editingSaleIdCompra = null;
+        document.getElementById('orderItemsList').innerHTML = '';
+        document.getElementById('orderCostsList').innerHTML = '';
+        document.getElementById('orderForm').reset();
+        orderFormPanel.hidden = true;
         await loadAll();
       } catch (err) {
-        notify('Erro ao atualizar: ' + err.message, true);
+        notify('Erro ao atualizar venda: ' + err.message, true);
       } finally {
         endLoad();
       }
     }, true);
+
 
     // ===== Submit em modo EDIÇÃO — Pedido =====
     document.getElementById('requestForm').addEventListener('submit', async e => {
