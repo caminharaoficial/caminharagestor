@@ -4809,15 +4809,27 @@ function gerarEtiquetaEnvio(registro, tipo) {
   const destWhats = cli ? (cli.whatsapp || '') : '';
   const destCpf = cli ? (cli.cpf || '') : '';
 
-  // ===== Produto / valores =====
-  const p = productById(registro.id_produto);
-  const nomeProd = p ? `${p.marca} ${p.modelo}` : 'Produto';
-  const numero = registro.numero || '—';
-  const qtd = registro.quantidade || 0;
+  // ===== Produto / valores (multi-item) =====
+  // Descobre todas as linhas da compra
+  const colecao = tipo === 'venda' ? sales : requests;
+  const idCompra = registro.id_compra ? String(registro.id_compra).trim() : '';
+  const linhas = idCompra
+    ? colecao.filter(x => String(x.id_compra || '').trim() === idCompra)
+    : [registro];
 
-  const valorDeclarado = tipo === 'venda'
-    ? Number(registro.valor_venda || 0)
-    : Number(registro.valor_total || 0);
+  const itensEtiqueta = linhas.map(it => {
+    const p = productById(it.id_produto);
+    return {
+      nomeProd: p ? `${p.marca} ${p.modelo}` : 'Produto',
+      numero: it.numero || '—',
+      qtd: Number(it.quantidade || 0)
+    };
+  });
+
+  const valorDeclaradoTotal = linhas.reduce((s, it) => {
+    const v = tipo === 'venda' ? Number(it.valor_venda || 0) : Number(it.valor_total || 0);
+    return s + (v * Number(it.quantidade || 0));
+  }, 0);
 
   // ===== Rastreio =====
   let rastreio = '';
@@ -4894,11 +4906,11 @@ function gerarEtiquetaEnvio(registro, tipo) {
         </div>
 
         <div class="bloco produto-bloco">
-          <div class="titulo-bloco">Conteúdo</div>
-          <div class="produto-linha"><strong>${esc(nomeProd)}</strong></div>
-          <div class="produto-linha">Numeração: <strong>${esc(numero)}</strong> · Quantidade: <strong>${qtd}</strong></div>
-          <div class="produto-linha">SKU: ${esc(registro.sku_variacao || '—')}</div>
-          <div class="valor">Valor declarado: ${money(valorDeclarado)}</div>
+          <div class="titulo-bloco">Conteúdo (${itensEtiqueta.length} item${itensEtiqueta.length > 1 ? 's' : ''})</div>
+          ${itensEtiqueta.map(it => `
+            <div class="produto-linha"><strong>${esc(it.nomeProd)}</strong> · Num ${esc(it.numero)} · Qtd ${it.qtd}</div>
+          `).join('')}
+          <div class="valor">Valor declarado: ${money(valorDeclaradoTotal)}</div>
         </div>
 
       </div>
@@ -4924,18 +4936,23 @@ function gerarEtiquetaEnvio(registro, tipo) {
 
 
 function gerarComprovante(v) {
-  const p = productById(v.id_produto);
-  const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto excluído';
-  const dataStr = v.data_venda ? new Date(v.data_venda).toLocaleString('pt-BR') : '—';
-  
-  const cli = clients.find(c => String(c.nome).trim() === String(v.cliente).trim());
+  // Descobre todas as linhas da compra
+  const idCompra = v.id_compra ? String(v.id_compra).trim() : '';
+  const itens = idCompra
+    ? sales.filter(x => String(x.id_compra || '').trim() === idCompra)
+    : [v];
+  const mae = itens[0];
+
+  const dataStr = mae.data_venda ? new Date(mae.data_venda).toLocaleString('pt-BR') : '—';
+  const cli = clients.find(c => String(c.nome).trim() === String(mae.cliente || '').trim());
   const cliCpf = cli && cli.cpf ? esc(cli.cpf) : '';
   const cliWpp = cli && cli.whatsapp ? esc(cli.whatsapp) : '';
-  
+
+  // Custos extras
   let custosHtml = '';
-  if (v.custos_extras) {
+  if (mae.custos_extras) {
     try {
-      const arr = JSON.parse(v.custos_extras);
+      const arr = JSON.parse(mae.custos_extras);
       if (arr.length > 0) {
         custosHtml = `
           <div style="margin-top:15px; font-size:11px; border-top:1px dashed #ccc; padding-top:8px;">
@@ -4947,28 +4964,45 @@ function gerarComprovante(v) {
     } catch (e) {}
   }
 
-  const enderecoHtml = v.endereco_entrega 
-    ? `<div class="linha" style="margin-top:10px; font-size:11px;"><span><strong>Entrega:</strong></span><span style="text-align:right; width: 180px;">${esc(v.endereco_entrega)}</span></div>`
+  const enderecoHtml = mae.endereco_entrega
+    ? `<div class="linha" style="margin-top:10px; font-size:11px;"><span><strong>Entrega:</strong></span><span style="text-align:right; width: 180px;">${esc(mae.endereco_entrega)}</span></div>`
     : '';
 
-  // Cabeçalho dinâmico
   const logoHtml = dadosLoja.logoUrl
     ? `<img src="${esc(dadosLoja.logoUrl)}" style="max-height:50px; max-width:180px; margin-bottom:6px;" alt="Logo"/>`
     : `<div class="logo">C</div>`;
-  
+
   const linhasDados = [];
   if (dadosLoja.cnpj) linhasDados.push(`CNPJ: ${esc(dadosLoja.cnpj)}`);
   if (dadosLoja.endereco) linhasDados.push(esc(dadosLoja.endereco));
   if (dadosLoja.whats) linhasDados.push(`WhatsApp: ${esc(dadosLoja.whats)}`);
   const dadosHtml = linhasDados.join('<br>');
 
+  // Tabela de itens
+  const itensRows = itens.map(it => {
+    const p = productById(it.id_produto);
+    const nome = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto excluído';
+    const subtotalIt = Number(it.valor_venda || 0) * Number(it.quantidade || 0);
+    return `<tr>
+      <td style="padding:4px 0; border-bottom:1px solid #eee; font-size:10px;">${nome}<br><small style="color:#888;">${esc(it.sku_variacao || '')} · Num ${esc(it.numero || '')}</small></td>
+      <td style="padding:4px 0; border-bottom:1px solid #eee; font-size:10px; text-align:center;">${it.quantidade}</td>
+      <td style="padding:4px 0; border-bottom:1px solid #eee; font-size:10px; text-align:right;">${money(it.valor_venda)}</td>
+      <td style="padding:4px 0; border-bottom:1px solid #eee; font-size:10px; text-align:right;">${money(subtotalIt)}</td>
+    </tr>`;
+  }).join('');
+
+  const subtotal = itens.reduce((s, it) => s + (Number(it.valor_venda || 0) * Number(it.quantidade || 0)), 0);
+  const frete = Number(mae.valor_frete || 0);
+  const desconto = Number(mae.valor_desconto || 0);
+  const totalFinal = subtotal + frete - desconto;
+
   const win = window.open('', '_blank');
   win.document.write(`
     <html>
     <head>
-      <title>Comprovante - ${esc(String(v.id).slice(0, 8))}</title>
+      <title>Comprovante - ${esc(String(mae.id).slice(0, 8))}</title>
       <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; width: 350px; margin: auto; color: #333; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; width: 380px; margin: auto; color: #333; }
         .header { text-align: center; border-bottom: 2px solid #202a35; padding-bottom: 10px; margin-bottom: 15px; }
         .logo { font-family: Georgia, serif; font-size: 32px; color: #202a35; font-weight: bold; margin-bottom: 5px; }
         .loja-nome { font-size: 16px; font-weight: bold; letter-spacing: 1px; }
@@ -4977,6 +5011,11 @@ function gerarComprovante(v) {
         .linha { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }
         .total { font-size: 18px; font-weight: bold; margin-top: 15px; border-top: 2px solid #202a35; border-bottom: 2px solid #202a35; padding: 10px 0; text-align: center; color: #202a35; }
         .footer { text-align: center; font-size: 10px; color: #777; margin-top: 25px; border-top: 1px solid #eee; padding-top: 10px; }
+        table.itens { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        table.itens th { text-align: left; font-size: 9px; text-transform: uppercase; color: #888; padding: 6px 0; border-bottom: 1px solid #ccc; }
+        table.itens th:nth-child(2), table.itens td:nth-child(2) { text-align: center; }
+        table.itens th:nth-child(3), table.itens td:nth-child(3),
+        table.itens th:nth-child(4), table.itens td:nth-child(4) { text-align: right; }
       </style>
     </head>
     <body>
@@ -4986,32 +5025,35 @@ function gerarComprovante(v) {
         ${dadosHtml ? `<div class="loja-dados">${dadosHtml}</div>` : ''}
       </div>
 
-      <div class="recibo-titulo">RECIBO DE VENDA #${esc(String(v.id).slice(0, 8)).toUpperCase()}</div>
-      
+      <div class="recibo-titulo">RECIBO DE VENDA #${esc(String(mae.id).slice(0, 8)).toUpperCase()}</div>
+
       <div style="text-align:center; font-size:11px; margin-bottom:15px; color:#555;">
         <strong>Data:</strong> ${dataStr}
       </div>
 
-      <div class="linha"><span><strong>Cliente:</strong></span><span style="text-align:right; width: 200px;">${esc(v.cliente || 'Consumidor Final')}</span></div>
+      <div class="linha"><span><strong>Cliente:</strong></span><span style="text-align:right; width: 200px;">${esc(mae.cliente || 'Consumidor Final')}</span></div>
       ${cliCpf ? `<div class="linha"><span><strong>CPF:</strong></span><span>${cliCpf}</span></div>` : ''}
       ${cliWpp ? `<div class="linha"><span><strong>WhatsApp:</strong></span><span>${cliWpp}</span></div>` : ''}
       ${enderecoHtml}
 
-      <div style="margin-top:15px; border-top: 1px solid #eee; padding-top:10px;">
-        <div class="linha"><span><strong>Produto:</strong></span><span style="text-align:right; width:200px;">${nomeProd}</span></div>
-        <div class="linha"><span><strong>SKU:</strong></span><span>${esc(v.sku_variacao)}</span></div>
-        <div class="linha"><span><strong>Numeração:</strong></span><span>${esc(v.numero)}</span></div>
-        <div class="linha"><span><strong>Quantidade:</strong></span><span>${v.quantidade}</span></div>
-        <div class="linha"><span><strong>Valor Unit.:</strong></span><span>${money(Number(v.valor_venda) / v.quantidade)}</span></div>
-      </div>
+      <table class="itens">
+        <thead><tr><th>Produto</th><th>Qtd</th><th>Unit.</th><th>Subtotal</th></tr></thead>
+        <tbody>${itensRows}</tbody>
+      </table>
 
       ${custosHtml}
 
-      <div class="linha" style="margin-top:15px;"><span><strong>Forma Pagto:</strong></span><span>${esc(v.forma_pagamento || '—')}</span></div>
-      <div class="linha"><span><strong>Status:</strong></span><span>${v.status_pagamento === 'OK' ? 'Pago' : 'Pendente'}</span></div>
+      <div style="margin-top:12px; border-top:1px dashed #ccc; padding-top:8px;">
+        <div class="linha"><span>Subtotal:</span><span>${money(subtotal)}</span></div>
+        ${frete > 0 ? `<div class="linha"><span>Frete:</span><span>${money(frete)}</span></div>` : ''}
+        ${desconto > 0 ? `<div class="linha"><span>Desconto:</span><span style="color:#b04545;">− ${money(desconto)}</span></div>` : ''}
+      </div>
 
-      <div class="total">Total: ${money(v.valor_venda)}</div>
-      
+      <div class="linha" style="margin-top:12px;"><span><strong>Forma Pagto:</strong></span><span>${esc(mae.forma_pagamento || '—')}</span></div>
+      <div class="linha"><span><strong>Status:</strong></span><span>${mae.status_pagamento === 'OK' ? 'Pago' : 'Pendente'}</span></div>
+
+      <div class="total">Total: ${money(totalFinal)}</div>
+
       <div class="footer">
         Obrigado pela preferência!<br>
         ${esc(dadosLoja.nome)}
@@ -5026,58 +5068,70 @@ function gerarComprovante(v) {
   win.document.close();
 }
 
-
 function enviarWhatsApp(v) {
-  const p = productById(v.id_produto);
-  const nomeProd = p ? `${p.marca} ${p.modelo}` : 'Produto';
-  const dataStr = v.data_venda ? new Date(v.data_venda).toLocaleDateString('pt-BR') : '—';
-  
-  // Monta a mensagem formatada
+  const idCompra = v.id_compra ? String(v.id_compra).trim() : '';
+  const linhas = idCompra
+    ? sales.filter(x => String(x.id_compra || '').trim() === idCompra)
+    : [v];
+  const mae = linhas[0];
+
+  const dataStr = mae.data_venda ? new Date(mae.data_venda).toLocaleDateString('pt-BR') : '—';
+
   let texto = `*🛍️ CAMINHARA - Recibo de Compra*\n\n`;
-  texto += `Olá, *${v.cliente || 'Cliente'}*! Tudo bem?\n`;
+  texto += `Olá, *${mae.cliente || 'Cliente'}*! Tudo bem?\n`;
   texto += `Aqui está o resumo da sua compra:\n\n`;
-  
-  texto += `*📅 Data:* ${dataStr}\n`;
-  texto += `*👟 Produto:* ${nomeProd}\n`;
-  texto += `*🔢 Numeração:* ${v.numero}\n`;
-  texto += `*📦 Quantidade:* ${v.quantidade}\n`;
-  
-  // Adiciona custos extras se houver
-  if (v.custos_extras) {
+  texto += `*📅 Data:* ${dataStr}\n\n`;
+  texto += `*👟 Itens:*\n`;
+
+  let subtotal = 0;
+  linhas.forEach(it => {
+    const p = productById(it.id_produto);
+    const nome = p ? `${p.marca} ${p.modelo}` : 'Produto';
+    const sub = Number(it.valor_venda || 0) * Number(it.quantidade || 0);
+    subtotal += sub;
+    texto += `• ${nome} · Num ${it.numero} · ${it.quantidade}x ${money(it.valor_venda)} = *${money(sub)}*\n`;
+  });
+
+  // Custos extras
+  if (mae.custos_extras) {
     try {
-      const arr = JSON.parse(v.custos_extras);
+      const arr = JSON.parse(mae.custos_extras);
       if (arr.length > 0) {
         texto += `\n*➕ Acréscimos:*\n`;
-        arr.forEach(c => {
-          texto += `• ${c.descricao}: ${money(c.valor)}\n`;
-        });
+        arr.forEach(c => { texto += `• ${c.descricao}: ${money(c.valor)}\n`; });
       }
     } catch (e) {}
   }
 
-  texto += `\n*💳 Forma de Pagto:* ${v.forma_pagamento || 'Não informada'}\n`;
-  texto += `*✅ Status:* ${v.status_pagamento === 'OK' ? 'Pago' : 'Pendente'}\n`;
-  
-  if (v.endereco_entrega) {
-    texto += `\n*📍 Endereço de Entrega:*\n${v.endereco_entrega}\n`;
+  const frete = Number(mae.valor_frete || 0);
+  const desconto = Number(mae.valor_desconto || 0);
+  const total = subtotal + frete - desconto;
+
+  if (frete > 0) texto += `\n*🚚 Frete:* ${money(frete)}`;
+  if (desconto > 0) texto += `\n*🏷 Desconto:* − ${money(desconto)}`;
+
+  texto += `\n\n*💳 Forma de Pagto:* ${mae.forma_pagamento || 'Não informada'}\n`;
+  texto += `*✅ Status:* ${mae.status_pagamento === 'OK' ? 'Pago' : 'Pendente'}\n`;
+
+  if (mae.endereco_entrega) {
+    texto += `\n*📍 Endereço de Entrega:*\n${mae.endereco_entrega}\n`;
   }
 
-  texto += `\n*💰 Total:* ${money(v.valor_venda)}\n`;
+  texto += `\n*💰 Total:* ${money(total)}\n`;
   texto += `\n_Agradecemos a preferência! Volte sempre._ ❤️\n`;
   texto += `*CAMINHARA Loja Virtual*`;
 
   const textoEncoded = encodeURIComponent(texto);
-  
-  const cli = clients.find(c => String(c.nome).trim() === String(v.cliente).trim());
+
+  const cli = clients.find(c => String(c.nome).trim() === String(mae.cliente || '').trim());
   const numeroCli = cli && cli.whatsapp ? cli.whatsapp.replace(/\D/g, '') : '';
-  
-  const url = numeroCli 
-    ? `https://api.whatsapp.com/send?phone=55${numeroCli}&text=${textoEncoded}` 
+
+  const url = numeroCli
+    ? `https://api.whatsapp.com/send?phone=55${numeroCli}&text=${textoEncoded}`
     : `https://api.whatsapp.com/send?text=${textoEncoded}`;
-    
+
   window.open(url, '_blank');
 }
-
 
 window.viewOrder = function(id) {
   const v = sales.find(x => String(x.id) === String(id));
@@ -5265,30 +5319,37 @@ window.viewRequest = function(id) {
 
 
     function duplicarVenda(v) {
+      // Descobre todas as linhas da compra
+      const idCompra = v.id_compra ? String(v.id_compra).trim() : '';
+      const itens = idCompra
+        ? sales.filter(x => String(x.id_compra || '').trim() === idCompra)
+        : [v];
+      const mae = itens[0];
+
       // Limpa o formulário primeiro
       document.getElementById('orderForm').reset();
+      document.getElementById('orderItemsList').innerHTML = '';
       document.getElementById('orderCostsList').innerHTML = '';
       editingSaleId = null;
-      
+      window._editingSaleIdCompra = null;
+
       showSection('sales');
       orderFormPanel.hidden = false;
-      
-      // Preenche os campos com os dados da venda original
-      const selProd = document.getElementById('orderProduct');
-      selProd.value = v.id_produto;
-      selProd.dispatchEvent(new Event('change', { bubbles: true }));
-      
-      document.getElementById('orderNumber').value = v.numero || '';
-      document.getElementById('orderQty').value = v.quantidade || 1;
-      document.getElementById('orderCostUnit').value = v.custo_unitario || 0;
-      document.getElementById('orderPrice').value = v.valor_venda || 0;
-      document.getElementById('orderNote').value = v.observacao || '';
-      document.getElementById('orderStatus').value = v.status_pagamento || 'OK';
-      document.getElementById('orderClient').value = v.cliente || '';
-      
-      // Se for Cartão Crédito, mostra as parcelas
-      const pag = v.forma_pagamento || 'Dinheiro';
-      document.getElementById('orderPayment').value = pag;
+
+      // Cabeçalho
+      document.getElementById('orderClient').value = mae.cliente || '';
+      document.getElementById('orderCpfCnpj').value = (() => {
+        const cli = clients.find(c => String(c.nome).trim() === String(mae.cliente || '').trim());
+        return cli ? (cli.cpf || '') : '';
+      })();
+      document.getElementById('orderPayment').value = mae.forma_pagamento || 'Dinheiro';
+      document.getElementById('orderNote').value = mae.observacao || '';
+      document.getElementById('orderStatus').value = mae.status_pagamento || 'OK';
+      document.getElementById('orderFreight').value = mae.valor_frete || 0;
+      document.getElementById('orderDiscount').value = mae.valor_desconto || 0;
+
+      // Parcelas
+      const pag = mae.forma_pagamento || 'Dinheiro';
       if (pag === 'Cartão Crédito') {
         document.getElementById('orderParcelasField').style.display = 'grid';
         document.getElementById('orderParcelaInfo').style.display = 'grid';
@@ -5296,53 +5357,70 @@ window.viewRequest = function(id) {
         document.getElementById('orderParcelasField').style.display = 'none';
         document.getElementById('orderParcelaInfo').style.display = 'none';
       }
-      
-      // Recria os custos extras
+
+      // Endereço
+      setTimeout(() => {
+        atualizarEnderecoVenda();
+        if (mae.endereco_entrega) {
+          const sel = document.getElementById('orderAddress');
+          if (sel) {
+            let achou = false;
+            for (const opt of sel.options) {
+              if (String(opt.value).trim() === String(mae.endereco_entrega).trim()) { sel.value = opt.value; achou = true; break; }
+            }
+            if (!achou) sel.add(new Option(mae.endereco_entrega, mae.endereco_entrega, true, true));
+          }
+        }
+      }, 100);
+
+      // Cria uma linha por item
+      itens.forEach(it => {
+        addOrderItemRow();
+        const rows = document.querySelectorAll('#orderItemsList .order-item-row');
+        const row = rows[rows.length - 1];
+        const prodObj = productById(it.id_produto);
+        if (!prodObj) return;
+
+        const prodInput = row.querySelector('.item-product');
+        prodInput.value = `${prodObj.marca} ${prodObj.modelo} ${prodObj.cor ? '· ' + prodObj.cor : ''} (${prodObj.sku})`;
+        prodInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+        setTimeout(() => {
+          row.querySelector('.item-number').value = it.numero || '';
+          row.querySelector('.item-qty').value = it.quantidade || 1;
+          row.querySelector('.item-cost').value = it.custo_unitario || 0;
+          row.querySelector('.item-price').value = it.valor_venda || 0;
+          calcularLucroVenda();
+        }, 60);
+      });
+
+      // Custos extras
       let custosArr = [];
-      if (v.custos_extras) {
-        try { custosArr = JSON.parse(v.custos_extras); } catch (e) {
-          custosArr = String(v.custos_extras).split('|').map(s => {
+      if (mae.custos_extras) {
+        try { custosArr = JSON.parse(mae.custos_extras); } catch (e) {}
+        if (!custosArr.length && typeof mae.custos_extras === 'string' && mae.custos_extras.includes(':')) {
+          custosArr = String(mae.custos_extras).split('|').map(s => {
             const [d, val] = s.split(':');
             return { descricao: d, valor: Number(val) };
           }).filter(c => c.descricao);
         }
       }
-      
       const lista = document.getElementById('orderCostsList');
       custosArr.forEach(c => {
         const div = document.createElement('div');
-        div.style.display = 'flex'; div.style.gap = '10px'; div.style.marginBottom = '10px';
-        
-        const inputDesc = document.createElement('input');
-        inputDesc.type = 'text';
-        inputDesc.className = 'order-cost-desc';
-        inputDesc.value = c.descricao || '';
-        inputDesc.style.cssText = 'flex:2; padding:8px; border:1px solid var(--line); border-radius:6px;';
-
-        const inputVal = document.createElement('input');
-        inputVal.type = 'number';
-        inputVal.className = 'order-cost-val';
-        inputVal.value = Number(c.valor || 0);
-        inputVal.min = '0';
-        inputVal.step = '0.01';
-        inputVal.style.cssText = 'flex:1; padding:8px; border:1px solid var(--line); border-radius:6px;';
-
-        const btnDel = document.createElement('button');
-        btnDel.type = 'button';
-        btnDel.className = 'btn btn-danger';
-        btnDel.textContent = 'X';
-        btnDel.style.cssText = 'padding:8px;';
-        btnDel.onclick = () => { div.remove(); calcularLucroVenda(); };
-
-        div.appendChild(inputDesc);
-        div.appendChild(inputVal);
-        div.appendChild(btnDel);
+        div.style.cssText = 'display:flex; gap:10px; margin-bottom:10px;';
+        div.innerHTML = `
+          <input type="text" class="order-cost-desc" value="${esc(c.descricao||'')}" style="flex:2; padding:8px; border:1px solid var(--line); border-radius:6px;" />
+          <input type="number" class="order-cost-val" value="${Number(c.valor||0)}" min="0" step="0.01" style="flex:1; padding:8px; border:1px solid var(--line); border-radius:6px;" />
+          <button type="button" class="btn btn-danger" style="padding:8px;">X</button>
+        `;
+        div.querySelector('button').onclick = () => { div.remove(); calcularLucroVenda(); };
         lista.appendChild(div);
       });
 
       calcularLucroVenda();
-      notify('Venda duplicada para edição. Ajuste se necessário e confirme.');
-      setTimeout(() => document.getElementById('orderFormPanel').scrollIntoView({ behavior:'smooth', block:'start' }), 50);
+      notify(`Venda duplicada (${itens.length} item${itens.length > 1 ? 's' : ''}). Ajuste se necessário e confirme.`);
+      setTimeout(() => document.getElementById('orderFormPanel').scrollIntoView({ behavior:'smooth', block:'start' }), 100);
     }
 
     function duplicarPedido(r) {
