@@ -204,6 +204,10 @@
           <div><div class="crumb">CAMINHARA / Gestão</div><div class="top-title" id="topTitle">Dashboard</div></div>
         </div>
         <div class="top-right">
+          <div style="position:relative;">
+            <input id="globalSearch" class="search" placeholder="🔍 Buscar produto, cliente, venda..." style="width:280px; padding:8px 12px; font-size:12px;" autocomplete="off" />
+            <div id="globalSearchResults" style="display:none; position:absolute; top:100%; right:0; margin-top:6px; width:380px; max-height:400px; overflow-y:auto; background:#fff; border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); z-index:50;"></div>
+          </div>
           <div class="status"><span class="dot" id="connDot"></span> <span id="connLabel">Conectando...</span></div>
           <div style="display:flex; align-items:center; gap:10px; margin-left:10px; border-left:1px solid #e4e9ee; padding-left:15px;">
             <span id="topUserName" style="font-size:12px; font-weight:bold; color:#202a35;"></span>
@@ -1679,6 +1683,111 @@ function renderZeroStockAlert() {
       stockFormPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
 
+    // ====== Busca global ======
+    function buscaGlobal(termo) {
+      const q = termo.trim().toLowerCase();
+      if (q.length < 2) return [];
+      const resultados = [];
+
+      // Produtos
+      products.forEach(p => {
+        const alvo = `${p.marca || ''} ${p.modelo || ''} ${p.cor || ''} ${p.sku || ''}`.toLowerCase();
+        if (alvo.includes(q)) {
+          resultados.push({
+            tipo: 'Produto',
+            icone: '◇',
+            titulo: `${p.marca} ${p.modelo}${p.cor ? ' · ' + p.cor : ''}`,
+            sub: p.sku || '',
+            acao: () => editProduct(p.id)
+          });
+        }
+      });
+
+      // Clientes
+      clients.forEach(c => {
+        const alvo = `${c.nome || ''} ${c.cpf || ''} ${c.whatsapp || ''} ${c.email || ''} ${c.cidade || ''}`.toLowerCase();
+        if (alvo.includes(q) || String(c.cpf || '').replace(/\D/g, '').includes(q.replace(/\D/g, ''))) {
+          resultados.push({
+            tipo: 'Cliente',
+            icone: '♙',
+            titulo: c.nome || 'Sem nome',
+            sub: c.whatsapp ? 'WhatsApp: ' + c.whatsapp : (c.cpf || ''),
+            acao: () => viewClient(c.id)
+          });
+        }
+      });
+
+      // Vendas (por ID, cliente, SKU)
+      sales.forEach(v => {
+        const alvo = `${v.id || ''} ${v.cliente || ''} ${v.sku_variacao || ''}`.toLowerCase();
+        if (alvo.includes(q)) {
+          const p = productById(v.id_produto);
+          resultados.push({
+            tipo: 'Venda',
+            icone: '💵',
+            titulo: `${v.cliente || 'Consumidor'} — ${money(v.valor_venda)}`,
+            sub: `${p ? p.marca + ' ' + p.modelo : 'Produto'} · ID ${String(v.id).slice(0,8)}`,
+            acao: () => viewOrder(v.id)
+          });
+        }
+      });
+
+      // Pedidos
+      requests.forEach(r => {
+        const alvo = `${r.id || ''} ${r.cliente || ''} ${r.sku_variacao || ''} ${r.codigo_rastreio || ''}`.toLowerCase();
+        if (alvo.includes(q)) {
+          const p = productById(r.id_produto);
+          resultados.push({
+            tipo: 'Pedido',
+            icone: '🛍',
+            titulo: `${r.cliente || 'Consumidor'} — ${money(r.valor_total)}`,
+            sub: `${p ? p.marca + ' ' + p.modelo : 'Produto'} · ${r.status_pedido || ''}`,
+            acao: () => viewRequest(r.id)
+          });
+        }
+      });
+
+      // Limita a 20 resultados no total
+      return resultados.slice(0, 20);
+    }
+
+    function renderBuscaGlobal(termo) {
+      const box = document.getElementById('globalSearchResults');
+      if (!box) return;
+      if (termo.trim().length < 2) { box.style.display = 'none'; return; }
+
+      const res = buscaGlobal(termo);
+      if (res.length === 0) {
+        box.innerHTML = '<div style="padding:14px; font-size:12px; color:#738091; text-align:center;">Nenhum resultado.</div>';
+        box.style.display = 'block';
+        return;
+      }
+
+      box.innerHTML = res.map((r, i) => `
+        <div class="global-result" data-idx="${i}" style="padding:10px 14px; cursor:pointer; border-bottom:1px solid #f0f3f6; display:flex; gap:10px; align-items:flex-start;">
+          <div style="width:28px; height:28px; border-radius:8px; background:#f0f3f6; display:grid; place-items:center; flex:0 0 auto; font-size:14px;">${r.icone}</div>
+          <div style="flex:1; min-width:0;">
+            <div style="font-size:12px; font-weight:700; color:#202936;">${esc(r.titulo)}</div>
+            <div style="font-size:10px; color:#738091; margin-top:2px;">${esc(r.tipo)} ${r.sub ? '· ' + esc(r.sub) : ''}</div>
+          </div>
+        </div>
+      `).join('');
+
+      box.querySelectorAll('.global-result').forEach(el => {
+        const idx = Number(el.dataset.idx);
+        el.addEventListener('mouseenter', () => el.style.background = '#f8fafc');
+        el.addEventListener('mouseleave', () => el.style.background = '');
+        el.addEventListener('click', () => {
+          box.style.display = 'none';
+          document.getElementById('globalSearch').value = '';
+          try { res[idx].acao(); } catch(e) { notify('Erro ao abrir: ' + e.message, true); }
+        });
+      });
+
+      box.style.display = 'block';
+    }
+
+
     // ====== Navegação ======
 const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sales:'Vendas', orders:'Pedidos', finance:'Financeiro', contacts:'Clientes', suppliers:'Fornecedores', activities:'Atividades', reports:'Relatório de Faturamento', settings:'Configurações' };
     function showSection(id) {
@@ -1695,6 +1804,31 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
 
     document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => showSection(b.dataset.go)));
     document.getElementById('menuToggle').addEventListener('click', () => document.getElementById('sidebar').classList.toggle('open'));
+
+    document.getElementById('globalSearch')?.addEventListener('input', function() {
+      renderBuscaGlobal(this.value);
+    });
+
+    document.getElementById('globalSearch')?.addEventListener('focus', function() {
+      if (this.value.trim().length >= 2) renderBuscaGlobal(this.value);
+    });
+
+    // Fecha ao clicar fora
+    document.addEventListener('click', (e) => {
+      const wrap = document.getElementById('globalSearch')?.parentElement;
+      const box = document.getElementById('globalSearchResults');
+      if (wrap && box && !wrap.contains(e.target)) box.style.display = 'none';
+    });
+
+    // ESC fecha
+    document.getElementById('globalSearch')?.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        this.value = '';
+        document.getElementById('globalSearchResults').style.display = 'none';
+        this.blur();
+      }
+    });
+
 
     // ====== Produtos: form ======
     const formPanel = document.getElementById('productFormPanel');
