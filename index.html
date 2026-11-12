@@ -967,6 +967,48 @@
             </table>
           </div>
         </div>
+
+        <div class="panel" style="margin-top: 20px;">
+          <div class="panel-head">
+            <div><h2>Tabela de Frete</h2><div class="panel-desc">Faixas de peso por UF. Usado no cálculo automático do frete na Venda/Pedido.</div></div>
+            <button class="btn btn-primary" id="newFreteBtn">＋ Nova Faixa</button>
+          </div>
+
+          <div id="freteFormPanel" style="display:none; background:#f8fafc; padding:16px; border-radius:10px; border:1px solid var(--line); margin-bottom:16px;">
+            <input type="hidden" id="freteEditId" />
+            <div class="form-grid">
+              <div class="field"><label for="freteUf">UF *</label>
+                <select id="freteUf" required>
+                  <option value="">— Selecione —</option>
+                  <option>AC</option><option>AL</option><option>AP</option><option>AM</option><option>BA</option>
+                  <option>CE</option><option>DF</option><option>ES</option><option>GO</option><option>MA</option>
+                  <option>MT</option><option>MS</option><option>MG</option><option>PA</option><option>PB</option>
+                  <option>PR</option><option>PE</option><option>PI</option><option>RJ</option><option>RN</option>
+                  <option>RS</option><option>RO</option><option>RR</option><option>SC</option><option>SP</option>
+                  <option>SE</option><option>TO</option>
+                </select>
+              </div>
+              <div class="field"><label for="fretePesoMin">Peso mínimo (kg) *</label><input id="fretePesoMin" type="number" min="0" step="0.001" required placeholder="Ex.: 0" /></div>
+              <div class="field"><label for="fretePesoMax">Peso máximo (kg) *</label><input id="fretePesoMax" type="number" min="0" step="0.001" required placeholder="Ex.: 0.300" /></div>
+              <div class="field"><label for="freteValor">Valor (R$) *</label><input id="freteValor" type="number" min="0" step="0.01" required placeholder="Ex.: 18.00" /></div>
+              <div class="field"><label for="fretePrazo">Prazo (dias)</label><input id="fretePrazo" type="number" min="0" step="1" placeholder="Ex.: 3" /></div>
+              <div class="field"><label for="freteAtivo">Ativo?</label>
+                <select id="freteAtivo"><option value="Sim">Sim</option><option value="Não">Não</option></select>
+              </div>
+            </div>
+            <div class="form-actions" style="margin-top:12px;">
+              <button class="btn btn-primary" id="saveFreteBtn" type="button">Salvar Faixa</button>
+              <button class="btn btn-light" id="cancelFreteBtn" type="button">Cancelar</button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>UF</th><th>Faixa de Peso (kg)</th><th>Valor</th><th>Prazo</th><th>Ativo</th><th>Ações</th></tr></thead>
+              <tbody id="freteTable"><tr><td colspan="6" class="table-empty">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
         </section>
       </div>
     </main>
@@ -1100,6 +1142,38 @@ let users = [];
     }
 
     // Gera SKU a partir de marca+modelo+cor (ex: CAR-LYO-AZU)
+
+    // ====== Frete: helpers ======
+    // Retorna a UF (2 letras) a partir do CEP (string ou número)
+    function ufPorCep(cep) {
+      const n = String(cep || '').replace(/\D/g, '');
+      if (n.length !== 8) return '';
+      const d = Number(n[0]);
+      // Mapa aproximado primeiro dígito do CEP -> UF principal
+      const mapa = {
+        0: 'SP', 1: 'SP', 2: 'RJ', 3: 'MG',
+        4: 'BA', 5: 'PE', 6: 'CE', 7: 'DF',
+        8: 'PR', 9: 'RS'
+      };
+      return mapa[d] || '';
+    }
+
+    // Busca a faixa de frete ativa para UF + peso. Retorna {valor, prazo_dias} ou null.
+    function buscarFretePorUfEPeso(uf, pesoKg) {
+      const u = String(uf || '').trim().toUpperCase();
+      const peso = Number(pesoKg || 0);
+      if (!u || peso <= 0) return null;
+      const faixas = tabelaFrete
+        .filter(f => String(f.ativo || '').toLowerCase() === 'sim' && String(f.uf || '').toUpperCase() === u)
+        .filter(f => peso >= Number(f.peso_min_kg || 0) && peso <= Number(f.peso_max_kg || 0))
+        .sort((a, b) => Number(a.peso_min_kg) - Number(b.peso_min_kg));
+      if (faixas.length === 0) return null;
+      const f = faixas[0];
+      return { valor: Number(f.valor || 0), prazo_dias: Number(f.prazo_dias || 0) };
+    }
+    // ====== Fim Frete helpers ======
+
+
     function generateSku(marca, modelo, cor) {
       const clean = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]/g,'');
       const m = clean(marca).slice(0,3) || 'XXX';
@@ -1290,7 +1364,8 @@ renderZeroStockAlert();
       renderRequests();       
       fillRequestProducts();  
       renderSuppliers();
-renderUsers();      
+renderUsers();
+renderTabelaFrete();    
 }
 
 function renderZeroStockAlert() {
@@ -1941,7 +2016,7 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
     }
     document.querySelectorAll('[data-section]').forEach(b => b.addEventListener('click', () => showSection(b.dataset.section)));
     document.querySelectorAll('[data-section="settings"]').forEach(b => {
-      b.addEventListener('click', () => { carregarConfig(); });
+      b.addEventListener('click', () => { carregarConfig(); renderTabelaFrete(); });
     });
 
     document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => showSection(b.dataset.go)));
@@ -3341,6 +3416,123 @@ document.getElementById('confirmPassword')?.addEventListener('keypress', (e) => 
 });
 
 // ====== Usuários ======
+
+// ====== Tabela de Frete: CRUD ======
+function renderTabelaFrete() {
+  const tbody = document.getElementById('freteTable');
+  if (!tbody) return;
+
+  const sorted = [...tabelaFrete].sort((a, b) => {
+    const uf = String(a.uf || '').localeCompare(String(b.uf || ''));
+    if (uf !== 0) return uf;
+    return Number(a.peso_min_kg || 0) - Number(b.peso_min_kg || 0);
+  });
+
+  tbody.innerHTML = sorted.length ? sorted.map(f => {
+    const ativo = (String(f.ativo || '').toLowerCase() === 'sim')
+      ? '<span style="color:#27775d;font-weight:700;background:#e6f4ea;padding:4px 8px;border-radius:6px">Sim</span>'
+      : '<span style="color:#b04545;font-weight:700;background:#fce8e8;padding:4px 8px;border-radius:6px">Não</span>';
+    return `<tr>
+      <td><strong>${esc(f.uf)}</strong></td>
+      <td>${Number(f.peso_min_kg || 0).toFixed(3)} → ${Number(f.peso_max_kg || 0).toFixed(3)}</td>
+      <td><strong>${money(f.valor)}</strong></td>
+      <td>${Number(f.prazo_dias || 0)} dia(s)</td>
+      <td>${ativo}</td>
+      <td>
+        <button class="btn btn-light" data-edit-frete="${esc(f.id)}" style="padding:6px 9px">Editar</button>
+        <button class="btn btn-danger" data-del-frete="${esc(f.id)}" style="padding:6px 9px">Excluir</button>
+      </td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="6" class="table-empty">Nenhuma faixa cadastrada.</td></tr>';
+
+  tbody.querySelectorAll('[data-edit-frete]').forEach(b => b.onclick = () => editFrete(b.dataset.editFrete));
+  tbody.querySelectorAll('[data-del-frete]').forEach(b => b.onclick = () => deleteFrete(b.dataset.delFrete));
+}
+
+document.getElementById('newFreteBtn')?.addEventListener('click', () => {
+  document.getElementById('freteEditId').value = '';
+  document.getElementById('freteUf').value = '';
+  document.getElementById('fretePesoMin').value = '';
+  document.getElementById('fretePesoMax').value = '';
+  document.getElementById('freteValor').value = '';
+  document.getElementById('fretePrazo').value = '';
+  document.getElementById('freteAtivo').value = 'Sim';
+  document.getElementById('freteFormPanel').style.display = 'block';
+  document.getElementById('freteUf').focus();
+});
+
+document.getElementById('cancelFreteBtn')?.addEventListener('click', () => {
+  document.getElementById('freteFormPanel').style.display = 'none';
+});
+
+function editFrete(id) {
+  const f = tabelaFrete.find(x => String(x.id) === String(id));
+  if (!f) return;
+  document.getElementById('freteEditId').value = f.id;
+  document.getElementById('freteUf').value = f.uf || '';
+  document.getElementById('fretePesoMin').value = f.peso_min_kg || 0;
+  document.getElementById('fretePesoMax').value = f.peso_max_kg || 0;
+  document.getElementById('freteValor').value = f.valor || 0;
+  document.getElementById('fretePrazo').value = f.prazo_dias || 0;
+  document.getElementById('freteAtivo').value = (String(f.ativo || '').toLowerCase() === 'sim') ? 'Sim' : 'Não';
+  document.getElementById('freteFormPanel').style.display = 'block';
+  document.getElementById('freteUf').focus();
+}
+
+document.getElementById('saveFreteBtn')?.addEventListener('click', async () => {
+  const id = document.getElementById('freteEditId').value;
+  const uf = document.getElementById('freteUf').value;
+  const pesoMin = Number(document.getElementById('fretePesoMin').value || 0);
+  const pesoMax = Number(document.getElementById('fretePesoMax').value || 0);
+  const valor = Number(document.getElementById('freteValor').value || 0);
+  const prazo = Number(document.getElementById('fretePrazo').value || 0);
+  const ativo = document.getElementById('freteAtivo').value;
+
+  if (!uf) { notify('Selecione a UF.', true); return; }
+  if (pesoMin < 0 || pesoMax <= pesoMin) { notify('Faixa de peso inválida: máximo deve ser maior que mínimo.', true); return; }
+  if (valor <= 0) { notify('Valor do frete deve ser maior que zero.', true); return; }
+
+  try {
+    startLoad();
+    const payload = {
+      uf, peso_min_kg: pesoMin, peso_max_kg: pesoMax,
+      valor, prazo_dias: prazo, ativo,
+      vendedor: usuarioLogado?.nome || 'Sistema'
+    };
+    if (id) {
+      payload.id = id;
+      await apiPost({ action: 'update', sheet: 'Tabela_Frete', data: payload });
+      notify('Faixa atualizada!');
+    } else {
+      payload.id = uuid();
+      await apiPost({ action: 'append', sheet: 'Tabela_Frete', data: payload });
+      notify('Faixa cadastrada!');
+    }
+    document.getElementById('freteFormPanel').style.display = 'none';
+    await loadAll();
+  } catch (err) {
+    notify('Erro ao salvar faixa: ' + err.message, true);
+    endLoad();
+  }
+});
+
+async function deleteFrete(id) {
+  window.pedirSenhaGerente(async () => {
+    startLoad();
+    try {
+      await apiPost({ action: 'delete', sheet: 'Tabela_Frete', id, vendedor: usuarioLogado?.nome || 'Sistema' });
+      notify('Faixa excluída.');
+      await loadAll();
+    } catch (err) {
+      notify('Erro ao excluir faixa: ' + err.message, true);
+    } finally {
+      endLoad();
+    }
+  });
+}
+// ====== Fim Tabela de Frete ======
+
+
 function renderUsers() {
   const tbody = document.getElementById('usersTable');
   if (!tbody) return;
