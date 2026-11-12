@@ -2191,7 +2191,12 @@ const descontoVenda = Number(document.getElementById('orderDiscount').value || 0
       const estoqueItem = stock.find(s => String(s.id_produto) === String(id_produto) && String(s.numero) === String(numero));
 
       if (baixarEstoque && (!estoqueItem || Number(estoqueItem.quantidade) < qtdVendida)) {
-        const confirmar = confirm(`Atenção: o estoque desta numeração é ${estoqueItem ? estoqueItem.quantidade : 0} mas você está vendendo ${qtdVendida}. Deseja continuar mesmo assim?`);
+        const disponivel = estoqueItem ? Number(estoqueItem.quantidade) : 0;
+        if (!permitirVendaSemEstoque) {
+          notify(`Estoque insuficiente: disponível ${disponivel}, solicitado ${qtdVendida}. Ajuste a quantidade ou peça ao gerente para liberar a venda sem estoque nas Configurações.`, true);
+          return;
+        }
+        const confirmar = confirm(`Atenção: o estoque desta numeração é ${disponivel} mas você está vendendo ${qtdVendida}. Deseja continuar mesmo assim?`);
         if (!confirmar) return;
       }
 
@@ -3325,6 +3330,22 @@ function renderSuppliers() {
       if (!clienteCadastrado) {
         notify('Informe um CPF/CNPJ de cliente já cadastrado.', true);
         return;
+      }
+
+      // Bloqueia pedido sem estoque se a política for rígida
+      if (!permitirVendaSemEstoque) {
+        const prodTxt = document.getElementById('reqProduct').value;
+        const prodSel = products.find(x => `${x.marca} ${x.modelo} ${x.cor ? '· ' + x.cor : ''} (${x.sku})` === prodTxt);
+        const numSel = document.getElementById('reqNumber').value;
+        const qtdSel = Number(document.getElementById('reqQty').value || 0);
+        if (prodSel && numSel && qtdSel > 0) {
+          const itemEst = stock.find(s => String(s.id_produto) === String(prodSel.id) && String(s.numero) === String(numSel));
+          const disp = itemEst ? Number(itemEst.quantidade) : 0;
+          if (disp < qtdSel) {
+            notify(`Estoque insuficiente para este pedido: disponível ${disp}, solicitado ${qtdSel}. Ajuste a quantidade ou libere a política em Configurações.`, true);
+            return;
+          }
+        }
       }
 
       const cliente = clienteCadastrado.nome;
