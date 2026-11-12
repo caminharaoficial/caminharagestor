@@ -1060,6 +1060,7 @@
       <div class="form-actions" style="margin-top:20px;">
         <button class="btn btn-light" type="button" id="detailDuplicateBtn" style="display:none; margin-right:auto;">📄 Duplicar</button>
         <button class="btn btn-light" type="button" id="detailPrintBtn" style="display:none; color:#526b83; border-color:#526b83;">🖨 Comprovante</button>
+        <button class="btn btn-light" type="button" id="detailLabelBtn" style="display:none; color:#202a35; border-color:#202a35;">🖨 Etiqueta de Envio</button>
         <button class="btn btn-light" type="button" id="detailWhatsBtn" style="display:none; color:#25D366; border-color:#25D366;">📱 WhatsApp</button>
         <button class="btn btn-primary" type="button" id="detailEditBtn">Editar</button>
         <button class="btn btn-danger" type="button" id="detailDeleteBtn">Excluir</button>
@@ -3409,6 +3410,7 @@ window.deleteAddress = async function(idAddr) {
       detailKind = 'client'; detailId = id; 
       detailTitle.textContent = 'Ficha do Cliente';
   document.getElementById('detailPrintBtn').style.display = 'none';
+  document.getElementById('detailLabelBtn').style.display = 'none';
   document.getElementById('detailWhatsBtn').style.display = 'none';
       
       detailBody.innerHTML = `
@@ -4426,6 +4428,146 @@ function calcularLucroPedido() {
       `).join('');
     }
 
+function gerarEtiquetaEnvio(registro, tipo) {
+  // tipo = 'venda' | 'pedido'
+  if (!registro) { notify('Registro não encontrado.', true); return; }
+
+  // ===== Dados do remetente (Configurações) =====
+  const remNome = dadosLoja.nome || 'CAMINHARA';
+  const remCnpj = dadosLoja.cnpj || '';
+  const remEnd = dadosLoja.endereco || '';
+  const remWhats = dadosLoja.whats || '';
+
+  // ===== Dados do destinatário (cliente) =====
+  const nomeCli = registro.cliente || 'Consumidor Final';
+  const cli = clients.find(c => String(c.nome).trim() === String(nomeCli).trim());
+
+  let destEndereco = registro.endereco_entrega || '';
+  if (!destEndereco && cli) {
+    destEndereco = [
+      cli.logradouro, cli.numero_end, cli.complemento, cli.bairro,
+      cli.cidade, cli.estado, cli.cep
+    ].filter(Boolean).join(', ');
+  }
+  if (!destEndereco) destEndereco = 'Endereço não informado';
+
+  const destWhats = cli ? (cli.whatsapp || '') : '';
+  const destCpf = cli ? (cli.cpf || '') : '';
+
+  // ===== Produto / valores =====
+  const p = productById(registro.id_produto);
+  const nomeProd = p ? `${p.marca} ${p.modelo}` : 'Produto';
+  const numero = registro.numero || '—';
+  const qtd = registro.quantidade || 0;
+
+  const valorDeclarado = tipo === 'venda'
+    ? Number(registro.valor_venda || 0)
+    : Number(registro.valor_total || 0);
+
+  // ===== Rastreio =====
+  let rastreio = '';
+  if (tipo === 'pedido') {
+    rastreio = registro.codigo_rastreio || '';
+  } else {
+    // Venda: tenta achar pedido original pelo cliente/produto/numero
+    const ped = requests.find(r =>
+      String(r.cliente || '').trim() === String(registro.cliente || '').trim() &&
+      String(r.id_produto || '') === String(registro.id_produto || '') &&
+      String(r.numero || '') === String(registro.numero || '') &&
+      r.codigo_rastreio
+    );
+    rastreio = ped ? ped.codigo_rastreio : '';
+  }
+  if (!rastreio) rastreio = 'SEM-RASTREIO';
+
+  // ===== Monta HTML 10x15 =====
+  const win = window.open('', '_blank');
+  win.document.write(`
+    <html>
+    <head>
+      <title>Etiqueta ${esc(rastreio)}</title>
+      <style>
+        @page { size: 10cm 15cm; margin: 0; }
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 0; font-family: Arial, sans-serif; color: #000; }
+        .etiqueta { width: 10cm; height: 15cm; padding: 6mm; display: flex; flex-direction: column; gap: 4mm; }
+        .bloco { border: 1.2px solid #000; border-radius: 2mm; padding: 3mm; }
+        .titulo-bloco { font-size: 7pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1.5mm; color: #444; }
+        .rem-nome { font-size: 10pt; font-weight: bold; margin-bottom: 1mm; }
+        .rem-info { font-size: 7.5pt; line-height: 1.3; }
+        .dest-nome { font-size: 11pt; font-weight: bold; margin-bottom: 1.5mm; }
+        .dest-info { font-size: 8pt; line-height: 1.35; }
+        .rastreio-bloco { text-align: center; padding: 3mm 2mm; }
+        .rastreio-txt { font-family: monospace; font-size: 11pt; font-weight: bold; letter-spacing: 0.5px; margin-top: 1.5mm; }
+        .produto-bloco { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+        .produto-linha { font-size: 8pt; line-height: 1.4; }
+        .produto-linha strong { font-size: 9pt; }
+        .valor { margin-top: 2mm; font-size: 9pt; font-weight: bold; text-align: right; border-top: 1px dashed #000; padding-top: 1.5mm; }
+        @media print {
+          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+      </style>
+      <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script>
+    </head>
+    <body>
+      <div class="etiqueta">
+
+        <div class="bloco">
+          <div class="titulo-bloco">Remetente</div>
+          <div class="rem-nome">${esc(remNome)}</div>
+          <div class="rem-info">
+            ${remCnpj ? 'CNPJ: ' + esc(remCnpj) + '<br>' : ''}
+            ${remEnd ? esc(remEnd) + '<br>' : ''}
+            ${remWhats ? 'WhatsApp: ' + esc(remWhats) : ''}
+          </div>
+        </div>
+
+        <div class="bloco">
+          <div class="titulo-bloco">Destinatário</div>
+          <div class="dest-nome">${esc(nomeCli)}</div>
+          <div class="dest-info">
+            ${destEndereco ? esc(destEndereco) + '<br>' : ''}
+            ${destWhats ? 'WhatsApp: ' + esc(destWhats) + '<br>' : ''}
+            ${destCpf ? 'CPF/CNPJ: ' + esc(destCpf) : ''}
+          </div>
+        </div>
+
+        <div class="bloco rastreio-bloco">
+          <div class="titulo-bloco" style="margin-bottom:1mm;">Código de Rastreio</div>
+          <svg id="barcodeRastreio"></svg>
+          <div class="rastreio-txt">${esc(rastreio)}</div>
+        </div>
+
+        <div class="bloco produto-bloco">
+          <div class="titulo-bloco">Conteúdo</div>
+          <div class="produto-linha"><strong>${esc(nomeProd)}</strong></div>
+          <div class="produto-linha">Numeração: <strong>${esc(numero)}</strong> · Quantidade: <strong>${qtd}</strong></div>
+          <div class="produto-linha">SKU: ${esc(registro.sku_variacao || '—')}</div>
+          <div class="valor">Valor declarado: ${money(valorDeclarado)}</div>
+        </div>
+
+      </div>
+      <script>
+        window.onload = function() {
+          try {
+            JsBarcode('#barcodeRastreio', '${String(rastreio).replace(/'/g, "\\'")}', {
+              format: 'CODE128',
+              width: 2,
+              height: 50,
+              displayValue: false,
+              margin: 0
+            });
+          } catch(e) { console.error('Erro no código de barras', e); }
+          setTimeout(function() { window.print(); }, 400);
+        };
+      <\/script>
+    </body>
+    </html>
+  `);
+  win.document.close();
+}
+
+
 function gerarComprovante(v) {
   const p = productById(v.id_produto);
   const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto excluído';
@@ -4589,8 +4731,10 @@ window.viewOrder = function(id) {
   detailEditBtn.style.display = 'inline-flex';
   detailDeleteBtn.style.display = 'inline-flex';
   
-  // Mostra os botões de comprovante e whatsapp
+  // Mostra os botões de comprovante, etiqueta e whatsapp
   document.getElementById('detailPrintBtn').style.display = 'inline-flex';
+  document.getElementById('detailLabelBtn').style.display = 'inline-flex';
+  document.getElementById('detailLabelBtn').onclick = () => gerarEtiquetaEnvio(v, 'venda');
   document.getElementById('detailWhatsBtn').style.display = 'inline-flex';
   document.getElementById('detailPrintBtn').onclick = () => gerarComprovante(v);
   document.getElementById('detailWhatsBtn').onclick = () => enviarWhatsApp(v);
@@ -4654,6 +4798,8 @@ window.viewRequest = function(id) {
 
   detailKind = 'request'; detailId = id; detailTitle.textContent = 'Detalhes do Pedido';
   document.getElementById('detailPrintBtn').style.display = 'none';
+  document.getElementById('detailLabelBtn').style.display = 'inline-flex';
+  document.getElementById('detailLabelBtn').onclick = () => gerarEtiquetaEnvio(r, 'pedido');
   document.getElementById('detailWhatsBtn').style.display = 'none';
   const p = productById(r.id_produto);
   const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto excluído';
