@@ -397,7 +397,7 @@
 
                 <div class="field" id="orderCostField"><label for="orderCostUnit">Custo Unitário (R$) *</label><input id="orderCostUnit" type="number" min="0" step="0.01" required placeholder="0,00"/></div>
 <div class="field"><label for="orderPrice">Valor Total (R$) *</label><input id="orderPrice" type="number" min="0" step="0.01" required placeholder="0,00"/></div>
-<div class="field"><label for="orderFreight">Valor do Frete (R$)</label><input id="orderFreight" type="number" min="0" step="0.01" placeholder="0,00"/></div>
+<div class="field"><label for="orderFreight">Valor do Frete (R$)</label><input id="orderFreight" type="number" min="0" step="0.01" placeholder="0,00"/><div id="orderFretePrazo" style="font-size:10px; margin-top:4px; min-height:12px;"></div></div>
 <div class="field">
   <label for="orderDiscount">Desconto</label>
   <div style="display:flex; gap:6px;">
@@ -525,7 +525,7 @@
                 <div class="field"><label for="reqQty">Qtd *</label><input id="reqQty" type="number" min="1" value="1" required/></div>
                 <div class="field"><label for="reqCostUnit">Custo Unitário (R$) *</label><input id="reqCostUnit" type="number" min="0" step="0.01" required/></div>
 <div class="field"><label for="reqPrice">Valor Total (R$) *</label><input id="reqPrice" type="number" min="0" step="0.01" required/></div>
-<div class="field"><label for="reqFreight">Valor do Frete (R$)</label><input id="reqFreight" type="number" min="0" step="0.01" placeholder="0,00"/></div>
+<div class="field"><label for="reqFreight">Valor do Frete (R$)</label><input id="reqFreight" type="number" min="0" step="0.01" placeholder="0,00"/><div id="reqFretePrazo" style="font-size:10px; margin-top:4px; min-height:12px;"></div></div>
 <div class="field">
   <label for="reqDiscount">Desconto</label>
   <div style="display:flex; gap:6px;">
@@ -1171,8 +1171,82 @@ let users = [];
       const f = faixas[0];
       return { valor: Number(f.valor || 0), prazo_dias: Number(f.prazo_dias || 0) };
     }
-    // ====== Fim Frete helpers ======
 
+    // Calcula e preenche o frete automaticamente. prefixo = 'order' | 'req'.
+    // Respeita sobrescrita manual: se o campo foi editado à mão, não sobrescreve.
+    function calcularFreteAutomatico(prefixo) {
+      const idFrete = prefixo === 'order' ? 'orderFreight' : 'reqFreight';
+      const idPrazo = prefixo === 'order' ? 'orderFretePrazo' : 'reqFretePrazo';
+      const idDoc = prefixo === 'order' ? 'orderCpfCnpj' : 'reqCpfCnpj';
+      const idProd = prefixo === 'order' ? 'orderProduct' : 'reqProduct';
+      const idQty = prefixo === 'order' ? 'orderQty' : 'reqQty';
+
+      const campoFrete = document.getElementById(idFrete);
+      const campoPrazo = document.getElementById(idPrazo);
+      if (!campoFrete) return;
+
+      // Se o usuário editou manualmente, não mexe mais
+      if (campoFrete.dataset.manual === 'true') return;
+
+      const doc = (document.getElementById(idDoc)?.value || '').trim();
+      const cliente = buscarClientePorDocumento(doc);
+      const prodText = (document.getElementById(idProd)?.value || '').trim();
+      const prodObj = products.find(x => `${x.marca} ${x.modelo} ${x.cor ? '· ' + x.cor : ''} (${x.sku})` === prodText);
+      const qtd = Number(document.getElementById(idQty)?.value || 1);
+
+      // Limpa prazo
+      if (campoPrazo) campoPrazo.textContent = '';
+
+      if (!cliente || !prodObj) {
+        campoFrete.value = '';
+        return;
+      }
+
+      // 1. Descobre UF do cliente
+      let uf = String(cliente.estado || '').trim().toUpperCase();
+      if (!uf || uf.length !== 2) {
+        uf = ufPorCep(cliente.cep || '');
+      }
+      if (!uf) {
+        campoFrete.value = '';
+        if (campoPrazo) campoPrazo.textContent = 'UF do cliente não identificada — informe o frete manualmente.';
+        campoPrazo.style.color = '#a16b1e';
+        return;
+      }
+
+      // 2. Peso total = peso do produto × quantidade
+      const pesoUnit = Number(prodObj.peso_kg || 0);
+      if (pesoUnit <= 0) {
+        campoFrete.value = '';
+        if (campoPrazo) campoPrazo.textContent = 'Produto sem peso cadastrado — cadastre em Produtos para calcular o frete.';
+        campoPrazo.style.color = '#a16b1e';
+        return;
+      }
+      const pesoTotal = pesoUnit * qtd;
+
+      // 3. Busca faixa
+      const faixa = buscarFretePorUfEPeso(uf, pesoTotal);
+      if (!faixa) {
+        campoFrete.value = '';
+        if (campoPrazo) campoPrazo.textContent = `Sem faixa de frete para ${uf} com ${pesoTotal.toFixed(3)} kg — cadastre em Configurações.`;
+        campoPrazo.style.color = '#b04545';
+        return;
+      }
+
+      // 4. Preenche
+      campoFrete.value = faixa.valor.toFixed(2);
+      if (campoPrazo) {
+        campoPrazo.textContent = `Estimado: ${uf} · ${pesoTotal.toFixed(3)} kg · prazo ${faixa.prazo_dias} dia(s).`;
+        campoPrazo.style.color = '#27775d';
+      }
+
+      // Recalcula lucro (o frete afeta o lucro)
+      if (prefixo === 'order') calcularLucroVenda();
+      else calcularLucroPedido();
+    }
+
+
+    // ====== Fim Frete helpers ======
 
     function generateSku(marca, modelo, cor) {
       const clean = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]/g,'');
@@ -2345,9 +2419,37 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
       }
     }
 
-    document.getElementById('orderClient')?.addEventListener('input', atualizarEnderecoVenda);
+document.getElementById('orderClient')?.addEventListener('input', atualizarEnderecoVenda);
     document.getElementById('orderClient')?.addEventListener('change', atualizarEnderecoVenda);
 
+    // ====== Frete: manual + reset ======
+    ['orderFreight','reqFreight'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('input', function() { this.dataset.manual = 'true'; });
+    });
+    ['orderCpfCnpj','reqCpfCnpj','orderProduct','reqProduct'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('change', () => {
+        const f = document.getElementById(id.startsWith('order') ? 'orderFreight' : 'reqFreight');
+        if (f) { f.dataset.manual = 'false'; f.value = ''; }
+      });
+    });
+    // ====== Fim Frete manual/reset ======
+
+    // ====== Frete: gatilhos de cálculo ======
+    ['orderCpfCnpj','orderProduct','orderQty'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('change', () => setTimeout(() => calcularFreteAutomatico('order'), 80));
+    });
+    ['reqCpfCnpj','reqProduct','reqQty'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('change', () => setTimeout(() => calcularFreteAutomatico('req'), 80));
+    });
+    // ====== Fim Frete gatilhos ======
 
     document.getElementById('reqFilterBtn')?.addEventListener('click', renderRequests);
     document.getElementById('reqClearFilterBtn')?.addEventListener('click', () => {
