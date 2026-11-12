@@ -772,7 +772,10 @@
         <section class="section" id="reports">
           <div class="page-heading">
             <div><h1>Relatório de Faturamento</h1><p class="subtitle">Analise o desempenho das vendas por período.</p></div>
-            <button class="btn btn-light" id="printReportBtn" onclick="window.print()">🖨 Imprimir</button>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-light" id="exportCsvBtn">📥 Exportar CSV</button>
+              <button class="btn btn-light" id="printReportBtn" onclick="window.print()">🖨 Imprimir</button>
+            </div>
           </div>
           
           <section class="panel" style="margin-bottom: 20px;">
@@ -4501,6 +4504,155 @@ document.getElementById('reportSellerTable').innerHTML = vendedoresOrdenados.len
       if (document.getElementById('reportStart').value && document.getElementById('reportEnd').value) {
         btn?.click();
       }
+    });
+
+    // ====== Exportar Relatório para CSV ======
+    document.getElementById('exportCsvBtn')?.addEventListener('click', () => {
+      const startStr = document.getElementById('reportStart').value;
+      const endStr = document.getElementById('reportEnd').value;
+      if (!startStr || !endStr) {
+        notify('Gere um relatório antes de exportar (selecione as datas).', true);
+        return;
+      }
+
+      const start = new Date(startStr + 'T00:00:00');
+      const end = new Date(endStr + 'T23:59:59');
+      const catFilter = document.getElementById('reportProductCategory')?.value || '';
+
+      const filtered = sales.filter(s => {
+        if (!s.data_venda) return false;
+        const d = new Date(s.data_venda);
+        return d >= start && d <= end;
+      });
+
+      if (filtered.length === 0) {
+        notify('Nenhuma venda no período selecionado.', true);
+        return;
+      }
+
+      const sep = ';';
+      const linha = (arr) => arr.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(sep);
+      const linhas = [];
+
+      // Cabeçalho geral
+      linhas.push(linha(['RELATÓRIO CAMINHARA']));
+      linhas.push(linha(['Período', startStr + ' a ' + endStr]));
+      linhas.push('');
+
+      // Resumo geral
+      let totalVendido = 0, totalLucro = 0;
+      filtered.forEach(s => {
+        totalVendido += Number(s.valor_venda || 0);
+        totalLucro += Number(s.lucro || 0);
+      });
+      linhas.push(linha(['RESUMO GERAL']));
+      linhas.push(linha(['Total Vendido', 'Lucro Total', 'Qtd Vendas', 'Ticket Médio']));
+      linhas.push(linha([
+        totalVendido.toFixed(2),
+        totalLucro.toFixed(2),
+        filtered.length,
+        (totalVendido / filtered.length).toFixed(2)
+      ]));
+      linhas.push('');
+
+      // Por pagamento
+      const porPag = {};
+      filtered.forEach(s => {
+        const f = s.forma_pagamento || 'Não informada';
+        if (!porPag[f]) porPag[f] = { count: 0, valor: 0 };
+        porPag[f].count++;
+        porPag[f].valor += Number(s.valor_venda || 0);
+      });
+      linhas.push(linha(['RESUMO POR FORMA DE PAGAMENTO']));
+      linhas.push(linha(['Forma', 'Qtd', 'Total']));
+      Object.keys(porPag).sort().forEach(f => {
+        linhas.push(linha([f, porPag[f].count, porPag[f].valor.toFixed(2)]));
+      });
+      linhas.push('');
+
+      // Por dia
+      const porDia = {};
+      filtered.forEach(s => {
+        const d = new Date(s.data_venda).toISOString().split('T')[0];
+        if (!porDia[d]) porDia[d] = { count: 0, valor: 0, lucro: 0 };
+        porDia[d].count++;
+        porDia[d].valor += Number(s.valor_venda || 0);
+        porDia[d].lucro += Number(s.lucro || 0);
+      });
+      linhas.push(linha(['RESUMO POR DIA']));
+      linhas.push(linha(['Data', 'Qtd', 'Total', 'Lucro']));
+      Object.keys(porDia).sort().reverse().forEach(d => {
+        linhas.push(linha([d, porDia[d].count, porDia[d].valor.toFixed(2), porDia[d].lucro.toFixed(2)]));
+      });
+      linhas.push('');
+
+      // Por vendedor
+      const porVend = {};
+      filtered.forEach(s => {
+        const v = s.vendedor ? String(s.vendedor).trim() : 'Sistema';
+        if (!porVend[v]) porVend[v] = { count: 0, valor: 0, lucro: 0 };
+        porVend[v].count++;
+        porVend[v].valor += Number(s.valor_venda || 0);
+        porVend[v].lucro += Number(s.lucro || 0);
+      });
+      linhas.push(linha(['RANKING DE VENDEDORES']));
+      linhas.push(linha(['Vendedor', 'Qtd', 'Total', 'Lucro']));
+      Object.keys(porVend).sort((a,b) => porVend[b].valor - porVend[a].valor).forEach(v => {
+        linhas.push(linha([v, porVend[v].count, porVend[v].valor.toFixed(2), porVend[v].lucro.toFixed(2)]));
+      });
+      linhas.push('');
+
+      // Por produto (com filtro de categoria)
+      const porProd = {};
+      filtered.forEach(s => {
+        if (!s.id_produto) return;
+        if (!porProd[s.id_produto]) porProd[s.id_produto] = { qtd: 0, valor: 0, lucro: 0 };
+        porProd[s.id_produto].qtd += Number(s.quantidade || 0);
+        porProd[s.id_produto].valor += Number(s.valor_venda || 0);
+        porProd[s.id_produto].lucro += Number(s.lucro || 0);
+      });
+      linhas.push(linha(['RANKING DE PRODUTOS' + (catFilter ? ' — Categoria: ' + catFilter : '')]));
+      linhas.push(linha(['Produto', 'Qtd Vendida', 'Total', 'Lucro']));
+      Object.keys(porProd)
+        .filter(id => {
+          if (!catFilter) return true;
+          const p = productById(id);
+          return p && String(p.categoria || '').trim() === catFilter;
+        })
+        .sort((a,b) => porProd[b].qtd - porProd[a].qtd)
+        .forEach(id => {
+          const p = productById(id);
+          const nome = p ? `${p.marca} ${p.modelo} ${p.cor || ''}`.trim() : 'Excluído';
+          linhas.push(linha([nome, porProd[id].qtd, porProd[id].valor.toFixed(2), porProd[id].lucro.toFixed(2)]));
+        });
+      linhas.push('');
+
+      // Por cliente
+      const porCli = {};
+      filtered.forEach(s => {
+        const c = s.cliente ? String(s.cliente).trim() : 'Consumidor Final';
+        if (!porCli[c]) porCli[c] = { count: 0, valor: 0 };
+        porCli[c].count++;
+        porCli[c].valor += Number(s.valor_venda || 0);
+      });
+      linhas.push(linha(['RANKING DE CLIENTES']));
+      linhas.push(linha(['Cliente', 'Compras', 'Total', 'Ticket Médio']));
+      Object.keys(porCli).sort((a,b) => porCli[b].valor - porCli[a].valor).forEach(c => {
+        linhas.push(linha([c, porCli[c].count, porCli[c].valor.toFixed(2), (porCli[c].valor / porCli[c].count).toFixed(2)]));
+      });
+
+      // Download
+      const csv = '\uFEFF' + linhas.join('\r\n'); // BOM UTF-8 para Excel
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `relatorio_caminhara_${startStr}_a_${endStr}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      notify('CSV exportado!');
     });
 
 
