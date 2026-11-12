@@ -316,8 +316,12 @@
             </form>
           </div>
           <section class="panel">
-            <div class="toolbar"><input class="search" id="productSearch" placeholder="Buscar por marca, modelo ou cor..." aria-label="Buscar produtos"/><button class="btn btn-light" id="refreshBtn">Atualizar</button></div>
-            <div class="table-wrap"><table><thead><tr><th>SKU</th><th>Categoria</th><th>Marca</th><th>Modelo</th><th>Cor</th><th>Gênero</th><th>Coleção</th><th>Grade</th><th>Custo</th><th>Preço</th><th>Estoque</th><th>Ações</th></tr></thead><tbody id="productsTable"><tr><td colspan="12" class="table-empty">Carregando...</td></tr></tbody></table></div>
+            <div class="toolbar">
+              <input class="search" id="productSearch" placeholder="Buscar por marca, modelo ou cor..." aria-label="Buscar produtos"/>
+              <button class="btn btn-light" id="refreshBtn">Atualizar</button>
+              <button class="btn btn-primary" id="printBatchLabelsBtn" style="background:#526b83;">🖨 Etiquetas Selecionadas</button>
+            </div>
+<div class="table-wrap"><table><thead><tr><th style="width:32px;"><input type="checkbox" id="selectAllProducts" title="Selecionar todos"/></th><th>SKU</th><th>Categoria</th><th>Marca</th><th>Modelo</th><th>Cor</th><th>Gênero</th><th>Coleção</th><th>Grade</th><th>Custo</th><th>Preço</th><th>Estoque</th><th>Ações</th></tr></thead><tbody id="productsTable"><tr><td colspan="13" class="table-empty">Carregando...</td></tr></tbody></table></div>
           </section>
         </section>
 
@@ -1467,6 +1471,7 @@ function renderZeroStockAlert() {
       const filtered = products.filter(p => [p.marca, p.modelo, p.cor, p.genero, p.sku, p.colecao, p.categoria].some(v => String(v || '').toLowerCase().includes(q)));
       const tbody = document.getElementById('productsTable');
       tbody.innerHTML = filtered.length ? filtered.map(p => `<tr>
+        <td><input type="checkbox" class="product-select" data-id="${esc(p.id)}" /></td>
         <td><strong>${esc(p.sku || '—')}</strong></td>
         <td>${esc(p.categoria || '—')}</td>
         <td>${esc(p.marca)}</td><td>${esc(p.modelo)}</td><td>${esc(p.cor || '—')}</td>
@@ -1475,11 +1480,23 @@ function renderZeroStockAlert() {
         <td>${money(p.custo)}</td><td>${money(p.preco_venda)}</td><td>${totalStock(p.id)}</td>
         <td><button class="btn btn-light" data-edit="${esc(p.id)}" style="padding:6px 9px">Editar</button>
 <button class="btn btn-light" data-label="${esc(p.id)}" style="padding:6px 9px; color:#526b83; border-color:#526b83;">Etiquetas</button> <button class="btn btn-danger" data-del="${esc(p.id)}" style="padding:6px 9px">Excluir</button></td>
-      </tr>`).join('') : `<tr><td colspan="12" class="table-empty">${q ? 'Sem resultados.' : 'Nenhum produto cadastrado.'}</td></tr>`;
+      </tr>`).join('') : `<tr><td colspan="13" class="table-empty">${q ? 'Sem resultados.' : 'Nenhum produto cadastrado.'}</td></tr>`;
       tbody.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => editProduct(b.dataset.edit));
       tbody.querySelectorAll('[data-del]').forEach(b => b.onclick = () => deleteProduct(b.dataset.del));
       tbody.querySelectorAll('[data-label]').forEach(b => b.onclick = () => gerarEtiquetas(b.dataset.label));
     }
+
+    // Selecionar todos
+    document.getElementById('selectAllProducts')?.addEventListener('change', function() {
+      document.querySelectorAll('.product-select').forEach(cb => { cb.checked = this.checked; });
+    });
+
+    // Impressão em lote
+    document.getElementById('printBatchLabelsBtn')?.addEventListener('click', () => {
+      const ids = Array.from(document.querySelectorAll('.product-select:checked')).map(cb => cb.dataset.id);
+      if (ids.length === 0) { notify('Selecione ao menos um produto.', true); return; }
+      gerarEtiquetasLote(ids);
+    });
 
     function renderStock() {
       const tbody = document.getElementById('stockTable');
@@ -5264,36 +5281,47 @@ document.getElementById('reportSellerTable').innerHTML = vendedoresOrdenados.len
 
     // ====== Gerar Etiquetas ======
     function gerarEtiquetas(produtoId) {
-      const p = productById(produtoId);
-      if (!p) return;
-      
-      const variacoes = stockForProduct(produtoId);
-      if (variacoes.length === 0) {
-        notify('Este produto não possui numerações cadastradas no estoque.', true);
+      gerarEtiquetasLote([produtoId]);
+    }
+
+    function gerarEtiquetasLote(idsProdutos) {
+      let etiquetasHtml = '';
+      let tituloJanela = 'Etiquetas';
+      let totalGeradas = 0;
+
+      idsProdutos.forEach(produtoId => {
+        const p = productById(produtoId);
+        if (!p) return;
+        const variacoes = stockForProduct(produtoId);
+        if (variacoes.length === 0) return;
+
+        if (idsProdutos.length === 1) tituloJanela = `Etiquetas - ${p.marca} ${p.modelo}`;
+
+        variacoes.forEach(v => {
+          const skuCompleto = v.sku_variacao || `${p.sku}-${v.numero}`;
+          etiquetasHtml += `
+            <div class="etiqueta-item">
+              <div class="etiqueta-produto">${esc(p.marca)} ${esc(p.modelo)}</div>
+              <div class="etiqueta-num">Numeração: <strong>${esc(v.numero)}</strong></div>
+              <svg class="barcode" data-sku="${esc(skuCompleto)}"></svg>
+              <div class="etiqueta-sku">${esc(skuCompleto)}</div>
+              <div class="etiqueta-preco">${money(p.preco_venda)}</div>
+            </div>
+          `;
+          totalGeradas++;
+        });
+      });
+
+      if (totalGeradas === 0) {
+        notify('Nenhum produto selecionado tem numerações cadastradas no estoque.', true);
         return;
       }
 
-      // Monta o HTML de cada etiqueta
-      let etiquetasHtml = '';
-      variacoes.forEach(v => {
-        const skuCompleto = v.sku_variacao || `${p.sku}-${v.numero}`;
-        etiquetasHtml += `
-          <div class="etiqueta-item">
-            <div class="etiqueta-produto">${esc(p.marca)} ${esc(p.modelo)}</div>
-            <div class="etiqueta-num">Numeração: <strong>${esc(v.numero)}</strong></div>
-            <svg class="barcode" data-sku="${esc(skuCompleto)}"></svg>
-            <div class="etiqueta-sku">${esc(skuCompleto)}</div>
-            <div class="etiqueta-preco">${money(p.preco_venda)}</div>
-          </div>
-        `;
-      });
-
-      // Cria a janela de impressão
       const win = window.open('', '_blank');
       win.document.write(`
         <html>
         <head>
-          <title>Etiquetas - ${esc(p.marca)} ${esc(p.modelo)}</title>
+          <title>${esc(tituloJanela)}</title>
           <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script>
           <style>
             body { font-family: sans-serif; padding: 20px; margin: 0; }
@@ -5324,7 +5352,6 @@ document.getElementById('reportSellerTable').innerHTML = vendedoresOrdenados.len
           </div>
           <script>
             window.onload = function() {
-              // Gera todos os códigos de barras
               document.querySelectorAll('.barcode').forEach(svg => {
                 try {
                   JsBarcode(svg, svg.dataset.sku, {
@@ -5338,11 +5365,7 @@ document.getElementById('reportSellerTable').innerHTML = vendedoresOrdenados.len
                   console.error('Erro ao gerar código para ' + svg.dataset.sku, e);
                 }
               });
-              
-              // Espera um tempinho para o navegador renderizar os códigos e abre a janela de impressão
-              setTimeout(() => {
-                window.print();
-              }, 300);
+              setTimeout(() => { window.print(); }, 300);
             }
           <\/script>
         </body>
@@ -5351,7 +5374,6 @@ document.getElementById('reportSellerTable').innerHTML = vendedoresOrdenados.len
       win.document.close();
     }
 
-    // ====== Permissões ======
 
     // ====== Permissões ======
     function aplicarPermissoes() {
