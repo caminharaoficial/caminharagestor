@@ -872,6 +872,24 @@
               <button class="btn btn-primary" id="manualBackupBtn">💾 Fazer Backup Agora</button>
             </div>
           </div>
+
+          <div class="panel" style="margin-top: 20px;">
+            <div class="panel-head">
+              <div><h2>Política de Estoque</h2><div class="panel-desc">Define se o sistema permite vender mais do que existe em estoque.</div></div>
+            </div>
+            <div class="form-grid">
+              <div class="field" style="grid-column: span 2; display:flex; align-items:center; gap:10px;">
+                <input type="checkbox" id="cfgPermitirVendaSemEstoque" style="width:20px; height:20px;" />
+                <label for="cfgPermitirVendaSemEstoque" style="margin:0; cursor:pointer;">
+                  Permitir vender sem estoque suficiente (vai pedir confirmação, mas não bloqueia)
+                </label>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button class="btn btn-primary" id="saveStockPolicyBtn">Salvar Política</button>
+            </div>
+          </div>
+
 <div class="panel" style="margin-top: 20px;">
           <div class="panel-head">
             <div><h2>Usuários do Sistema</h2><div class="panel-desc">Gerencie quem tem acesso ao sistema.</div></div>
@@ -1004,6 +1022,8 @@
     let suppliers = []; // <-- NOVO
 let users = [];
     let connected = false;
+    let permitirVendaSemEstoque = false; // padrão: bloqueia
+
 
     const money = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -1642,6 +1662,10 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
     document.querySelectorAll('[data-section]').forEach(b => b.addEventListener('click', () => showSection(b.dataset.section)));
+    document.querySelectorAll('[data-section="settings"]').forEach(b => {
+      b.addEventListener('click', () => { carregarConfig(); });
+    });
+
     document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => showSection(b.dataset.go)));
     document.getElementById('menuToggle').addEventListener('click', () => document.getElementById('sidebar').classList.toggle('open'));
 
@@ -1744,6 +1768,34 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
     document.getElementById('refreshBtn').addEventListener('click', () => loadAll());
     document.getElementById('reloadBtn').addEventListener('click', () => loadAll());
     document.getElementById('reloadSettingsBtn').addEventListener('click', () => loadAll());
+    async function carregarConfig() {
+      try {
+        const res = await apiPost({ action: 'getConfig' });
+        if (res.ok && res.data) {
+          permitirVendaSemEstoque = String(res.data.permitir_venda_sem_estoque || '').toLowerCase() === 'sim';
+          const cb = document.getElementById('cfgPermitirVendaSemEstoque');
+          if (cb) cb.checked = permitirVendaSemEstoque;
+        }
+      } catch (e) {
+        console.warn('Falha ao carregar config:', e.message);
+      }
+    }
+
+    document.getElementById('saveStockPolicyBtn')?.addEventListener('click', async () => {
+      const cb = document.getElementById('cfgPermitirVendaSemEstoque');
+      const novo = cb && cb.checked ? 'sim' : 'nao';
+      try {
+        startLoad();
+        await apiPost({ action: 'setConfig', chave: 'permitir_venda_sem_estoque', valor: novo });
+        permitirVendaSemEstoque = (novo === 'sim');
+        notify('Política de estoque salva!');
+      } catch (err) {
+        notify('Erro ao salvar política: ' + err.message, true);
+      } finally {
+        endLoad();
+      }
+    });
+
 
     document.getElementById('manualBackupBtn')?.addEventListener('click', async () => {
       if (!confirm('Gerar um backup da planilha agora?\n\nO arquivo será salvo na pasta "Backups CAMINHARA" do Drive.')) return;
