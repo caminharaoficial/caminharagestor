@@ -325,7 +325,7 @@
               <button class="btn btn-light" id="refreshBtn">Atualizar</button>
               <button class="btn btn-primary" id="printBatchLabelsBtn" style="background:#526b83;">🖨 Etiquetas Selecionadas</button>
             </div>
-<div class="table-wrap"><table><thead><tr><th style="width:32px;"><input type="checkbox" id="selectAllProducts" title="Selecionar todos"/></th><th>SKU</th><th>Categoria</th><th>Marca</th><th>Modelo</th><th>Cor</th><th>Gênero</th><th>Coleção</th><th>Grade</th><th>Custo</th><th>Preço</th><th>Estoque</th><th>Ações</th></tr></thead><tbody id="productsTable"><tr><td colspan="13" class="table-empty">Carregando...</td></tr></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th style="width:32px;"><input type="checkbox" id="selectAllProducts" title="Selecionar todos"/></th><th>SKU</th><th>Categoria</th><th>Marca</th><th>Modelo</th><th>Cor</th><th>Gênero</th><th>Coleção</th><th>Grade</th><th>Custo</th><th>Preço</th><th>Estoque</th><th>Peso (kg)</th><th>Ações</th></tr></thead><tbody id="productsTable"><tr><td colspan="14" class="table-empty">Carregando...</td></tr></tbody></table></div>
           </section>
         </section>
 
@@ -1481,10 +1481,10 @@ function renderZeroStockAlert() {
         <td>${esc(p.marca)}</td><td>${esc(p.modelo)}</td><td>${esc(p.cor || '—')}</td>
         <td>${esc(p.genero || '—')}</td><td>${esc(p.colecao || '—')}</td>
         <td>${esc(p.grade || '—')}</td>
-        <td>${money(p.custo)}</td><td>${money(p.preco_venda)}</td><td>${totalStock(p.id)}</td>
+        <td>${money(p.custo)}</td><td>${money(p.preco_venda)}</td><td>${totalStock(p.id)}</td><td>${p.peso_kg ? Number(p.peso_kg).toFixed(3) : '—'}</td>
         <td><button class="btn btn-light" data-edit="${esc(p.id)}" style="padding:6px 9px">Editar</button>
 <button class="btn btn-light" data-label="${esc(p.id)}" style="padding:6px 9px; color:#526b83; border-color:#526b83;">Etiquetas</button> <button class="btn btn-danger" data-del="${esc(p.id)}" style="padding:6px 9px">Excluir</button></td>
-      </tr>`).join('') : `<tr><td colspan="13" class="table-empty">${q ? 'Sem resultados.' : 'Nenhum produto cadastrado.'}</td></tr>`;
+      </tr>`).join('') : `<tr><td colspan="14" class="table-empty">${q ? 'Sem resultados.' : 'Nenhum produto cadastrado.'}</td></tr>`;
       tbody.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => editProduct(b.dataset.edit));
       tbody.querySelectorAll('[data-del]').forEach(b => b.onclick = () => deleteProduct(b.dataset.del));
       tbody.querySelectorAll('[data-label]').forEach(b => b.onclick = () => gerarEtiquetas(b.dataset.label));
