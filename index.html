@@ -311,6 +311,7 @@
           <div class="page-heading">
             <div><h1>Estoque</h1><p class="subtitle">Quantidade por numeração de cada produto.</p></div>
             <div style="display:flex; gap:10px;">
+              <button class="btn btn-light" id="exportStockBtn">📥 Exportar CSV</button>
               <button class="btn btn-primary" id="fixOrphansBtn" style="background:#27775d;">Gerar Estoque Faltante</button>
               <button class="btn btn-light" id="cleanOrphansBtn" style="color:#b04545; border-color:#b04545;">Limpar Registros Órfãos</button>
               <button class="btn btn-primary" id="newStockBtn">＋ Adicionar numeração</button>
@@ -652,7 +653,10 @@
         <section class="section" id="contacts">
           <div class="page-heading">
             <div><h1>Clientes</h1><p class="subtitle">Cadastro e histórico de clientes.</p></div>
-            <button class="btn btn-primary" id="newClientBtn">＋ Novo Cliente</button>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-light" id="exportClientsBtn">📥 Exportar CSV</button>
+              <button class="btn btn-primary" id="newClientBtn">＋ Novo Cliente</button>
+            </div>
           </div>
 
           <div class="panel" id="clientFormPanel" style="margin-bottom:18px">
@@ -4601,6 +4605,85 @@ document.getElementById('reportSellerTable').innerHTML = vendedoresOrdenados.len
         btn?.click();
       }
     });
+
+    // ====== Exportar CSV genérico ======
+    function baixarCsv(nomeArquivo, linhas) {
+      const csv = '\uFEFF' + linhas.join('\r\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = nomeArquivo;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    document.getElementById('exportClientsBtn')?.addEventListener('click', () => {
+      const q = (document.getElementById('clientSearch')?.value || '').trim().toLowerCase();
+      let lista = [...clients];
+      if (q) {
+        lista = lista.filter(c =>
+          String(c.nome || '').toLowerCase().includes(q) ||
+          String(c.cpf || '').replace(/\D/g, '').includes(q.replace(/\D/g, '')) ||
+          String(c.whatsapp || '').replace(/\D/g, '').includes(q.replace(/\D/g, '')) ||
+          String(c.cidade || '').toLowerCase().includes(q) ||
+          String(c.email || '').toLowerCase().includes(q)
+        );
+      }
+      lista.sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
+      if (lista.length === 0) { notify('Nenhum cliente para exportar.', true); return; }
+
+      const sep = ';';
+      const linha = arr => arr.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(sep);
+      const out = [];
+      out.push(linha(['Nome','WhatsApp','CPF','E-mail','CEP','Logradouro','Número','Complemento','Bairro','Cidade','Estado','Observação']));
+      lista.forEach(c => {
+        out.push(linha([
+          c.nome, c.whatsapp, c.cpf, c.email, c.cep, c.logradouro,
+          c.numero_end, c.complemento, c.bairro, c.cidade, c.estado, c.observacao
+        ]));
+      });
+      baixarCsv(`clientes_caminhara_${new Date().toISOString().split('T')[0]}.csv`, out);
+      notify(`${lista.length} cliente(s) exportado(s).`);
+    });
+
+    document.getElementById('exportStockBtn')?.addEventListener('click', () => {
+      const q = (document.getElementById('stockSearch')?.value || '').trim().toLowerCase();
+      let prods = [...products];
+      if (q) {
+        prods = prods.filter(p =>
+          [p.marca, p.modelo, p.cor, p.sku].some(v => String(v || '').toLowerCase().includes(q))
+        );
+      }
+      if (prods.length === 0) { notify('Nenhum produto para exportar.', true); return; }
+
+      const sep = ';';
+      const linha = arr => arr.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(sep);
+      const out = [];
+      out.push(linha(['SKU Pai','Marca','Modelo','Cor','Numeração','SKU Variação','Quantidade','Vendidos','Estoque Mínimo']));
+      let count = 0;
+      prods.forEach(p => {
+        const variacoes = stockForProduct(p.id);
+        if (variacoes.length === 0) {
+          out.push(linha([p.sku, p.marca, p.modelo, p.cor, '—', '—', 0, 0, 0]));
+          count++;
+        } else {
+          variacoes.forEach(v => {
+            out.push(linha([
+              p.sku, p.marca, p.modelo, p.cor,
+              v.numero, v.sku_variacao,
+              Number(v.quantidade || 0), Number(v.vendidos || 0), Number(v.estoque_minimo || 0)
+            ]));
+            count++;
+          });
+        }
+      });
+      baixarCsv(`estoque_caminhara_${new Date().toISOString().split('T')[0]}.csv`, out);
+      notify(`${count} linha(s) de estoque exportada(s).`);
+    });
+
 
     // ====== Exportar Relatório para CSV ======
     document.getElementById('exportCsvBtn')?.addEventListener('click', () => {
