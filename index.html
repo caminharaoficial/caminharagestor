@@ -205,6 +205,16 @@
         </div>
         <div class="top-right">
           <div style="position:relative;">
+            <button id="alertsBtn" class="btn btn-light" style="position:relative; padding:8px 10px; font-size:16px;" title="Alertas">🔔<span id="alertsCount" style="display:none; position:absolute; top:-6px; right:-6px; background:#b04545; color:#fff; font-size:9px; font-weight:700; padding:2px 6px; border-radius:10px; min-width:16px; text-align:center;">0</span></button>
+            <div id="alertsDropdown" style="display:none; position:absolute; top:100%; right:0; margin-top:6px; width:360px; max-height:440px; overflow-y:auto; background:#fff; border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); z-index:50;">
+              <div style="padding:12px 14px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center;">
+                <strong style="font-size:12px;">Alertas</strong>
+                <button id="alertsCloseBtn" style="background:none; border:0; color:#738091; font-size:14px; cursor:pointer;">✕</button>
+              </div>
+              <div id="alertsList"></div>
+            </div>
+          </div>
+          <div style="position:relative;">
             <input id="globalSearch" class="search" placeholder="🔍 Buscar produto, cliente, venda..." style="width:280px; padding:8px 12px; font-size:12px;" autocomplete="off" />
             <div id="globalSearchResults" style="display:none; position:absolute; top:100%; right:0; margin-top:6px; width:380px; max-height:400px; overflow-y:auto; background:#fff; border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); z-index:50;"></div>
           </div>
@@ -1264,6 +1274,7 @@ renderZeroStockAlert();
       updateNetProfit();      
       renderSalesChart();
       renderMonthMetrics();
+      renderAlertas();
       renderClients();        
       fillOrderClients();      
       renderRequests();       
@@ -1683,6 +1694,114 @@ function renderZeroStockAlert() {
       stockFormPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
 
+    // ====== Sino de alertas ======
+    function calcularAlertas() {
+      const alertas = [];
+
+      // 1. Estoque zerado (por numeração)
+      const zerados = [];
+      products.forEach(p => {
+        stockForProduct(p.id).forEach(v => {
+          if (Number(v.quantidade) === 0) {
+            zerados.push({ produto: p, variacao: v });
+          }
+        });
+      });
+      if (zerados.length > 0) {
+        alertas.push({
+          grupo: 'Estoque zerado',
+          cor: '#b04545',
+          icone: '🚨',
+          count: zerados.length,
+          descricao: `${zerados.length} numeração(ões) sem estoque`,
+          acao: () => { showSection('stock'); document.getElementById('stockSearch')?.focus(); }
+        });
+      }
+
+      // 2. Estoque baixo (por numeração, respeitando o mínimo da variação)
+      const baixos = [];
+      products.forEach(p => {
+        stockForProduct(p.id).forEach(v => {
+          const min = Number(v.estoque_minimo || 0);
+          if (min > 0 && Number(v.quantidade) > 0 && Number(v.quantidade) <= min) {
+            baixos.push({ produto: p, variacao: v });
+          }
+        });
+      });
+      if (baixos.length > 0) {
+        alertas.push({
+          grupo: 'Estoque baixo',
+          cor: '#a16b1e',
+          icone: '⚠',
+          count: baixos.length,
+          descricao: `${baixos.length} numeração(ões) no limite mínimo`,
+          acao: () => { showSection('stock'); document.getElementById('stockSearch')?.focus(); }
+        });
+      }
+
+      // 3. Despesas pendentes vencidas
+      const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
+      const vencidas = expenses.filter(d => {
+        if (String(d.status_pagamento || '').toLowerCase() !== 'pendente') return false;
+        if (!d.data_vencimento) return false;
+        const dv = new Date(d.data_vencimento + 'T00:00:00');
+        return dv < hoje;
+      });
+      if (vencidas.length > 0) {
+        const total = vencidas.reduce((s, d) => s + Number(d.valor || 0), 0);
+        alertas.push({
+          grupo: 'Despesas vencidas',
+          cor: '#b04545',
+          icone: '💸',
+          count: vencidas.length,
+          descricao: `${vencidas.length} despesa(s) pendente(s) — ${money(total)}`,
+          acao: () => { showSection('finance'); document.getElementById('expFilterStart').value = ''; document.getElementById('expFilterEnd').value = ''; document.getElementById('expFilterUser').value = ''; renderExpenses(); }
+        });
+      }
+
+      return alertas;
+    }
+
+    function renderAlertas() {
+      const lista = document.getElementById('alertsList');
+      const badge = document.getElementById('alertsCount');
+      if (!lista || !badge) return;
+
+      const alertas = calcularAlertas();
+      const total = alertas.reduce((s, a) => s + a.count, 0);
+
+      if (total === 0) {
+        badge.style.display = 'none';
+        lista.innerHTML = '<div style="padding:20px; text-align:center; font-size:12px; color:#738091;">✅ Nenhum alerta no momento.</div>';
+        return;
+      }
+
+      badge.textContent = total > 99 ? '99+' : String(total);
+      badge.style.display = 'block';
+
+      lista.innerHTML = alertas.map((a, i) => `
+        <div class="alert-item" data-idx="${i}" style="padding:12px 14px; cursor:pointer; border-bottom:1px solid #f0f3f6; display:flex; gap:10px; align-items:flex-start;">
+          <div style="width:30px; height:30px; border-radius:8px; background:${a.cor}22; color:${a.cor}; display:grid; place-items:center; flex:0 0 auto; font-size:15px;">${a.icone}</div>
+          <div style="flex:1; min-width:0;">
+            <div style="font-size:12px; font-weight:700; color:#202936;">${esc(a.grupo)} <span style="background:${a.cor}; color:#fff; font-size:9px; padding:1px 6px; border-radius:8px; margin-left:4px;">${a.count}</span></div>
+            <div style="font-size:10px; color:#738091; margin-top:3px;">${esc(a.descricao)}</div>
+          </div>
+        </div>
+      `).join('');
+
+      lista.querySelectorAll('.alert-item').forEach(el => {
+        const idx = Number(el.dataset.idx);
+        el.addEventListener('mouseenter', () => el.style.background = '#f8fafc');
+        el.addEventListener('mouseleave', () => el.style.background = '');
+        el.addEventListener('click', () => {
+          document.getElementById('alertsDropdown').style.display = 'none';
+          try { alertas[idx].acao(); } catch(e) { notify('Erro: ' + e.message, true); }
+        });
+      });
+    }
+
+
     // ====== Busca global ======
     function buscaGlobal(termo) {
       const q = termo.trim().toLowerCase();
@@ -1804,6 +1923,27 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
 
     document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => showSection(b.dataset.go)));
     document.getElementById('menuToggle').addEventListener('click', () => document.getElementById('sidebar').classList.toggle('open'));
+
+    document.getElementById('alertsBtn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const dd = document.getElementById('alertsDropdown');
+      const aberto = dd.style.display === 'block';
+      dd.style.display = aberto ? 'none' : 'block';
+      if (!aberto) renderAlertas();
+    });
+
+    document.getElementById('alertsCloseBtn')?.addEventListener('click', () => {
+      document.getElementById('alertsDropdown').style.display = 'none';
+    });
+
+    // Fecha ao clicar fora
+    document.addEventListener('click', (e) => {
+      const dd = document.getElementById('alertsDropdown');
+      const btn = document.getElementById('alertsBtn');
+      if (!dd || !btn) return;
+      if (!btn.contains(e.target) && !dd.contains(e.target)) dd.style.display = 'none';
+    });
+
 
     document.getElementById('globalSearch')?.addEventListener('input', function() {
       renderBuscaGlobal(this.value);
