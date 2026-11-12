@@ -222,6 +222,8 @@
             <article class="metric"><div class="metric-top"><span class="metric-label">Unidades em estoque</span><span class="metric-icon">▤</span></div><div class="metric-value" id="metricStock">0</div><div class="metric-note">Soma das quantidades</div></article>
             <article class="metric"><div class="metric-top"><span class="metric-label">Pedidos registrados</span><span class="metric-icon">🛍</span></div><div class="metric-value" id="metricOrders">0</div><div class="metric-note">Pedidos lançados</div></article>
             <article class="metric"><div class="metric-top"><span class="metric-label">Lucro Líquido</span><span class="metric-icon">◉</span></div><div class="metric-value" id="metricNetProfit">R$ 0,00</div><div class="metric-note">Vendas - Custos - Despesas</div></article>
+            <article class="metric"><div class="metric-top"><span class="metric-label">Total Vendido (mês)</span><span class="metric-icon">💵</span></div><div class="metric-value" id="metricMonthSales">R$ 0,00</div><div class="metric-note">Mês atual</div></article>
+            <article class="metric"><div class="metric-top"><span class="metric-label">Ticket Médio (mês)</span><span class="metric-icon">🏷</span></div><div class="metric-value" id="metricMonthAvg">R$ 0,00</div><div class="metric-note">Mês atual</div></article>
           </div>
 
 <div id="zeroStockAlert" style="display:none; margin-bottom:20px;">
@@ -372,7 +374,13 @@
                 <div class="field" id="orderCostField"><label for="orderCostUnit">Custo Unitário (R$) *</label><input id="orderCostUnit" type="number" min="0" step="0.01" required placeholder="0,00"/></div>
 <div class="field"><label for="orderPrice">Valor Total (R$) *</label><input id="orderPrice" type="number" min="0" step="0.01" required placeholder="0,00"/></div>
 <div class="field"><label for="orderFreight">Valor do Frete (R$)</label><input id="orderFreight" type="number" min="0" step="0.01" placeholder="0,00"/></div>
-<div class="field"><label for="orderDiscount">Desconto (R$)</label><input id="orderDiscount" type="number" min="0" step="0.01" placeholder="0,00"/></div>
+<div class="field">
+  <label for="orderDiscount">Desconto</label>
+  <div style="display:flex; gap:6px;">
+    <input id="orderDiscount" type="number" min="0" step="0.01" placeholder="R$ 0,00" style="flex:1"/>
+    <input id="orderDiscountPct" type="number" min="0" max="100" step="0.1" placeholder="%" style="width:80px;" title="Desconto em %"/>
+  </div>
+</div>
                 <div class="field" id="orderProfitField"><label>Lucro Real</label>
                   <input id="orderLucroReal" readonly style="background:#e6f4ea; color:#27775d; font-weight:700;" value="R$ 0,00"/>
                 </div>
@@ -494,7 +502,13 @@
                 <div class="field"><label for="reqCostUnit">Custo Unitário (R$) *</label><input id="reqCostUnit" type="number" min="0" step="0.01" required/></div>
 <div class="field"><label for="reqPrice">Valor Total (R$) *</label><input id="reqPrice" type="number" min="0" step="0.01" required/></div>
 <div class="field"><label for="reqFreight">Valor do Frete (R$)</label><input id="reqFreight" type="number" min="0" step="0.01" placeholder="0,00"/></div>
-<div class="field"><label for="reqDiscount">Desconto (R$)</label><input id="reqDiscount" type="number" min="0" step="0.01" placeholder="0,00"/></div>
+<div class="field">
+  <label for="reqDiscount">Desconto</label>
+  <div style="display:flex; gap:6px;">
+    <input id="reqDiscount" type="number" min="0" step="0.01" placeholder="R$ 0,00" style="flex:1"/>
+    <input id="reqDiscountPct" type="number" min="0" max="100" step="0.1" placeholder="%" style="width:80px;" title="Desconto em %"/>
+  </div>
+</div>
                 <div class="field"><label>Lucro Real</label>
                   <input id="reqLucroReal" readonly style="background:#e6f4ea; color:#27775d; font-weight:700;" value="R$ 0,00"/>
                 </div>
@@ -551,10 +565,24 @@
 
           <!-- Histórico de Pedidos -->
           <section class="panel">
-            <div class="panel-head"><div><h2>Histórico de Pedidos</h2><div class="panel-desc">Encomendas em aberto.</div></div></div>
+            <div class="panel-head" style="flex-wrap: wrap;">
+              <div><h2>Histórico de Pedidos</h2><div class="panel-desc">Exibindo por padrão os últimos 30 dias.</div></div>
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <input type="date" id="reqFilterStart" class="search" style="max-width:130px;" title="Data inicial" />
+                <input type="date" id="reqFilterEnd" class="search" style="max-width:130px;" title="Data final" />
+                <select id="reqFilterStatus" class="search" style="max-width:180px;">
+                  <option value="">Todos os status</option>
+                  <option>Em preparo</option>
+                  <option>Aguardando Fornecedor</option>
+                  <option>Pronto para Retirada</option>
+                </select>
+                <button class="btn btn-primary" id="reqFilterBtn" style="padding:8px 12px;">Filtrar</button>
+                <button class="btn btn-light" id="reqClearFilterBtn" style="padding:8px 12px;">Limpar</button>
+              </div>
+            </div>
             <div class="table-wrap">
               <table>
-<thead><tr><th>Data</th><th>Cliente</th><th>Produto</th><th>Num.</th><th>Qtd.</th><th>Valor</th><th>Status</th><th>Rastreio</th><th>Ações</th></tr></thead>
+<thead><tr><th>Data</th><th>Cliente</th><th>Produto</th><th>Num.</th><th>Qtd.</th><th>Valor</th><th>Status</th><th>Envio</th><th>Rastreio</th><th>Ações</th></tr></thead>
                 <tbody id="requestsTable"><tr><td colspan="8" class="table-empty">Carregando...</td></tr></tbody>
               </table>
             </div>
@@ -794,7 +822,15 @@
        </section>
 
 <section class="panel" style="margin-bottom: 20px;">
-         <div class="panel-head"><div><h2>Ranking de Produtos</h2><div class="panel-desc">Os produtos com maior saída no período selecionado.</div></div></div>
+         <div class="panel-head" style="flex-wrap: wrap;">
+           <div><h2>Ranking de Produtos</h2><div class="panel-desc">Os produtos com maior saída no período selecionado.</div></div>
+           <select id="reportProductCategory" class="search" style="max-width:200px;">
+             <option value="">Todas as categorias</option>
+             <option>Sandália</option><option>Tênis</option><option>Sapato</option>
+             <option>Chinelo</option><option>Bota</option><option>Papete</option>
+             <option>Mocassim</option><option>Salto</option><option>Infantil</option><option>Outros</option>
+           </select>
+         </div>
          <div class="table-wrap">
            <table>
              <thead><tr><th>Produto</th><th>Qtd. Vendida</th><th>Total Vendido</th><th>Lucro Gerado</th></tr></thead>
@@ -823,7 +859,10 @@
               <div class="field"><label>Armazenamento</label><input value="Google Sheets (via Apps Script)" readonly/></div>
               <div class="field"><label>Abas</label><input value="Produtos · Estoque · Vendas · Despesas" readonly/></div>
             </div>
-            <div class="form-actions"><button class="btn btn-light" id="reloadSettingsBtn">Recarregar dados do Sheets</button></div>
+            <div class="form-actions">
+              <button class="btn btn-light" id="reloadSettingsBtn">Recarregar dados do Sheets</button>
+              <button class="btn btn-primary" id="manualBackupBtn">💾 Fazer Backup Agora</button>
+            </div>
           </div>
 <div class="panel" style="margin-top: 20px;">
           <div class="panel-head">
@@ -1149,6 +1188,7 @@ renderZeroStockAlert();
       renderExpenses();       
       updateNetProfit();      
       renderSalesChart();
+      renderMonthMetrics();
       renderClients();        
       fillOrderClients();      
       renderRequests();       
@@ -1302,6 +1342,26 @@ function renderZeroStockAlert() {
           }
         }
       });
+    }
+
+    function renderMonthMetrics() {
+      const agora = new Date();
+      const mesAtual = agora.getMonth();
+      const anoAtual = agora.getFullYear();
+
+      const vendasMes = sales.filter(s => {
+        if (!s.data_venda) return false;
+        const d = new Date(s.data_venda);
+        return d.getMonth() === mesAtual && d.getFullYear() === anoAtual;
+      });
+
+      const totalMes = vendasMes.reduce((sum, s) => sum + Number(s.valor_venda || 0), 0);
+      const ticketMedio = vendasMes.length > 0 ? totalMes / vendasMes.length : 0;
+
+      const elTotal = document.getElementById('metricMonthSales');
+      const elAvg = document.getElementById('metricMonthAvg');
+      if (elTotal) elTotal.textContent = money(totalMes);
+      if (elAvg) elAvg.textContent = money(ticketMedio);
     }
 
 
@@ -1661,6 +1721,30 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
     document.getElementById('reloadBtn').addEventListener('click', () => loadAll());
     document.getElementById('reloadSettingsBtn').addEventListener('click', () => loadAll());
 
+    document.getElementById('manualBackupBtn')?.addEventListener('click', async () => {
+      if (!confirm('Gerar um backup da planilha agora?\n\nO arquivo será salvo na pasta "Backups CAMINHARA" do Drive.')) return;
+      const btn = document.getElementById('manualBackupBtn');
+      const txt = btn.textContent;
+      btn.textContent = 'Gerando backup...';
+      btn.disabled = true;
+      try {
+        startLoad();
+        const res = await apiPost({ action: 'backup' });
+        if (res.ok) {
+          notify('Backup gerado com sucesso!');
+          if (res.url) window.open(res.url, '_blank');
+        } else {
+          notify('Falha no backup: ' + (res.error || 'erro desconhecido'), true);
+        }
+      } catch (err) {
+        notify('Erro ao gerar backup: ' + err.message, true);
+      } finally {
+        endLoad();
+        btn.textContent = txt;
+        btn.disabled = false;
+      }
+    });
+
     function editProduct(id) {
       const p = productById(id); if (!p) return;
       document.getElementById('editId').value = p.id;
@@ -1734,6 +1818,15 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
 
     document.getElementById('orderClient')?.addEventListener('input', atualizarEnderecoVenda);
     document.getElementById('orderClient')?.addEventListener('change', atualizarEnderecoVenda);
+
+
+    document.getElementById('reqFilterBtn')?.addEventListener('click', renderRequests);
+    document.getElementById('reqClearFilterBtn')?.addEventListener('click', () => {
+      document.getElementById('reqFilterStart').value = '';
+      document.getElementById('reqFilterEnd').value = '';
+      document.getElementById('reqFilterStatus').value = '';
+      renderRequests();
+    });
 
     document.getElementById('orderClientFilter')?.addEventListener('input', renderOrders);
 document.getElementById('orderFilterBtn')?.addEventListener('click', renderOrders);
@@ -3223,12 +3316,41 @@ custos_extras: custosString,
       }
     });
 
+
     function renderRequests() {
       const tbody = document.getElementById('requestsTable');
       if (!tbody) return;
 
-      const sorted = [...requests].sort((a, b) => new Date(b.data_pedido) - new Date(a.data_pedido));
-      
+      const startInput = document.getElementById('reqFilterStart')?.value;
+      const endInput = document.getElementById('reqFilterEnd')?.value;
+      const statusFilter = document.getElementById('reqFilterStatus')?.value || '';
+
+      // Padrão: últimos 30 dias se não houver data de início
+      let startDate, endDate;
+      if (!startInput) {
+        startDate = new Date();
+        startDate.setDate(startDate.getDate() - 30);
+        startDate.setHours(0, 0, 0, 0);
+      } else {
+        startDate = new Date(startInput + 'T00:00:00');
+      }
+      if (!endInput) {
+        endDate = new Date();
+        endDate.setHours(23, 59, 59, 999);
+      } else {
+        endDate = new Date(endInput + 'T23:59:59');
+      }
+
+      const filtered = requests.filter(r => {
+        if (!r.data_pedido) return false;
+        const d = new Date(r.data_pedido);
+        if (d < startDate || d > endDate) return false;
+        if (statusFilter && String(r.status_pedido || '').trim() !== statusFilter) return false;
+        return true;
+      });
+
+      const sorted = filtered.sort((a, b) => new Date(b.data_pedido) - new Date(a.data_pedido));
+
       tbody.innerHTML = sorted.length ? sorted.map(r => {
         const p = productById(r.id_produto);
         const dataStr = r.data_pedido ? new Date(r.data_pedido).toLocaleString('pt-BR') : '—';
@@ -3240,16 +3362,18 @@ custos_extras: custosString,
           <td>${r.quantidade}</td>
           <td>${money(r.valor_total)}</td>
 <td>${esc(r.status_pedido)}</td>
-<td>${esc(r.codigo_rastreio || '—')}</td>
+<td>${esc(r.status_envio || 'Não enviado')}</td>
+<td>${r.codigo_rastreio ? `<span style="font-family:monospace;">${esc(r.codigo_rastreio)}</span> <button class="btn btn-light" style="padding:2px 6px; font-size:9px;" onclick="event.stopPropagation(); navigator.clipboard.writeText('${esc(r.codigo_rastreio)}'); notify('Rastreio copiado!')">Copiar</button>` : '—'}</td>
 <td>
   <button class="btn btn-light" style="padding: 4px 8px; font-size: 10px;" onclick="viewRequest('${esc(r.id)}')">Ver</button>
   <button class="btn btn-primary" style="padding: 4px 8px; font-size: 10px;" onclick="faturarPedido('${esc(r.id)}')">Faturar</button>
   <button class="btn btn-danger" style="padding: 4px 8px; font-size: 10px;" onclick="deleteRequest('${esc(r.id)}')">Excluir</button>
 </td>
         </tr>`;
-      }).join('') : '<tr><td colspan="8" class="table-empty">Nenhum pedido em aberto.</td></tr>';
+      }).join('') : '<tr><td colspan="9" class="table-empty">Nenhum pedido encontrado neste período.</td></tr>';
     }
 
+   
     // Botão de Faturar: Transforma o pedido em venda
     window.faturarPedido = async function(idPedido) {
       const pedido = requests.find(r => String(r.id) === String(idPedido));
@@ -3459,6 +3583,37 @@ function calcularLucroPedido() {
     el.style.background = lucro >= 0 ? '#e6f4ea' : '#fce8e8';
   }
 }
+
+    // Sincroniza Desconto % ↔ R$ (Vendas)
+    document.getElementById('orderDiscountPct')?.addEventListener('input', function() {
+      const pct = Number(this.value || 0);
+      const total = Number(document.getElementById('orderPrice')?.value || 0);
+      const rs = total * (pct / 100);
+      document.getElementById('orderDiscount').value = rs > 0 ? rs.toFixed(2) : '';
+      calcularLucroVenda();
+    });
+    document.getElementById('orderDiscount')?.addEventListener('input', function() {
+      const rs = Number(this.value || 0);
+      const total = Number(document.getElementById('orderPrice')?.value || 0);
+      const pctInput = document.getElementById('orderDiscountPct');
+      if (pctInput && total > 0) pctInput.value = ((rs / total) * 100).toFixed(1);
+    });
+
+    // Sincroniza Desconto % ↔ R$ (Pedidos)
+    document.getElementById('reqDiscountPct')?.addEventListener('input', function() {
+      const pct = Number(this.value || 0);
+      const total = Number(document.getElementById('reqPrice')?.value || 0);
+      const rs = total * (pct / 100);
+      document.getElementById('reqDiscount').value = rs > 0 ? rs.toFixed(2) : '';
+      calcularLucroPedido();
+    });
+    document.getElementById('reqDiscount')?.addEventListener('input', function() {
+      const rs = Number(this.value || 0);
+      const total = Number(document.getElementById('reqPrice')?.value || 0);
+      const pctInput = document.getElementById('reqDiscountPct');
+      if (pctInput && total > 0) pctInput.value = ((rs / total) * 100).toFixed(1);
+    });
+
 
     // Eventos Vendas
 ['orderQty','orderCostUnit','orderPrice','orderFreight','orderDiscount'].forEach(id => {
@@ -3725,7 +3880,16 @@ window.viewRequest = function(id) {
   const p = productById(r.id_produto);
   const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto excluído';
   const custo = Number(r.custo_unitario || 0);
-  const lucro = Number(r.valor_total || 0) - (custo * Number(r.quantidade || 0));
+  const freteReq = Number(r.valor_frete || 0);
+  const descontoReq = Number(r.valor_desconto || 0);
+  let extrasReq = 0;
+  if (r.custos_extras) {
+    try {
+      const arr = JSON.parse(r.custos_extras);
+      arr.forEach(c => extrasReq += Number(c.valor || 0));
+    } catch (e) {}
+  }
+  const lucro = Number(r.valor_total || 0) - (custo * Number(r.quantidade || 0)) - extrasReq - freteReq - descontoReq;
   const rows = [
     ['ID', `<span style="font-family:monospace; user-select:all;">${esc(r.id)}</span>`],
     ['Data', r.data_pedido ? new Date(r.data_pedido).toLocaleString('pt-BR') : '—'],
@@ -3736,6 +3900,16 @@ window.viewRequest = function(id) {
     ['Valor Total', `<span style="color:#27775d">${money(r.valor_total)}</span>`],
     ['Lucro Real', `<span style="color:#27775d">${money(lucro)}</span>`],
     ['Status', esc(r.status_pedido || '—')],
+    ['Status de Envio', esc(r.status_envio || 'Não enviado')],
+    ['Código de Rastreio', esc(r.codigo_rastreio || '—')],
+    ['Frete', money(freteReq)],
+    ['Desconto', money(descontoReq)],
+    ['Custos Extras', r.custos_extras ? (() => {
+      try {
+        const arr = JSON.parse(r.custos_extras);
+        return arr.length ? arr.map(c => `• ${esc(c.descricao)}: ${money(c.valor)}`).join('<br>') : '—';
+      } catch(e) { return '—'; }
+    })() : '—'],
     ['Observação', esc(r.observacao || '—')],
   ];
   detailBody.innerHTML = `<table style="width:100%; border-collapse:collapse;">${renderDetailRows(rows)}</table>`;
@@ -4254,7 +4428,12 @@ filtered.forEach(s => {
   porProduto[prodId].lucro += Number(s.lucro || 0);
 });
 
-const produtosOrdenados = Object.keys(porProduto).sort((a, b) => porProduto[b].qtd - porProduto[a].qtd);
+const catFilter = document.getElementById('reportProductCategory')?.value || '';
+let produtosOrdenados = Object.keys(porProduto).filter(prodId => {
+  if (!catFilter) return true;
+  const p = productById(prodId);
+  return p && String(p.categoria || '').trim() === catFilter;
+}).sort((a, b) => porProduto[b].qtd - porProduto[a].qtd);
 
 document.getElementById('reportProductTable').innerHTML = produtosOrdenados.length
   ? produtosOrdenados.map(prodId => {
@@ -4300,6 +4479,14 @@ document.getElementById('reportSellerTable').innerHTML = vendedoresOrdenados.len
         : '<tr><td colspan="4" class="table-empty">Nenhuma venda registrada no período.</td></tr>';
 
     });
+
+    document.getElementById('reportProductCategory')?.addEventListener('change', () => {
+      const btn = document.getElementById('generateReportBtn');
+      if (document.getElementById('reportStart').value && document.getElementById('reportEnd').value) {
+        btn?.click();
+      }
+    });
+
 
     // ====== Gerar Etiquetas ======
     function gerarEtiquetas(produtoId) {
