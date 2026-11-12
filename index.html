@@ -1123,12 +1123,28 @@ let users = [];
     }
     
     async function apiPost(payload) {
+      // Injeta o token da sessão em toda requisição (exceto login)
+      const finalPayload = { ...payload };
+      if (finalPayload.action !== 'login') {
+        const tk = sessionStorage.getItem('caminhara_token');
+        if (tk) finalPayload.token = tk;
+      }
+
       const res = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(finalPayload)
       });
       const json = await res.json();
+
+      // Se sessão inválida, derruba pro login
+      if (json.error && /sess(ã|a)o/i.test(json.error)) {
+        sessionStorage.clear();
+        notify('Sessão expirada. Faça login novamente.', true);
+        setTimeout(() => window.location.reload(), 1200);
+        throw new Error(json.error);
+      }
+
       if (json.error) throw new Error(json.error);
       return json;
     }
