@@ -2039,6 +2039,10 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
         custo: Number(document.getElementById('productCost').value || 0),
         preco_venda: Number(document.getElementById('productPrice').value || 0),
         estoque_minimo: Number(document.getElementById('productMinStock').value || 0),
+        peso_kg: Number(document.getElementById('productWeight').value || 0),
+        altura_cm: Number(document.getElementById('productHeight').value || 0),
+        largura_cm: Number(document.getElementById('productWidth').value || 0),
+        comprimento_cm: Number(document.getElementById('productLength').value || 0),
         criado_em: new Date().toISOString()
       };
 
@@ -2203,6 +2207,10 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
       document.getElementById('productCost').value = p.custo || '';
       document.getElementById('productPrice').value = p.preco_venda || '';
       document.getElementById('productMinStock').value = p.estoque_minimo || '';
+      document.getElementById('productWeight').value = p.peso_kg || '';
+      document.getElementById('productHeight').value = p.altura_cm || '';
+      document.getElementById('productWidth').value = p.largura_cm || '';
+      document.getElementById('productLength').value = p.comprimento_cm || '';
       document.getElementById('formTitle').textContent = 'Editar produto';
       formPanel.hidden = false;
       showSection('products');
