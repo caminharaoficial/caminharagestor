@@ -3892,7 +3892,9 @@ window.viewRequest = function(id) {
   detailEditBtn.style.display = 'inline-flex';
   detailDeleteBtn.style.display = 'inline-flex';
   
-  document.getElementById('detailDuplicateBtn').style.display = 'none';
+  const dupBtnReq = document.getElementById('detailDuplicateBtn');
+  dupBtnReq.style.display = 'inline-flex';
+  dupBtnReq.onclick = () => { fecharDetail(); duplicarPedido(r); };
 
   detailKind = 'request'; detailId = id; detailTitle.textContent = 'Detalhes do Pedido';
   document.getElementById('detailPrintBtn').style.display = 'none';
@@ -4045,6 +4047,81 @@ window.viewRequest = function(id) {
       calcularLucroVenda();
       notify('Venda duplicada para edição. Ajuste se necessário e confirme.');
       setTimeout(() => document.getElementById('orderFormPanel').scrollIntoView({ behavior:'smooth', block:'start' }), 50);
+    }
+
+    function duplicarPedido(r) {
+      // Limpa o formulário
+      document.getElementById('requestForm').reset();
+      document.getElementById('reqCostsList').innerHTML = '';
+      editingRequestId = null;
+
+      showSection('orders');
+      requestFormPanel.hidden = false;
+
+      // Preenche cliente (input de texto) e produto (dispara change para carregar numerações)
+      document.getElementById('reqClient').value = r.cliente || '';
+      document.getElementById('reqProduct').value = r.id_produto;
+      document.getElementById('reqProduct').dispatchEvent(new Event('change', { bubbles: true }));
+
+      // Preenche o resto depois que o change do produto terminar (setTimeout curto)
+      setTimeout(() => {
+        document.getElementById('reqNumber').value = r.numero || '';
+        document.getElementById('reqQty').value = r.quantidade || 1;
+        document.getElementById('reqCostUnit').value = r.custo_unitario || 0;
+        document.getElementById('reqPrice').value = r.valor_total || 0;
+        document.getElementById('reqNote').value = r.observacao || '';
+        document.getElementById('reqStatus').value = r.status_pedido || 'Em preparo';
+        document.getElementById('reqFreight').value = r.valor_frete || 0;
+        document.getElementById('reqDiscount').value = r.valor_desconto || 0;
+        document.getElementById('reqTracking').value = r.codigo_rastreio || '';
+        document.getElementById('reqShippingStatus').value = r.status_envio || 'Não enviado';
+
+        // Recria os custos extras
+        let custosArr = [];
+        if (r.custos_extras) {
+          try { custosArr = JSON.parse(r.custos_extras); } catch (e) {
+            custosArr = String(r.custos_extras).split('|').map(s => {
+              const [d, val] = s.split(':');
+              return { descricao: d, valor: Number(val) };
+            }).filter(c => c.descricao);
+          }
+        }
+
+        const lista = document.getElementById('reqCostsList');
+        custosArr.forEach(c => {
+          const div = document.createElement('div');
+          div.style.display = 'flex'; div.style.gap = '10px'; div.style.marginBottom = '10px';
+
+          const inputDesc = document.createElement('input');
+          inputDesc.type = 'text';
+          inputDesc.className = 'req-cost-desc';
+          inputDesc.value = c.descricao || '';
+          inputDesc.style.cssText = 'flex:2; padding:8px; border:1px solid var(--line); border-radius:6px;';
+
+          const inputVal = document.createElement('input');
+          inputVal.type = 'number';
+          inputVal.className = 'req-cost-val';
+          inputVal.value = Number(c.valor || 0);
+          inputVal.min = '0'; inputVal.step = '0.01';
+          inputVal.style.cssText = 'flex:1; padding:8px; border:1px solid var(--line); border-radius:6px;';
+
+          const btnDel = document.createElement('button');
+          btnDel.type = 'button';
+          btnDel.className = 'btn btn-danger';
+          btnDel.textContent = 'X';
+          btnDel.style.cssText = 'padding:8px;';
+          btnDel.onclick = () => { div.remove(); calcularLucroPedido(); };
+
+          div.appendChild(inputDesc);
+          div.appendChild(inputVal);
+          div.appendChild(btnDel);
+          lista.appendChild(div);
+        });
+
+        calcularLucroPedido();
+        notify('Pedido duplicado para edição. Ajuste se necessário e salve.');
+        setTimeout(() => requestFormPanel.scrollIntoView({ behavior:'smooth', block:'start' }), 50);
+      }, 80);
     }
 
 
