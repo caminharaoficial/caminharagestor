@@ -890,6 +890,23 @@
             </div>
           </div>
 
+          <div class="panel" style="margin-top: 20px;">
+            <div class="panel-head">
+              <div><h2>Dados da Loja</h2><div class="panel-desc">Aparecem no comprovante impresso.</div></div>
+            </div>
+            <div class="form-grid">
+              <div class="field"><label for="cfgLojaNome">Nome da loja</label><input id="cfgLojaNome" placeholder="CAMINHARA Loja Virtual"/></div>
+              <div class="field"><label for="cfgLojaCnpj">CNPJ</label><input id="cfgLojaCnpj" placeholder="00.000.000/0001-00"/></div>
+              <div class="field" style="grid-column: span 2;"><label for="cfgLojaEndereco">Endereço</label><input id="cfgLojaEndereco" placeholder="Rua ..., 123 - Bairro - Cidade/UF"/></div>
+              <div class="field"><label for="cfgLojaWhats">WhatsApp / Telefone</label><input id="cfgLojaWhats" placeholder="(11) 99999-9999"/></div>
+              <div class="field"><label for="cfgLojaSite">Site</label><input id="cfgLojaSite" placeholder="www.caminhara.com.br"/></div>
+              <div class="field" style="grid-column: span 2;"><label for="cfgLojaLogoUrl">URL da Logo (opcional)</label><input id="cfgLojaLogoUrl" placeholder="https://.../logo.png"/></div>
+            </div>
+            <div class="form-actions">
+              <button class="btn btn-primary" id="saveLojaBtn">Salvar Dados da Loja</button>
+            </div>
+          </div>
+
 <div class="panel" style="margin-top: 20px;">
           <div class="panel-head">
             <div><h2>Usuários do Sistema</h2><div class="panel-desc">Gerencie quem tem acesso ao sistema.</div></div>
@@ -1023,6 +1040,16 @@
 let users = [];
     let connected = false;
     let permitirVendaSemEstoque = false; // padrão: bloqueia
+
+    let dadosLoja = {
+      nome: 'CAMINHARA Loja Virtual',
+      cnpj: '',
+      endereco: '',
+      whats: '',
+      site: '',
+      logoUrl: ''
+    };
+
 
 
     const money = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -1768,6 +1795,8 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
     document.getElementById('refreshBtn').addEventListener('click', () => loadAll());
     document.getElementById('reloadBtn').addEventListener('click', () => loadAll());
     document.getElementById('reloadSettingsBtn').addEventListener('click', () => loadAll());
+
+
     async function carregarConfig() {
       try {
         const res = await apiPost({ action: 'getConfig' });
@@ -1775,11 +1804,28 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
           permitirVendaSemEstoque = String(res.data.permitir_venda_sem_estoque || '').toLowerCase() === 'sim';
           const cb = document.getElementById('cfgPermitirVendaSemEstoque');
           if (cb) cb.checked = permitirVendaSemEstoque;
+
+          dadosLoja = {
+            nome: res.data.loja_nome || 'CAMINHARA Loja Virtual',
+            cnpj: res.data.loja_cnpj || '',
+            endereco: res.data.loja_endereco || '',
+            whats: res.data.loja_whats || '',
+            site: res.data.loja_site || '',
+            logoUrl: res.data.loja_logo_url || ''
+          };
+          const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+          set('cfgLojaNome', dadosLoja.nome);
+          set('cfgLojaCnpj', dadosLoja.cnpj);
+          set('cfgLojaEndereco', dadosLoja.endereco);
+          set('cfgLojaWhats', dadosLoja.whats);
+          set('cfgLojaSite', dadosLoja.site);
+          set('cfgLojaLogoUrl', dadosLoja.logoUrl);
         }
       } catch (e) {
         console.warn('Falha ao carregar config:', e.message);
       }
     }
+
 
     document.getElementById('saveStockPolicyBtn')?.addEventListener('click', async () => {
       const cb = document.getElementById('cfgPermitirVendaSemEstoque');
@@ -1795,6 +1841,33 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
         endLoad();
       }
     });
+
+    document.getElementById('saveLojaBtn')?.addEventListener('click', async () => {
+      const nome = document.getElementById('cfgLojaNome').value.trim();
+      const cnpj = document.getElementById('cfgLojaCnpj').value.trim();
+      const endereco = document.getElementById('cfgLojaEndereco').value.trim();
+      const whats = document.getElementById('cfgLojaWhats').value.trim();
+      const site = document.getElementById('cfgLojaSite').value.trim();
+      const logoUrl = document.getElementById('cfgLojaLogoUrl').value.trim();
+
+      try {
+        startLoad();
+        await apiPost({ action: 'setConfig', chave: 'loja_nome', valor: nome });
+        await apiPost({ action: 'setConfig', chave: 'loja_cnpj', valor: cnpj });
+        await apiPost({ action: 'setConfig', chave: 'loja_endereco', valor: endereco });
+        await apiPost({ action: 'setConfig', chave: 'loja_whats', valor: whats });
+        await apiPost({ action: 'setConfig', chave: 'loja_site', valor: site });
+        await apiPost({ action: 'setConfig', chave: 'loja_logo_url', valor: logoUrl });
+
+        dadosLoja = { nome, cnpj, endereco, whats, site, logoUrl };
+        notify('Dados da loja salvos!');
+      } catch (err) {
+        notify('Erro ao salvar dados da loja: ' + err.message, true);
+      } finally {
+        endLoad();
+      }
+    });
+
 
 
     document.getElementById('manualBackupBtn')?.addEventListener('click', async () => {
