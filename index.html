@@ -1059,6 +1059,7 @@
     let orderCosts = [];
     let requests = []; 
     let suppliers = []; // <-- NOVO
+    let tabelaFrete = [];
 let users = [];
     let connected = false;
     let permitirVendaSemEstoque = false; // padrão: bloqueia
@@ -1230,8 +1231,8 @@ let users = [];
       startLoad();
       try {
         setConnection(true);
-        const [p, s, v, d, c, oc, r, e, f] = await Promise.all([
-          apiRead('Produtos'), apiRead('Estoque'), apiRead('Vendas'), apiRead('Despesas'), apiRead('Clientes'), apiRead('Custos'), apiRead('Pedidos'), apiRead('Enderecos_Entrega'), apiRead('Fornecedores')
+        const [p, s, v, d, c, oc, r, e, f, tf] = await Promise.all([
+          apiRead('Produtos'), apiRead('Estoque'), apiRead('Vendas'), apiRead('Despesas'), apiRead('Clientes'), apiRead('Custos'), apiRead('Pedidos'), apiRead('Enderecos_Entrega'), apiRead('Fornecedores'), apiRead('Tabela_Frete')
         ]);
         // ...
         requests = r.filter(x => x && x.id && String(x.id).trim() !== ''); // <-- ADICIONE
@@ -1244,6 +1245,7 @@ let users = [];
         clients = c.filter(x => x && x.id && String(x.id).trim() !== ''); 
         deliveryAddresses = e.filter(x => x && x.id && String(x.id).trim() !== ''); 
         suppliers = f.filter(x => x && x.id && String(x.id).trim() !== ''); // <-- NOVO
+        tabelaFrete = tf.filter(x => x && x.id && String(x.id).trim() !== '');
 users = (await apiRead('Usuarios')).filter(x => x && x.id && String(x.id).trim() !== '');
         
         setConnection(true);
