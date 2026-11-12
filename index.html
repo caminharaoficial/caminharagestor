@@ -3833,8 +3833,8 @@ function gerarComprovante(v) {
   const dataStr = v.data_venda ? new Date(v.data_venda).toLocaleString('pt-BR') : '—';
   
   const cli = clients.find(c => String(c.nome).trim() === String(v.cliente).trim());
-  const cliCpf = cli && cli.cpf ? ` - CPF: ${esc(cli.cpf)}` : '';
-  const cliWpp = cli && cli.whatsapp ? ` - WhatsApp: ${esc(cli.whatsapp)}` : '';
+  const cliCpf = cli && cli.cpf ? esc(cli.cpf) : '';
+  const cliWpp = cli && cli.whatsapp ? esc(cli.whatsapp) : '';
   
   let custosHtml = '';
   if (v.custos_extras) {
@@ -3855,6 +3855,17 @@ function gerarComprovante(v) {
     ? `<div class="linha" style="margin-top:10px; font-size:11px;"><span><strong>Entrega:</strong></span><span style="text-align:right; width: 180px;">${esc(v.endereco_entrega)}</span></div>`
     : '';
 
+  // Cabeçalho dinâmico
+  const logoHtml = dadosLoja.logoUrl
+    ? `<img src="${esc(dadosLoja.logoUrl)}" style="max-height:50px; max-width:180px; margin-bottom:6px;" alt="Logo"/>`
+    : `<div class="logo">C</div>`;
+  
+  const linhasDados = [];
+  if (dadosLoja.cnpj) linhasDados.push(`CNPJ: ${esc(dadosLoja.cnpj)}`);
+  if (dadosLoja.endereco) linhasDados.push(esc(dadosLoja.endereco));
+  if (dadosLoja.whats) linhasDados.push(`WhatsApp: ${esc(dadosLoja.whats)}`);
+  const dadosHtml = linhasDados.join('<br>');
+
   const win = window.open('', '_blank');
   win.document.write(`
     <html>
@@ -3874,13 +3885,9 @@ function gerarComprovante(v) {
     </head>
     <body>
       <div class="header">
-        <div class="logo">C</div>
-        <div class="loja-nome">CAMINHARA</div>
-        <div class="loja-dados">
-          CNPJ: 00.000.000/0001-00<br>
-          Rua das Flores, 123 - Centro<br>
-          WhatsApp: (11) 99999-9999
-        </div>
+        ${logoHtml}
+        <div class="loja-nome">${esc(dadosLoja.nome)}</div>
+        ${dadosHtml ? `<div class="loja-dados">${dadosHtml}</div>` : ''}
       </div>
 
       <div class="recibo-titulo">RECIBO DE VENDA #${esc(String(v.id).slice(0, 8)).toUpperCase()}</div>
@@ -3890,8 +3897,8 @@ function gerarComprovante(v) {
       </div>
 
       <div class="linha"><span><strong>Cliente:</strong></span><span style="text-align:right; width: 200px;">${esc(v.cliente || 'Consumidor Final')}</span></div>
-      ${cliCpf ? `<div class="linha"><span><strong>CPF:</strong></span><span>${esc(cli.cpf)}</span></div>` : ''}
-      ${cliWpp ? `<div class="linha"><span><strong>WhatsApp:</strong></span><span>${esc(cli.whatsapp)}</span></div>` : ''}
+      ${cliCpf ? `<div class="linha"><span><strong>CPF:</strong></span><span>${cliCpf}</span></div>` : ''}
+      ${cliWpp ? `<div class="linha"><span><strong>WhatsApp:</strong></span><span>${cliWpp}</span></div>` : ''}
       ${enderecoHtml}
 
       <div style="margin-top:15px; border-top: 1px solid #eee; padding-top:10px;">
@@ -3911,8 +3918,8 @@ function gerarComprovante(v) {
       
       <div class="footer">
         Obrigado pela preferência!<br>
-        CAMINHARA Loja Virtual<br>
-        www.caminhara.com.br
+        ${esc(dadosLoja.nome)}
+        ${dadosLoja.site ? '<br>' + esc(dadosLoja.site) : ''}
       </div>
       <script>
         window.onload = function() { window.print(); }
