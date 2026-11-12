@@ -3943,6 +3943,24 @@ window.viewRequest = function(id) {
       if (k === 'request') deleteRequest(id);
     });
 
+    detailEditBtn?.addEventListener('click', () => {
+      const k = detailKind, id = detailId;
+      if (k === 'order') {
+        const v = sales.find(x => String(x.id) === String(id));
+        if (!v) return;
+        fecharDetail();
+        editarVendaExistente(v);
+      } else if (k === 'request') {
+        const r = requests.find(x => String(x.id) === String(id));
+        if (!r) return;
+        fecharDetail();
+        editarPedidoExistente(r);
+      } else if (k === 'client') {
+        fecharDetail();
+        editClient(id);
+      }
+    });
+
     // Edição
     let editingSaleId = null;
     let editingRequestId = null;
