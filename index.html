@@ -526,14 +526,9 @@
           <!-- Formulário de Novo Pedido -->
           <div class="panel" id="requestFormPanel" style="margin-bottom:18px">
             <div class="panel-head"><div><h2>Registrar novo pedido</h2><div class="panel-desc">O estoque não é baixado até o faturamento.</div></div></div>
-             <form id="requestForm">
+              <form id="requestForm">
               <datalist id="reqProductList"></datalist>
-              <div class="form-grid">
 
-                <div class="field" id="reqAddressField" style="display:none;">
-                  <label for="reqAddress">Endereço de Entrega</label>
-                  <select id="reqAddress"></select>
-                </div>
               <div id="reqItemsWrapper" style="margin-bottom:16px; padding:15px; border:1px solid var(--line); border-radius:10px; background:#fafbfc;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                   <h3 style="margin:0; font-size:13px;">Itens do Pedido</h3>
@@ -567,14 +562,18 @@
               <!-- O resto do formulário fica bloqueado aqui -->
               <div id="reqRestForm" style="opacity:0.4; pointer-events:none; transition:0.3s;">
                 <div class="form-grid">
-                <div class="form-grid">
-                  
+
+                  <div class="field" id="reqAddressField" style="display:none; grid-column: span 2;">
+                    <label for="reqAddress">Endereço de Entrega</label>
+                    <select id="reqAddress"></select>
+                  </div>
+
                   <div class="field">
                     <label for="reqFreight">Valor do Frete (R$)</label>
                     <input id="reqFreight" type="number" min="0" step="0.01" placeholder="0,00"/>
                     <div id="reqFretePrazo" style="font-size:10px; margin-top:4px; min-height:12px;"></div>
                   </div>
-                  
+
                   <div class="field">
                     <label for="reqDiscount">Desconto</label>
                     <div style="display:flex; gap:6px;">
@@ -585,44 +584,51 @@
 
                   <div class="field">
                     <label for="reqPayment">Forma de Pagamento</label>
-                  <select id="reqPayment">
-                    <option value="Dinheiro">Dinheiro</option>
-                    <option value="Pix">Pix</option>
-                    <option value="Cartão Débito">Cartão Débito</option>
-                    <option value="Cartão Crédito">Cartão Crédito</option>
-                    <option value="Boleto">Boleto</option>
-                  </select>
-                </div>
-                <div class="field" id="reqParcelasField" style="display:none;"><label for="reqParcelas">Parcelas</label>
-                  <select id="reqParcelas">
-                    <option value="1">1x</option><option value="2">2x</option><option value="3">3x</option>
-                    <option value="4">4x</option><option value="5">5x</option><option value="6">6x</option>
-                    <option value="7">7x</option><option value="8">8x</option><option value="9">9x</option>
-                    <option value="10">10x</option><option value="11">11x</option><option value="12">12x</option>
-                  </select>
-                </div>
-                <div class="field" id="reqParcelaInfo" style="display:none;"><label>Valor por parcela</label>
-                  <input id="reqParcelaValor" readonly style="background:#f0f3f6;"/>
-                </div>
-                <div class="field"><label for="reqNote">Observação</label><input id="reqNote" maxlength="100"/></div>
-<div class="field"><label for="reqStatus">Status Pedido</label>
-                  <select id="reqStatus">
-                    <option>Em preparo</option><option>Aguardando Fornecedor</option><option>Pronto para Retirada</option>
-                  </select>
-                </div>
+                    <select id="reqPayment">
+                      <option value="Dinheiro">Dinheiro</option>
+                      <option value="Pix">Pix</option>
+                      <option value="Cartão Débito">Cartão Débito</option>
+                      <option value="Cartão Crédito">Cartão Crédito</option>
+                      <option value="Boleto">Boleto</option>
+                    </select>
+                  </div>
 
+                  <div class="field" id="reqParcelasField" style="display:none;"><label for="reqParcelas">Parcelas</label>
+                    <select id="reqParcelas">
+                      <option value="1">1x</option><option value="2">2x</option><option value="3">3x</option>
+                      <option value="4">4x</option><option value="5">5x</option><option value="6">6x</option>
+                      <option value="7">7x</option><option value="8">8x</option><option value="9">9x</option>
+                      <option value="10">10x</option><option value="11">11x</option><option value="12">12x</option>
+                    </select>
+                  </div>
 
-                <div class="field"><label for="reqTracking">Código de Rastreio</label>
-                  <input id="reqTracking" maxlength="50" placeholder="Ex.: BR123456789" />
-                </div>
-                <div class="field"><label for="reqShippingStatus">Status de Envio</label>
-                  <select id="reqShippingStatus">
-                    <option value="Não enviado">Não enviado</option>
-                    <option value="Enviado">Enviado</option>
-                    <option value="Entregue">Entregue</option>
-                  </select>
-                </div>
-              </div>
+                  <div class="field" id="reqParcelaInfo" style="display:none;"><label>Valor por parcela</label>
+                    <input id="reqParcelaValor" readonly style="background:#f0f3f6;"/>
+                  </div>
+
+                  <div class="field"><label for="reqNote">Observação</label><input id="reqNote" maxlength="100"/></div>
+
+                  <div class="field"><label for="reqStatus">Status Pedido</label>
+                    <select id="reqStatus">
+                      <option>Em preparo</option><option>Aguardando Fornecedor</option><option>Pronto para Retirada</option>
+                    </select>
+                  </div>
+
+                  <div class="field"><label for="reqTracking">Código de Rastreio</label>
+                    <input id="reqTracking" maxlength="50" placeholder="Ex.: BR123456789" />
+                  </div>
+
+                  <div class="field"><label for="reqShippingStatus">Status de Envio</label>
+                    <select id="reqShippingStatus">
+                      <option value="Não enviado">Não enviado</option>
+                      <option value="Enviado">Enviado</option>
+                      <option value="Entregue">Entregue</option>
+                    </select>
+                  </div>
+
+                </div> <!-- Fecha o form-grid -->
+              </div> <!-- Fecha o reqRestForm -->
+
               <div style="margin-top:18px; padding:15px; border:1px solid var(--line); border-radius:10px; background:#fafbfc;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                   <h3 style="margin:0; font-size:13px;">Custos Extras</h3>
@@ -630,7 +636,6 @@
                 </div>
                 <div id="reqCostsList"></div>
               </div>
-              </div> <!-- Fecha o form-grid -->
               
               <div class="form-actions">
                 <button class="btn btn-primary" type="submit">Salvar Pedido</button>
