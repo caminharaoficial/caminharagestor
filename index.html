@@ -3027,6 +3027,14 @@ div.querySelector('button').onclick = () => { div.remove(); calcularLucroVenda()
       if (editingSaleId) return; // edição tem listener próprio depois
       e.preventDefault();
 
+      // ⚠️ Bloqueia se o mês atual estiver fechado
+      const dataHojeStr = new Date().toISOString();
+      if (mesEstaFechado(dataHojeStr)) {
+        const mesStr = `${String(new Date().getMonth()+1).padStart(2,'0')}/${new Date().getFullYear()}`;
+        notify(`❌ O mês ${mesStr} está fechado. Exclua o fechamento antes de vender.`, true);
+        return;
+      }
+
       const docCliente = document.getElementById('orderCpfCnpj').value.trim();
       const clienteCadastrado = buscarClientePorDocumento(docCliente);
       if (!clienteCadastrado) {
@@ -3380,6 +3388,13 @@ window.editExpense = function(id) {
   const d = expenses.find(x => String(x.id) === String(id));
   if (!d) return;
 
+  // ⚠️ Bloqueia abrir para edição se o mês estiver fechado
+  if (d.data_vencimento && mesEstaFechado(d.data_vencimento + 'T12:00:00')) {
+    const [a, m] = d.data_vencimento.split('-');
+    notify(`❌ O mês ${m}/${a} está fechado. Não é possível editar esta despesa.`, true);
+    return;
+  }
+
   document.getElementById('expenseDesc').value = d.descricao || '';
   document.getElementById('expenseCategory').value = d.categoria || '';
   document.getElementById('expenseValue').value = d.valor || '';
@@ -3423,6 +3438,15 @@ document.getElementById('newExpenseBtn')?.addEventListener('click', () => {
     // SUBMIT DA DESPESA
 document.getElementById('expenseForm')?.addEventListener('submit', async e => {
   e.preventDefault();
+
+  // ⚠️ Bloqueia se a data de vencimento cair em mês fechado
+  const dataVencCheck = document.getElementById('expenseDate').value || new Date().toISOString().split('T')[0];
+  if (mesEstaFechado(dataVencCheck + 'T12:00:00')) {
+    const [a, m] = dataVencCheck.split('-');
+    notify(`❌ O mês ${m}/${a} está fechado. Exclua o fechamento antes de lançar.`, true);
+    return;
+  }
+
   const desc = document.getElementById('expenseDesc').value.trim();
   const cat = document.getElementById('expenseCategory').value;
   const valor = Number(document.getElementById('expenseValue').value);
@@ -3470,6 +3494,21 @@ document.getElementById('expenseForm')?.addEventListener('submit', async e => {
     endLoad();
   }
 });
+
+
+    // ====== Verificação de Mês Fechado ======
+    function mesEstaFechado(dataStr) {
+      if (!dataStr) return false;
+      const d = new Date(dataStr);
+      if (isNaN(d.getTime())) return false;
+      const ano = d.getFullYear();
+      const mes = String(d.getMonth() + 1).padStart(2, '0');
+      const mesAno = `${ano}-${mes}`;
+      return fechamentos.some(f => String(f.mes_ano).trim() === mesAno);
+    }
+
+    // ====== FECHAMENTO MENSAL ======
+    function calcularBalancoMes(mesAno) {
 
     // ====== FECHAMENTO MENSAL ======
     function calcularBalancoMes(mesAno) {
@@ -4969,6 +5008,13 @@ function renderSuppliers() {
       const pedido = requests.find(r => String(r.id) === String(idPedido));
       if (!pedido) return;
 
+      // ⚠️ O faturamento gera venda com a data de HOJE. Bloqueia se o mês atual estiver fechado.
+      if (mesEstaFechado(new Date().toISOString())) {
+        const mesStr = `${String(new Date().getMonth()+1).padStart(2,'0')}/${new Date().getFullYear()}`;
+        notify(`❌ O mês ${mesStr} está fechado. Exclua o fechamento antes de faturar.`, true);
+        return;
+      }
+
       // Descobre todas as linhas do mesmo pedido
       const idCompra = pedido.id_compra ? String(pedido.id_compra).trim() : '';
       const linhasPedido = idCompra
@@ -5524,6 +5570,7 @@ function gerarComprovante(v) {
   const frete = Number(mae.valor_frete || 0);
   const desconto = Number(mae.valor_desconto || 0);
   const totalFinal = subtotal + frete - desconto;
+  const totalItens = itens.reduce((s, it) => s + Number(it.quantidade || 0), 0);
 
   const win = window.open('', '_blank');
   win.document.write(`
@@ -5587,12 +5634,26 @@ function gerarComprovante(v) {
       })()}
 
       <div style="margin-top:12px; border-top:1px dashed #ccc; padding-top:8px;">
+        <div class="linha"><span><strong>Total de itens:</strong></span><span>${totalItens} un.</span></div>
         <div class="linha"><span>Subtotal:</span><span>${money(subtotal)}</span></div>
         ${frete > 0 ? `<div class="linha"><span>Frete:</span><span>${money(frete)}</span></div>` : ''}
         ${desconto > 0 ? `<div class="linha"><span>Desconto:</span><span style="color:#b04545;">− ${money(desconto)}</span></div>` : ''}
       </div>
 
-      <div class="linha" style="margin-top:12px;"><span><strong>Forma Pagto:</strong></span><span>${esc(mae.forma_pagamento || '—')}</span></div>
+      ${(() => {
+        const forma = mae.forma_pagamento || '—';
+        if (forma === 'Cartão Crédito') {
+          // Deduz o número de parcelas pelo campo "observacao" (não temos campo específico).
+          // Se existir algo no observacao mencionando parcelas, exibe; senão, mostra "Cartão Crédito".
+          const obs = String(mae.observacao || '');
+          const match = obs.match(/(\d+)x\s*de\s*R\$\s*([\d.,]+)/i);
+          if (match) {
+            return `<div class="linha" style="margin-top:12px;"><span><strong>Forma Pagto:</strong></span><span>Cartão Crédito (${match[1]}x de R$ ${match[2]})</span></div>`;
+          }
+          return `<div class="linha" style="margin-top:12px;"><span><strong>Forma Pagto:</strong></span><span>Cartão Crédito</span></div>`;
+        }
+        return `<div class="linha" style="margin-top:12px;"><span><strong>Forma Pagto:</strong></span><span>${esc(forma)}</span></div>`;
+      })()}
       <div class="linha"><span><strong>Status:</strong></span><span>${mae.status_pagamento === 'OK' ? 'Pago' : 'Pendente'}</span></div>
 
       <div class="total">Total: ${money(totalFinal)}</div>
@@ -5601,6 +5662,9 @@ function gerarComprovante(v) {
         Obrigado pela preferência!<br>
         ${esc(dadosLoja.nome)}
         ${dadosLoja.site ? '<br>' + esc(dadosLoja.site) : ''}
+        <div style="margin-top:8px; font-size:9px; color:#aaa;">
+          Comprovante emitido em ${new Date().toLocaleString('pt-BR')}
+        </div>
       </div>
       <script>
         window.onload = function() { window.print(); }
@@ -6335,6 +6399,13 @@ function editarPedidoExistente(r) {
     document.getElementById('orderForm').addEventListener('submit', async e => {
       if (!editingSaleId) return;
       e.preventDefault(); e.stopImmediatePropagation();
+
+      // ⚠️ Bloqueia se a venda original estiver num mês fechado
+      const vendaOriginal = sales.find(x => String(x.id) === String(editingSaleId));
+      if (vendaOriginal && mesEstaFechado(vendaOriginal.data_venda)) {
+        notify('❌ Este mês está fechado. Exclua o fechamento antes de editar.', true);
+        return;
+      }
 
       const cliente = document.getElementById('orderClient').value.trim();
       const obs = document.getElementById('orderNote').value.trim();
