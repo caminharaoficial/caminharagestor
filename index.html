@@ -5485,7 +5485,7 @@ window.viewOrder = function(id) {
         ${frete > 0 ? `<div style="display:flex; justify-content:space-between;"><span>Frete:</span><strong>${money(frete)}</strong></div>` : ''}
         ${desconto > 0 ? `<div style="display:flex; justify-content:space-between;"><span>Desconto:</span><strong style="color:#b04545;">− ${money(desconto)}</strong></div>` : ''}
         <div style="display:flex; justify-content:space-between; margin-top:6px; padding-top:6px; border-top:1px solid var(--line); font-size:14px;"><span><strong>Total:</strong></span><strong style="color:#27775d;">${money(totalFinal)}</strong></div>
-        <div style="display:flex; justify-content:space-between; margin-top:4px;"><span><strong>Lucro:</strong></span><strong style="color:#27775d;">${money(lucroTotal)}</strong></div>
+        <div id="orderModalLucroRow" style="display:flex; justify-content:space-between; margin-top:4px;"><span><strong>Lucro:</strong></span><strong style="color:#27775d;">${money(lucroTotal)}</strong></div>
       </div>
     </div>
   `;
@@ -6865,11 +6865,36 @@ document.getElementById('reportSellerTable').innerHTML = vendedoresOrdenados.len
         });
       });
 
-      // 3.5. Esconde os campos de custo e lucro nos formulários
-      const camposCusto = ['orderCostField', 'orderProfitField', 'reqCostField', 'reqProfitField'];
-      camposCusto.forEach(id => {
+      // 3.5. Esconde os campos de lucro nos formulários (versão nova)
+      const camposLucroResumo = ['orderResumoLucro', 'reqResumoLucro'];
+      camposLucroResumo.forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.style.display = isGerente ? 'grid' : 'none';
+        if (el) {
+          const linha = el.parentElement;
+          if (linha) linha.style.display = isGerente ? 'flex' : 'none';
+        }
+      });
+
+      // 3.6. Esconde a linha "Lucro" no modal de detalhes (Ver Venda/Pedido)
+      document.querySelectorAll('#detailBody div[style*="justify-content:space-between"]').forEach(linha => {
+        const txt = linha.textContent || '';
+        if (/Lucro:/i.test(txt)) {
+          linha.style.display = isGerente ? 'flex' : 'none';
+        }
+      });
+
+      // 3.7. Esconde a coluna "Lucro" na sub-tabela da Venda (Ver Venda)
+      document.querySelectorAll('#detailBody th').forEach(th => {
+        if (/Lucro/i.test(th.textContent || '')) {
+          const colIndex = Array.from(th.parentElement.children).indexOf(th);
+          th.style.display = isGerente ? '' : 'none';
+          const tabela = th.closest('table');
+          if (tabela) {
+            tabela.querySelectorAll('tbody tr').forEach(tr => {
+              if (tr.children[colIndex]) tr.children[colIndex].style.display = isGerente ? '' : 'none';
+            });
+          }
+        }
       });
 
       // 4. Se o vendedor estava em uma tela proibida, manda pro Dashboard
