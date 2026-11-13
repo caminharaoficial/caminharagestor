@@ -486,6 +486,7 @@
                 </div>
                 <div id="orderCostsList"></div>
               </div>
+              </div> <!-- Fecha o form-grid -->
               </div> <!-- Fim do orderRestForm -->
               
               <div class="form-actions">
@@ -562,7 +563,10 @@
                   <input id="reqClient" readonly style="background:#e4e9ee; font-weight:700; color:#202a35; padding:10px 12px;" placeholder="Aguardando CPF..." />
                 </div>
                 <div id="reqClientInfo" style="display:none; margin-top:10px;"></div>
-              </div>
+              </div> <!-- Fecha a caixa cinza do cliente -->
+
+              <!-- O resto do formulário fica bloqueado aqui -->
+              <div id="reqRestForm" style="opacity:0.4; pointer-events:none; transition:0.3s;">
 
               <!-- O resto do formulário fica bloqueado aqui -->
               <div id="reqRestForm" style="opacity:0.4; pointer-events:none; transition:0.3s;">
@@ -629,6 +633,7 @@
                 </div>
                 <div id="reqCostsList"></div>
               </div>
+              </div> <!-- Fecha o form-grid -->
               </div> <!-- Fim do reqRestForm -->
               
               <div class="form-actions">
@@ -637,7 +642,6 @@
               </div>
             </form>
           </div>
-
           <!-- Histórico de Pedidos -->
           <section class="panel">
             <div class="panel-head" style="flex-wrap: wrap;">
