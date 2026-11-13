@@ -417,6 +417,28 @@
                 </div>
               </div>
 
+              <!-- Cliente primeiro (obrigatório) -->
+              <div style="margin-bottom:16px; padding:15px; border:1px solid var(--line); border-radius:10px; background:#f8fafc;">
+                <div class="form-grid">
+                  <div class="field">
+                    <label for="orderCpfCnpj" style="color:#202a35; font-weight:bold;">1º Passo: CPF ou CNPJ do Cliente *</label>
+                    <div style="display:flex; gap:6px;">
+                      <input id="orderCpfCnpj" placeholder="Digite o CPF/CNPJ" style="flex:1; border:2px solid #526b83;" />
+                      <button type="button" class="btn btn-light" id="quickAddClientBtn" style="white-space:nowrap;">＋ Novo</button>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label for="orderClient">Cliente Confirmado</label>
+                    <input id="orderClient" readonly style="background:#e4e9ee; font-weight:700;" placeholder="Aguardando CPF..." />
+                  </div>
+                  <div class="field" style="grid-column: span 2;">
+                    <div id="orderClientInfo" style="display:none;"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- O resto do formulário fica bloqueado aqui -->
+              <div id="orderRestForm" style="opacity:0.4; pointer-events:none; transition:0.3s;">
               <div class="form-grid">
 <div class="field"><label for="orderFreight">Valor do Frete (R$)</label><input id="orderFreight" type="number" min="0" step="0.01" placeholder="0,00"/><div id="orderFretePrazo" style="font-size:10px; margin-top:4px; min-height:12px;"></div></div>
 <div class="field">
@@ -427,18 +449,7 @@
   </div>
 </div>
 
-                <div class="field">
-                  <label for="orderCpfCnpj">CPF ou CNPJ *</label>
-                  <div style="display:flex; gap:6px;">
-                    <input id="orderCpfCnpj" placeholder="Digite o CPF/CNPJ" style="flex:1" />
-                    <button type="button" class="btn btn-light" id="quickAddClientBtn" style="white-space:nowrap;">＋ Novo</button>
-                  </div>
-                </div>
-                <div class="field" style="grid-column: span 2;">
-                  <label for="orderClient">Cliente *</label>
-                  <input id="orderClient" readonly style="background:#f0f3f6; font-weight:700;" placeholder="Preenchido automaticamente" />
-                  <div id="orderClientInfo" style="display:none; margin-top:6px;"></div>
-                </div>
+
                 <div class="field" id="orderAddressField" style="display:none;">
                   <label for="orderAddress">Endereço de Entrega</label>
                   <select id="orderAddress"></select>
@@ -479,6 +490,7 @@
                 </div>
                 <div id="orderCostsList"></div>
               </div>
+              </div> <!-- Fim do orderRestForm -->
               <div class="form-actions">
                 <button class="btn btn-primary" type="submit">Confirmar Venda</button>
                 <button class="btn btn-light" type="button" id="cancelOrderBtn">Cancelar</button>
@@ -520,18 +532,7 @@
              <form id="requestForm">
               <datalist id="reqProductList"></datalist>
               <div class="form-grid">
-                <div class="field">
-                  <label for="reqCpfCnpj">CPF ou CNPJ *</label>
-                  <div style="display:flex; gap:6px;">
-                    <input id="reqCpfCnpj" placeholder="Digite o CPF/CNPJ" style="flex:1" />
-                    <button type="button" class="btn btn-light" id="quickAddReqClientBtn" style="white-space:nowrap;">＋ Novo</button>
-                  </div>
-                </div>
-                <div class="field" style="grid-column: span 2;">
-                  <label for="reqClient">Cliente *</label>
-                  <input id="reqClient" readonly style="background:#f0f3f6; font-weight:700;" placeholder="Preenchido automaticamente" />
-                  <div id="reqClientInfo" style="display:none; margin-top:6px;"></div>
-                </div>
+
                 <div class="field" id="reqAddressField" style="display:none;">
                   <label for="reqAddress">Endereço de Entrega</label>
                   <select id="reqAddress"></select>
@@ -550,7 +551,30 @@
                 </div>
               </div>
 
-<div class="field"><label for="reqFreight">Valor do Frete (R$)</label><input id="reqFreight" type="number" min="0" step="0.01" placeholder="0,00"/><div id="reqFretePrazo" style="font-size:10px; margin-top:4px; min-height:12px;"></div></div><div class="field">
+              <!-- Cliente primeiro (obrigatório) -->
+              <div style="margin-bottom:16px; padding:15px; border:1px solid var(--line); border-radius:10px; background:#f8fafc;">
+                <div class="form-grid">
+                  <div class="field">
+                    <label for="reqCpfCnpj" style="color:#202a35; font-weight:bold;">1º Passo: CPF ou CNPJ do Cliente *</label>
+                    <div style="display:flex; gap:6px;">
+                      <input id="reqCpfCnpj" placeholder="Digite o CPF/CNPJ" style="flex:1; border:2px solid #526b83;" />
+                      <button type="button" class="btn btn-light" id="quickAddReqClientBtn" style="white-space:nowrap;">＋ Novo</button>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label for="reqClient">Cliente Confirmado</label>
+                    <input id="reqClient" readonly style="background:#e4e9ee; font-weight:700;" placeholder="Aguardando CPF..." />
+                  </div>
+                  <div class="field" style="grid-column: span 2;">
+                    <div id="reqClientInfo" style="display:none;"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- O resto do formulário fica bloqueado aqui -->
+              <div id="reqRestForm" style="opacity:0.4; pointer-events:none; transition:0.3s;">
+              <div class="form-grid">
+<div class="field"><label for="reqFreight">Valor do Frete (R$)</label><input id="reqFreight" type="number" min="0" step="0.01" placeholder="0,00"/><div id="reqFretePrazo" style="font-size:10px; margin-top:4px; min-height:12px;"></div></div>
   <label for="reqDiscount">Desconto</label>
   <div style="display:flex; gap:6px;">
     <input id="reqDiscount" type="number" min="0" step="0.01" placeholder="R$ 0,00" style="flex:1"/>
@@ -614,6 +638,7 @@
                 </div>
                 <div id="reqCostsList"></div>
               </div>
+              </div> <!-- Fim do reqRestForm -->
               <div class="form-actions">
                 <button class="btn btn-primary" type="submit">Salvar Pedido</button>
                 <button class="btn btn-light" type="button" id="cancelRequestBtn">Cancelar</button>
@@ -2675,14 +2700,18 @@ document.getElementById('orderClearFilterBtn')?.addEventListener('click', () => 
       return clients.find(c => String(c.cpf).replace(/\D/g, '') === docLimpo);
     }
 
-    function preencherDadosCliente(cliente, tipo) {
+     function preencherDadosCliente(cliente, tipo) {
       const prefix = tipo === 'venda' ? 'order' : 'req';
       const nomeInput = document.getElementById(`${prefix}Client`);
       const resumoDiv = document.getElementById(`${prefix}ClientInfo`);
+      const restForm = document.getElementById(`${prefix}RestForm`);
 
       if (cliente) {
         nomeInput.value = cliente.nome;
         
+        // DESBLOQUEIA O FORMULÁRIO
+        if (restForm) { restForm.style.opacity = '1'; restForm.style.pointerEvents = 'auto'; }
+
         let enderecoTexto = 'Não cadastrado.';
         if (cliente.logradouro) {
           enderecoTexto = `${cliente.logradouro}, ${cliente.numero_end || 'S/N'}${cliente.complemento ? ' - ' + cliente.complemento : ''}<br>${cliente.bairro || ''} - ${cliente.cidade || ''}/${cliente.estado || ''}${cliente.cep ? '<br>CEP: ' + cliente.cep : ''}`;
@@ -2703,11 +2732,15 @@ document.getElementById('orderClearFilterBtn')?.addEventListener('click', () => 
         `;
       } else {
         nomeInput.value = '';
+        
+        // BLOQUEIA O FORMULÁRIO NOVAMENTE
+        if (restForm) { restForm.style.opacity = '0.4'; restForm.style.pointerEvents = 'none'; }
+
         resumoDiv.style.display = 'block';
         resumoDiv.innerHTML = `
           <div style="background:#fce8e8; border-left: 4px solid #b04545; padding:12px 15px; border-radius:8px; font-size:12px; color:#b04545; font-weight:700;">
             ❌ Cliente não encontrado.<br>
-            <span style="font-weight:400; color:#202936;">Cadastre o cliente antes de continuar.</span>
+            <span style="font-weight:400; color:#202936;">Cadastre o cliente clicando em "＋ Novo" antes de continuar a venda.</span>
           </div>
         `;
       }
