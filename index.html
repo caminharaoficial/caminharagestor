@@ -3596,6 +3596,7 @@ document.getElementById('expenseForm')?.addEventListener('submit', async e => {
           <td>${dataFech}</td>
           <td>${esc(f.usuario || '—')}</td>
           <td>
+            <button class="btn btn-light" style="padding:4px 8px; font-size:10px; color:#526b83; border-color:#526b83;" onclick="imprimirFechamento('${esc(f.id)}')">🖨 Imprimir</button>
             <button class="btn btn-danger" style="padding:4px 8px; font-size:10px;" onclick="deleteFechamento('${esc(f.id)}')">Excluir</button>
           </td>
         </tr>`;
@@ -3622,6 +3623,123 @@ document.getElementById('expenseForm')?.addEventListener('submit', async e => {
         }
       });
     };
+
+    // ====== Impressão do Fechamento ======
+    window.imprimirFechamento = function(id) {
+      const f = fechamentos.find(x => String(x.id) === String(id));
+      if (!f) { notify('Fechamento não encontrado.', true); return; }
+
+      // Formata o mês "YYYY-MM" para "Novembro/2026"
+      const mesesNome = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+      let mesExtenso = f.mes_ano;
+      if (f.mes_ano && f.mes_ano.includes('-')) {
+        const [a, m] = f.mes_ano.split('-');
+        mesExtenso = `${mesesNome[Number(m) - 1]} / ${a}`;
+      }
+
+      const dataFech = f.data_fechamento ? new Date(f.data_fechamento).toLocaleString('pt-BR') : '—';
+      const lucro = Number(f.lucro_liquido || 0);
+      const corLucro = lucro >= 0 ? '#27775d' : '#b04545';
+
+      const lojaNome = dadosLoja.nome || 'CAMINHARA Loja Virtual';
+      const lojaCnpj = dadosLoja.cnpj || '';
+      const lojaEnd = dadosLoja.endereco || '';
+      const lojaWhats = dadosLoja.whats || '';
+
+      const logoHtml = dadosLoja.logoUrl
+        ? `<img src="${esc(dadosLoja.logoUrl)}" style="max-height:60px; max-width:200px; margin-bottom:8px;" alt="Logo"/>`
+        : `<div class="logo">C</div>`;
+
+      const win = window.open('', '_blank');
+      win.document.write(`
+        <html>
+        <head>
+          <title>Fechamento - ${esc(mesExtenso)}</title>
+          <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 30px; max-width: 720px; margin: auto; color: #202a35; }
+            .header { text-align: center; border-bottom: 3px solid #202a35; padding-bottom: 15px; margin-bottom: 25px; }
+            .logo { font-family: Georgia, serif; font-size: 42px; color: #202a35; font-weight: bold; margin-bottom: 6px; }
+            .loja-nome { font-size: 20px; font-weight: bold; letter-spacing: 1px; }
+            .loja-dados { font-size: 11px; color: #666; margin-top: 6px; line-height: 1.5; }
+            .titulo-relatorio { text-align: center; font-size: 18px; font-weight: bold; color: #202a35; margin: 20px 0 6px 0; text-transform: uppercase; letter-spacing: 1px; }
+            .mes-relatorio { text-align: center; font-size: 15px; color: #526b83; margin-bottom: 25px; font-weight: 600; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+            th { background: #f4f6f8; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #738091; padding: 12px 14px; border-bottom: 2px solid #202a35; }
+            td { padding: 14px 14px; font-size: 13px; border-bottom: 1px solid #e4e9ee; }
+            td.valor { text-align: right; font-weight: 600; }
+            .linha-total { background: #202a35; color: #fff; }
+            .linha-total td { border-bottom: 0; font-size: 15px; font-weight: 700; color: #fff; }
+            .linha-total td.valor { color: #fff; font-size: 16px; }
+            .footer { text-align: center; font-size: 10px; color: #999; margin-top: 30px; padding-top: 15px; border-top: 1px solid #e4e9ee; line-height: 1.6; }
+            .assinatura { margin-top: 40px; padding-top: 15px; border-top: 1px dashed #ccc; text-align: center; font-size: 11px; color: #666; }
+            .assinatura .linha-assinar { width: 280px; border-bottom: 1px solid #202a35; margin: 0 auto 6px auto; height: 30px; }
+            @media print {
+              body { padding: 15px; }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            ${logoHtml}
+            <div class="loja-nome">${esc(lojaNome)}</div>
+            ${lojaCnpj || lojaEnd || lojaWhats ? `<div class="loja-dados">
+              ${lojaCnpj ? 'CNPJ: ' + esc(lojaCnpj) + '<br>' : ''}
+              ${lojaEnd ? esc(lojaEnd) + '<br>' : ''}
+              ${lojaWhats ? 'WhatsApp: ' + esc(lojaWhats) : ''}
+            </div>` : ''}
+          </div>
+
+          <div class="titulo-relatorio">Fechamento Mensal</div>
+          <div class="mes-relatorio">${esc(mesExtenso)}</div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th style="text-align:right;">Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Total de Vendas Brutas</td>
+                <td class="valor">${money(f.total_vendas)}</td>
+              </tr>
+              <tr>
+                <td>(-) Custo dos Produtos Vendidos</td>
+                <td class="valor" style="color:#b04545;">− ${money(f.total_custos)}</td>
+              </tr>
+              <tr>
+                <td>(-) Despesas Operacionais</td>
+                <td class="valor" style="color:#b04545;">− ${money(f.total_despesas)}</td>
+              </tr>
+              <tr class="linha-total">
+                <td><strong>LUCRO LÍQUIDO DO MÊS</strong></td>
+                <td class="valor" style="color:${lucro >= 0 ? '#e6f4ea' : '#fce8e8'};">${money(f.lucro_liquido)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="assinatura">
+            <div class="linha-assinar"></div>
+            <strong>Responsável pelo Fechamento</strong><br>
+            ${esc(f.usuario || '—')}
+          </div>
+
+          <div class="footer">
+            Fechamento realizado em ${dataFech}<br>
+            Documento gerado pelo sistema CAMINHARA ERP<br>
+            Comprovante emitido em ${new Date().toLocaleString('pt-BR')}
+          </div>
+          <script>
+            window.onload = function() { window.print(); }
+          <\/script>
+        </body>
+        </html>
+      `);
+      win.document.close();
+    };
+
 
     // Renderiza a tabela de despesas
 function renderExpenses() {
