@@ -5191,6 +5191,20 @@ function gerarComprovante(v) {
 
       ${custosHtml}
 
+      ${(() => {
+        let pesoTotal = 0;
+        let algumSemPeso = false;
+        itens.forEach(it => {
+          const p = productById(it.id_produto);
+          const peso = p ? Number(p.peso_kg || 0) : 0;
+          if (peso > 0) pesoTotal += peso * Number(it.quantidade || 0);
+          else algumSemPeso = true;
+        });
+        if (pesoTotal <= 0) return '';
+        return `<div class="linha" style="margin-top:8px;"><span><strong>Peso total:</strong></span><span>${pesoTotal.toFixed(3)} kg${algumSemPeso ? ' *' : ''}</span></div>
+                ${algumSemPeso ? '<div style="font-size:9px; color:#888; text-align:right;">* alguns itens sem peso cadastrado</div>' : ''}`;
+      })()}
+
       <div style="margin-top:12px; border-top:1px dashed #ccc; padding-top:8px;">
         <div class="linha"><span>Subtotal:</span><span>${money(subtotal)}</span></div>
         ${frete > 0 ? `<div class="linha"><span>Frete:</span><span>${money(frete)}</span></div>` : ''}
@@ -6781,16 +6795,58 @@ document.getElementById('topUserName').textContent = res.nome;
 
         let logs = [];
 
-        // Monta o log de Vendas
+        // ===== Log de Vendas (agrupado por compra) =====
+        const comprasV = {};
         v.forEach(item => {
           if (!item.id) return;
-          logs.push({ data: item.data_venda, user: item.vendedor || 'Sistema', acao: 'Venda', detalhe: `Venda de ${item.quantidade}x ${item.sku_variacao} (${money(item.valor_venda)}) - Cliente: ${item.cliente || 'Consumidor'}` });
+          const chave = (item.id_compra && String(item.id_compra).trim()) ? String(item.id_compra).trim() : 'solo-' + item.id;
+          if (!comprasV[chave]) comprasV[chave] = [];
+          comprasV[chave].push(item);
+        });
+        Object.keys(comprasV).forEach(chave => {
+          const itens = comprasV[chave];
+          const mae = itens[0];
+          const totalQtd = itens.reduce((s, it) => s + Number(it.quantidade || 0), 0);
+          const totalValor = itens.reduce((s, it) => s + (Number(it.valor_venda || 0) * Number(it.quantidade || 0)), 0)
+                          + Number(mae.valor_frete || 0) - Number(mae.valor_desconto || 0);
+          if (itens.length === 1) {
+            logs.push({
+              data: mae.data_venda, user: mae.vendedor || 'Sistema', acao: 'Venda',
+              detalhe: `Venda de ${mae.quantidade}x ${mae.sku_variacao} (${money(mae.valor_venda)}) - Cliente: ${mae.cliente || 'Consumidor'}`
+            });
+          } else {
+            logs.push({
+              data: mae.data_venda, user: mae.vendedor || 'Sistema', acao: 'Venda',
+              detalhe: `Venda de ${itens.length} itens (${totalQtd} un.) — ${money(totalValor)} - Cliente: ${mae.cliente || 'Consumidor'}`
+            });
+          }
         });
 
-        // Monta o log de Pedidos
+        // ===== Log de Pedidos (agrupado por compra) =====
+        const comprasP = {};
         p.forEach(item => {
           if (!item.id) return;
-          logs.push({ data: item.data_pedido, user: item.vendedor || 'Sistema', acao: 'Pedido', detalhe: `Pedido de ${item.quantidade}x ${item.sku_variacao} (${money(item.valor_total)})` });
+          const chave = (item.id_compra && String(item.id_compra).trim()) ? String(item.id_compra).trim() : 'solo-' + item.id;
+          if (!comprasP[chave]) comprasP[chave] = [];
+          comprasP[chave].push(item);
+        });
+        Object.keys(comprasP).forEach(chave => {
+          const itens = comprasP[chave];
+          const mae = itens[0];
+          const totalQtd = itens.reduce((s, it) => s + Number(it.quantidade || 0), 0);
+          const totalValor = itens.reduce((s, it) => s + (Number(it.valor_total || 0) * Number(it.quantidade || 0)), 0)
+                          + Number(mae.valor_frete || 0) - Number(mae.valor_desconto || 0);
+          if (itens.length === 1) {
+            logs.push({
+              data: mae.data_pedido, user: mae.vendedor || 'Sistema', acao: 'Pedido',
+              detalhe: `Pedido de ${mae.quantidade}x ${mae.sku_variacao} (${money(mae.valor_total)})`
+            });
+          } else {
+            logs.push({
+              data: mae.data_pedido, user: mae.vendedor || 'Sistema', acao: 'Pedido',
+              detalhe: `Pedido de ${itens.length} itens (${totalQtd} un.) — ${money(totalValor)}`
+            });
+          }
         });
 
         // Monta o log de Despesas
