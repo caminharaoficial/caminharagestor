@@ -347,11 +347,67 @@
         <section class="section" id="stock">
           <div class="page-heading">
             <div><h1>Estoque</h1><p class="subtitle">Quantidade por numeração de cada produto.</p></div>
-            <div style="display:flex; gap:10px;">
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <button class="btn btn-primary" id="inventarioBtn" style="background:#526b83;">📊 Inventário</button>
               <button class="btn btn-light" id="exportStockBtn">📥 Exportar CSV</button>
               <button class="btn btn-primary" id="fixOrphansBtn" style="background:#27775d;">Gerar Estoque Faltante</button>
               <button class="btn btn-light" id="cleanOrphansBtn" style="color:#b04545; border-color:#b04545;">Limpar Registros Órfãos</button>
               <button class="btn btn-primary" id="newStockBtn">＋ Adicionar numeração</button>
+            </div>
+          </div>
+
+          <!-- Painel de Inventário -->
+          <div class="panel" id="inventarioPanel" style="display:none; margin-bottom:18px;">
+            <div class="panel-head">
+              <div>
+                <h2>📊 Inventário de Estoque</h2>
+                <div class="panel-desc">Visão consolidada do capital parado e valor potencial de venda.</div>
+              </div>
+              <div style="display:flex; gap:8px;">
+                <button class="btn btn-light" id="inventarioExportBtn">📥 Exportar CSV</button>
+                <button class="btn btn-light" id="inventarioCloseBtn">✕ Fechar</button>
+              </div>
+            </div>
+
+            <!-- Resumo em 4 cards -->
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:20px;">
+              <div style="padding:15px; border:1px solid var(--line); border-radius:10px; background:#fafbfc;">
+                <div style="color:#738091; font-size:11px; text-transform:uppercase; letter-spacing:0.5px;">Unidades em Estoque</div>
+                <div id="invQtdTotal" style="font-size:22px; font-weight:750; color:#202936; margin-top:6px;">0</div>
+              </div>
+              <div style="padding:15px; border:1px solid var(--line); border-radius:10px; background:#fef8f0;">
+                <div style="color:#785d2e; font-size:11px; text-transform:uppercase; letter-spacing:0.5px;">Capital Parado (Custo)</div>
+                <div id="invCustoTotal" style="font-size:22px; font-weight:750; color:#785d2e; margin-top:6px;">R$ 0,00</div>
+              </div>
+              <div style="padding:15px; border:1px solid var(--line); border-radius:10px; background:#f0f7f4;">
+                <div style="color:#27775d; font-size:11px; text-transform:uppercase; letter-spacing:0.5px;">Valor de Venda</div>
+                <div id="invVendaTotal" style="font-size:22px; font-weight:750; color:#27775d; margin-top:6px;">R$ 0,00</div>
+              </div>
+              <div style="padding:15px; border:1px solid var(--line); border-radius:10px; background:#e6f4ea;">
+                <div style="color:#27775d; font-size:11px; text-transform:uppercase; letter-spacing:0.5px;">Margem Potencial</div>
+                <div id="invMargemTotal" style="font-size:22px; font-weight:750; color:#27775d; margin-top:6px;">R$ 0,00</div>
+              </div>
+            </div>
+
+            <!-- Tabela por produto -->
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>SKU</th>
+                    <th>Produto</th>
+                    <th style="text-align:right;">Qtd</th>
+                    <th style="text-align:right;">Custo Unit.</th>
+                    <th style="text-align:right;">Custo Total</th>
+                    <th style="text-align:right;">Venda Unit.</th>
+                    <th style="text-align:right;">Venda Total</th>
+                    <th style="text-align:right;">Margem</th>
+                  </tr>
+                </thead>
+                <tbody id="inventarioTable">
+                  <tr><td colspan="8" class="table-empty">Clique em "📊 Inventário" para carregar.</td></tr>
+                </tbody>
+              </table>
             </div>
           </div>
           
@@ -1945,6 +2001,134 @@ function renderZeroStockAlert() {
         });
       });
     }
+
+    // ====== INVENTÁRIO DE ESTOQUE ======
+    function renderInventario() {
+      const tbody = document.getElementById('inventarioTable');
+      if (!tbody) return;
+
+      let qtdTotalGeral = 0;
+      let custoTotalGeral = 0;
+      let vendaTotalGeral = 0;
+      const linhas = [];
+
+      // Varre produtos com estoque
+      products.forEach(p => {
+        const variacoes = stockForProduct(p.id);
+        if (variacoes.length === 0) return;
+
+        const qtdProd = variacoes.reduce((s, v) => s + Number(v.quantidade || 0), 0);
+        if (qtdProd <= 0) return; // ignora produtos sem estoque
+
+        const custoUnit = Number(p.custo || 0);
+        const vendaUnit = Number(p.preco_venda || 0);
+        const custoProd = custoUnit * qtdProd;
+        const vendaProd = vendaUnit * qtdProd;
+        const margemProd = vendaProd - custoProd;
+
+        qtdTotalGeral += qtdProd;
+        custoTotalGeral += custoProd;
+        vendaTotalGeral += vendaProd;
+
+        linhas.push({
+          p, qtdProd, custoUnit, vendaUnit, custoProd, vendaProd, margemProd
+        });
+      });
+
+      const margemTotalGeral = vendaTotalGeral - custoTotalGeral;
+
+      // Atualiza cards
+      const elQtd = document.getElementById('invQtdTotal');
+      const elCusto = document.getElementById('invCustoTotal');
+      const elVenda = document.getElementById('invVendaTotal');
+      const elMargem = document.getElementById('invMargemTotal');
+      if (elQtd) elQtd.textContent = qtdTotalGeral;
+      if (elCusto) elCusto.textContent = money(custoTotalGeral);
+      if (elVenda) elVenda.textContent = money(vendaTotalGeral);
+      if (elMargem) elMargem.textContent = money(margemTotalGeral);
+
+      // Ordena por maior custo total (do mais caro pro mais barato)
+      linhas.sort((a, b) => b.custoProd - a.custoProd);
+
+      if (linhas.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="table-empty">Nenhum produto com estoque no momento.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = linhas.map(l => `
+        <tr>
+          <td><small style="font-family:monospace; color:#738091;">${esc(l.p.sku || '—')}</small></td>
+          <td><strong>${esc(l.p.marca)} ${esc(l.p.modelo)}</strong>${l.p.cor ? ' <small style="color:#738091;">· ' + esc(l.p.cor) + '</small>' : ''}</td>
+          <td style="text-align:right;">${l.qtdProd}</td>
+          <td style="text-align:right;">${money(l.custoUnit)}</td>
+          <td style="text-align:right; color:#785d2e; font-weight:600;">${money(l.custoProd)}</td>
+          <td style="text-align:right;">${money(l.vendaUnit)}</td>
+          <td style="text-align:right; color:#27775d; font-weight:600;">${money(l.vendaProd)}</td>
+          <td style="text-align:right; color:${l.margemProd >= 0 ? '#27775d' : '#b04545'}; font-weight:600;">${money(l.margemProd)}</td>
+        </tr>
+      `).join('');
+    }
+
+    // Exportar inventário em CSV
+    document.getElementById('inventarioExportBtn')?.addEventListener('click', () => {
+      const linhas = [];
+      const sep = ';';
+      const linhaCsv = arr => arr.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(sep);
+
+      linhas.push(linhaCsv(['SKU','Marca','Modelo','Cor','Categoria','Qtd Estoque','Custo Unit.','Custo Total','Venda Unit.','Venda Total','Margem']));
+
+      let qtdTotal = 0, custoTotal = 0, vendaTotal = 0;
+
+      products.forEach(p => {
+        const variacoes = stockForProduct(p.id);
+        const qtd = variacoes.reduce((s, v) => s + Number(v.quantidade || 0), 0);
+        if (qtd <= 0) return;
+
+        const cu = Number(p.custo || 0);
+        const vu = Number(p.preco_venda || 0);
+        const ct = cu * qtd;
+        const vt = vu * qtd;
+        const mg = vt - ct;
+
+        qtdTotal += qtd;
+        custoTotal += ct;
+        vendaTotal += vt;
+
+        linhas.push(linhaCsv([
+          p.sku, p.marca, p.modelo, p.cor, p.categoria,
+          qtd,
+          cu.toFixed(2), ct.toFixed(2),
+          vu.toFixed(2), vt.toFixed(2), mg.toFixed(2)
+        ]));
+      });
+
+      linhas.push('');
+      linhas.push(linhaCsv(['TOTAIS','','','','', qtdTotal, '', custoTotal.toFixed(2), '', vendaTotal.toFixed(2), (vendaTotal - custoTotal).toFixed(2)]));
+
+      const csv = '\uFEFF' + linhas.join('\r\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `inventario_caminhara_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      notify('Inventário exportado!');
+    });
+
+    // Abrir / Fechar o painel
+    document.getElementById('inventarioBtn')?.addEventListener('click', () => {
+      const panel = document.getElementById('inventarioPanel');
+      panel.style.display = 'block';
+      renderInventario();
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    document.getElementById('inventarioCloseBtn')?.addEventListener('click', () => {
+      document.getElementById('inventarioPanel').style.display = 'none';
+    });
 
     // Salva todas as quantidades de um produto de uma vez
     window.saveAllStock = async function(prodId, btnElement) {
