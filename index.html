@@ -3496,7 +3496,7 @@ document.getElementById('expenseForm')?.addEventListener('submit', async e => {
 });
 
 
-    // ====== Verificação de Mês Fechado ======
+   // ====== Verificação de Mês Fechado ======
     function mesEstaFechado(dataStr) {
       if (!dataStr) return false;
       const d = new Date(dataStr);
@@ -3506,9 +3506,6 @@ document.getElementById('expenseForm')?.addEventListener('submit', async e => {
       const mesAno = `${ano}-${mes}`;
       return fechamentos.some(f => String(f.mes_ano).trim() === mesAno);
     }
-
-    // ====== FECHAMENTO MENSAL ======
-    function calcularBalancoMes(mesAno) {
 
     // ====== FECHAMENTO MENSAL ======
     function calcularBalancoMes(mesAno) {
