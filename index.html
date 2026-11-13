@@ -939,15 +939,20 @@
         <section class="section" id="settings">
           <div class="page-heading"><div><h1>Configurações</h1><p class="subtitle">Informações do sistema.</p></div></div>
           <div class="panel">
+            <div class="panel-head">
+              <div><h2>Informações do Sistema</h2><div class="panel-desc">Estes dados ficam salvos na aba "Configuracoes" do Sheets.</div></div>
+            </div>
             <div class="form-grid">
-              <div class="field"><label>Loja</label><input value="CAMINHARA Loja Virtual" readonly/></div>
-              <div class="field"><label>Versão</label><input value="0.2 — Google Sheets" readonly/></div>
-              <div class="field"><label>Armazenamento</label><input value="Google Sheets (via Apps Script)" readonly/></div>
-              <div class="field"><label>Abas</label><input value="Produtos · Estoque · Vendas · Despesas" readonly/></div>
+              <div class="field"><label>Loja</label><input id="cfgSisLoja" readonly style="background:#f0f3f6;" /></div>
+              <div class="field"><label>Armazenamento</label><input id="cfgSisArmaz" readonly style="background:#f0f3f6;" /></div>
+              <div class="field"><label for="cfgSisVersao">Versão do App</label><input id="cfgSisVersao" placeholder="Ex.: 1.0.0 - Produção" /></div>
+              <div class="field"><label for="cfgSisDev">Desenvolvedor / Responsável</label><input id="cfgSisDev" placeholder="Ex.: Seu Nome" /></div>
+              <div class="field" style="grid-column: span 2;"><label for="cfgSisInfo">Notas da Versão (O que mudou?)</label><input id="cfgSisInfo" placeholder="Ex.: Correção do layout de Pedidos, melhoria no frete..." /></div>
             </div>
             <div class="form-actions">
+              <button class="btn btn-primary" id="saveSisInfoBtn">Salvar Informações</button>
               <button class="btn btn-light" id="reloadSettingsBtn">Recarregar dados do Sheets</button>
-              <button class="btn btn-primary" id="manualBackupBtn">💾 Fazer Backup Agora</button>
+              <button class="btn btn-primary" id="manualBackupBtn" style="margin-left:auto;">💾 Fazer Backup Agora</button>
             </div>
           </div>
 
@@ -2418,6 +2423,13 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
           set('cfgLojaWhats', dadosLoja.whats);
           set('cfgLojaSite', dadosLoja.site);
           set('cfgLojaLogoUrl', dadosLoja.logoUrl);
+
+          // Preenche os campos do bloco "Informações do Sistema"
+          set('cfgSisLoja', dadosLoja.nome);
+          set('cfgSisArmaz', 'Google Sheets (via Apps Script)');
+          set('cfgSisVersao', res.data.sistema_versao || '1.0.0 - Produção');
+          set('cfgSisDev', res.data.sistema_dev || 'CAMINHARA');
+          set('cfgSisInfo', res.data.sistema_info || 'Gestão completa com múltiplos itens e controle de estoque.');
         }
       } catch (e) {
         console.warn('Falha ao carregar config:', e.message);
@@ -2435,6 +2447,24 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
         notify('Política de estoque salva!');
       } catch (err) {
         notify('Erro ao salvar política: ' + err.message, true);
+      } finally {
+        endLoad();
+      }
+    });
+
+    document.getElementById('saveSisInfoBtn')?.addEventListener('click', async () => {
+      const versao = document.getElementById('cfgSisVersao').value.trim();
+      const dev = document.getElementById('cfgSisDev').value.trim();
+      const info = document.getElementById('cfgSisInfo').value.trim();
+
+      try {
+        startLoad();
+        await apiPost({ action: 'setConfig', chave: 'sistema_versao', valor: versao });
+        await apiPost({ action: 'setConfig', chave: 'sistema_dev', valor: dev });
+        await apiPost({ action: 'setConfig', chave: 'sistema_info', valor: info });
+        notify('Informações do sistema atualizadas!');
+      } catch (err) {
+        notify('Erro ao salvar: ' + err.message, true);
       } finally {
         endLoad();
       }
