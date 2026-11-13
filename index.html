@@ -4568,7 +4568,6 @@ function renderSuppliers() {
       const endInput = document.getElementById('reqFilterEnd')?.value;
       const statusFilter = document.getElementById('reqFilterStatus')?.value || '';
 
-      // Padrão: últimos 30 dias se não houver data de início
       let startDate, endDate;
       if (!startInput) {
         startDate = new Date();
@@ -4592,30 +4591,100 @@ function renderSuppliers() {
         return true;
       });
 
-      const sorted = filtered.sort((a, b) => new Date(b.data_pedido) - new Date(a.data_pedido));
+      // Agrupa por id_compra (ou por id, se for pedido antigo sem id_compra)
+      const grupos = {};
+      filtered.forEach(r => {
+        const chave = (r.id_compra && String(r.id_compra).trim()) ? String(r.id_compra).trim() : 'solo-' + r.id;
+        if (!grupos[chave]) grupos[chave] = [];
+        grupos[chave].push(r);
+      });
 
-      tbody.innerHTML = sorted.length ? sorted.map(r => {
-        const p = productById(r.id_produto);
-        const dataStr = r.data_pedido ? new Date(r.data_pedido).toLocaleString('pt-BR') : '—';
-        return `<tr>
+      // Ordena grupos por data da primeira linha (mais recente primeiro)
+      const chavesOrdenadas = Object.keys(grupos).sort((a, b) => {
+        const da = new Date(grupos[a][0].data_pedido || 0);
+        const db = new Date(grupos[b][0].data_pedido || 0);
+        return db - da;
+      });
+
+      if (chavesOrdenadas.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" class="table-empty">Nenhum pedido encontrado neste período.</td></tr>';
+        return;
+      }
+
+      let html = '';
+      chavesOrdenadas.forEach(chave => {
+        const itens = grupos[chave];
+        const mae = itens[0];
+        const isMulti = itens.length > 1 || (mae.id_compra && String(mae.id_compra).trim());
+
+        const totalQtd = itens.reduce((s, it) => s + Number(it.quantidade || 0), 0);
+        const totalValor = itens.reduce((s, it) => s + (Number(it.valor_total || 0) * Number(it.quantidade || 0)), 0)
+                         + Number(mae.valor_frete || 0) - Number(mae.valor_desconto || 0);
+        const dataStr = mae.data_pedido ? new Date(mae.data_pedido).toLocaleString('pt-BR') : '—';
+
+        const idMae = mae.id;
+        const qtdItens = itens.length;
+        const labelItens = qtdItens > 1
+          ? `<span style="cursor:pointer; color:#526b83; font-weight:700;" data-toggle-req="${esc(chave)}">🛍 ${qtdItens} itens ▾</span>`
+          : (() => {
+              const p = productById(mae.id_produto);
+              return p ? `${esc(p.marca)} ${esc(p.modelo)}<br><small style="color:#738091">${esc(mae.sku_variacao)}</small>` : 'Produto Excluído';
+            })();
+
+        html += `<tr data-req-row="${esc(chave)}">
           <td>${dataStr}</td>
-          <td>${esc(r.cliente || '—')}</td>
-          <td><strong>${p ? esc(p.marca) + ' ' + esc(p.modelo) : 'Excluído'}</strong><br><small>${esc(r.sku_variacao)}</small></td>
-          <td>${esc(r.numero)}</td>
-          <td>${r.quantidade}</td>
-          <td>${money(r.valor_total)}</td>
-<td>${esc(r.status_pedido)}</td>
-<td>${esc(r.status_envio || 'Não enviado')}</td>
-<td>${r.codigo_rastreio ? `<span style="font-family:monospace;">${esc(r.codigo_rastreio)}</span> <button class="btn btn-light" style="padding:2px 6px; font-size:9px;" onclick="event.stopPropagation(); navigator.clipboard.writeText('${esc(r.codigo_rastreio)}'); notify('Rastreio copiado!')">Copiar</button>` : '—'}</td>
-<td>
-  <button class="btn btn-light" style="padding: 4px 8px; font-size: 10px;" onclick="viewRequest('${esc(r.id)}')">Ver</button>
-  <button class="btn btn-primary" style="padding: 4px 8px; font-size: 10px;" onclick="faturarPedido('${esc(r.id)}')">Faturar</button>
-  <button class="btn btn-danger" style="padding: 4px 8px; font-size: 10px;" onclick="deleteRequest('${esc(r.id)}')">Excluir</button>
-</td>
+          <td>${esc(mae.cliente || '—')}</td>
+          <td>${labelItens}</td>
+          <td>${isMulti ? '—' : esc(mae.numero)}</td>
+          <td>${totalQtd}</td>
+          <td><strong>${money(totalValor)}</strong></td>
+          <td>${esc(mae.status_pedido || '—')}</td>
+          <td>${esc(mae.status_envio || 'Não enviado')}</td>
+          <td>${mae.codigo_rastreio ? `<span style="font-family:monospace;">${esc(mae.codigo_rastreio)}</span> <button class="btn btn-light" style="padding:2px 6px; font-size:9px;" onclick="event.stopPropagation(); navigator.clipboard.writeText('${esc(mae.codigo_rastreio)}'); notify('Rastreio copiado!')">Copiar</button>` : '—'}</td>
+          <td>
+            <button class="btn btn-light" style="padding: 4px 8px; font-size: 10px;" onclick="viewRequest('${esc(idMae)}')">Ver</button>
+            <button class="btn btn-primary" style="padding: 4px 8px; font-size: 10px;" onclick="faturarPedido('${esc(idMae)}')">Faturar</button>
+            <button class="btn btn-danger" style="padding: 4px 8px; font-size: 10px;" onclick="deleteRequest('${esc(idMae)}')">Excluir</button>
+          </td>
         </tr>`;
-      }).join('') : '<tr><td colspan="9" class="table-empty">Nenhum pedido encontrado neste período.</td></tr>';
-    }
 
+        if (isMulti) {
+          html += `<tr data-req-items="${esc(chave)}" style="display:none; background:#fafbfc;">
+            <td colspan="10" style="padding: 0;">
+              <table style="margin:0;">
+                <thead><tr>
+                  <th style="padding-left:32px;">Produto</th><th>Num.</th><th>Qtd.</th><th>Valor Un.</th><th>Subtotal</th><th>Status</th>
+                </tr></thead>
+                <tbody>
+                  ${itens.map(it => {
+                    const p = productById(it.id_produto);
+                    const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto Excluído';
+                    return `<tr>
+                      <td style="padding-left:32px;">${nomeProd}<br><small style="color:#738091">${esc(it.sku_variacao)}</small></td>
+                      <td>${esc(it.numero)}</td>
+                      <td>${it.quantidade}</td>
+                      <td>${money(it.valor_total)}</td>
+                      <td><strong>${money(Number(it.valor_total||0) * Number(it.quantidade||0))}</strong></td>
+                      <td>${esc(it.status_pedido || '—')}</td>
+                    </tr>`;
+                  }).join('')}
+                </tbody>
+              </table>
+            </td>
+          </tr>`;
+        }
+      });
+
+      tbody.innerHTML = html;
+
+      tbody.querySelectorAll('[data-toggle-req]').forEach(el => {
+        el.onclick = () => {
+          const chave = el.dataset.toggleReq;
+          const sub = tbody.querySelector(`[data-req-items="${CSS.escape(chave)}"]`);
+          if (sub) sub.style.display = (sub.style.display === 'none') ? '' : 'none';
+        };
+      });
+    }
    
     // Botão de Faturar: Transforma o pedido (multi-item) em N linhas de venda
     window.faturarPedido = async function(idPedido) {
@@ -5433,56 +5502,125 @@ window.viewRequest = function(id) {
   const r = requests.find(x => String(x.id) === String(id));
   if (!r) return;
 
+  // Descobre todas as linhas do mesmo pedido
+  const idCompra = r.id_compra ? String(r.id_compra).trim() : '';
+  const itens = idCompra
+    ? requests.filter(x => String(x.id_compra || '').trim() === idCompra)
+    : [r];
+
+  const mae = itens[0];
+
   detailEditBtn.style.display = 'inline-flex';
   detailDeleteBtn.style.display = 'inline-flex';
-  
+
   const dupBtnReq = document.getElementById('detailDuplicateBtn');
   dupBtnReq.style.display = 'inline-flex';
-  dupBtnReq.onclick = () => { fecharDetail(); duplicarPedido(r); };
+  dupBtnReq.onclick = () => { fecharDetail(); duplicarPedido(mae); };
 
   detailKind = 'request'; detailId = id; detailTitle.textContent = 'Detalhes do Pedido';
+
   document.getElementById('detailPrintBtn').style.display = 'none';
   document.getElementById('detailLabelBtn').style.display = 'inline-flex';
-  document.getElementById('detailLabelBtn').onclick = () => gerarEtiquetaEnvio(r, 'pedido');
+  document.getElementById('detailLabelBtn').onclick = () => gerarEtiquetaEnvio(mae, 'pedido');
   document.getElementById('detailWhatsBtn').style.display = 'none';
-  const p = productById(r.id_produto);
-  const nomeProd = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Produto excluído';
-  const custo = Number(r.custo_unitario || 0);
-  const freteReq = Number(r.valor_frete || 0);
-  const descontoReq = Number(r.valor_desconto || 0);
-  let extrasReq = 0;
-  if (r.custos_extras) {
-    try {
-      const arr = JSON.parse(r.custos_extras);
-      arr.forEach(c => extrasReq += Number(c.valor || 0));
-    } catch (e) {}
-  }
-  const lucro = Number(r.valor_total || 0) - (custo * Number(r.quantidade || 0)) - extrasReq - freteReq - descontoReq;
+
+  const freteReq = Number(mae.valor_frete || 0);
+  const descontoReq = Number(mae.valor_desconto || 0);
+
   const rows = [
-    ['ID', `<span style="font-family:monospace; user-select:all;">${esc(r.id)}</span>`],
-    ['Data', r.data_pedido ? new Date(r.data_pedido).toLocaleString('pt-BR') : '—'],
-    ['Cliente', esc(r.cliente || 'Consumidor Final')],
-    ['Produto', nomeProd], ['SKU', esc(r.sku_variacao || '—')],
-    ['Numeração', esc(r.numero || '—')], ['Quantidade', r.quantidade || 0],
-    ['Custo Unitário', money(custo)],
-    ['Valor Total', `<span style="color:#27775d">${money(r.valor_total)}</span>`],
-    ['Lucro Real', `<span style="color:#27775d">${money(lucro)}</span>`],
-    ['Status', esc(r.status_pedido || '—')],
-    ['Status de Envio', esc(r.status_envio || 'Não enviado')],
-    ['Código de Rastreio', esc(r.codigo_rastreio || '—')],
-    ['Frete', money(freteReq)],
-    ['Desconto', money(descontoReq)],
-    ['Custos Extras', r.custos_extras ? (() => {
-      try {
-        const arr = JSON.parse(r.custos_extras);
-        return arr.length ? arr.map(c => `• ${esc(c.descricao)}: ${money(c.valor)}`).join('<br>') : '—';
-      } catch(e) { return '—'; }
-    })() : '—'],
-    ['Observação', esc(r.observacao || '—')],
+    ['ID', `<span style="font-family:monospace; user-select:all;">${esc(mae.id)}</span>`],
+    ['Data', mae.data_pedido ? new Date(mae.data_pedido).toLocaleString('pt-BR') : '—'],
+    ['Cliente', esc(mae.cliente || 'Consumidor Final')],
+    ['Status', esc(mae.status_pedido || '—')],
+    ['Status de Envio', esc(mae.status_envio || 'Não enviado')],
+    ['Código de Rastreio', esc(mae.codigo_rastreio || '—')],
+    ['Forma Pagto', esc(mae.forma_pagamento || '—')],
+    ['Endereço de Entrega', esc(mae.endereco_entrega || '—')],
+    ['Observação', esc(mae.observacao || '—')],
   ];
-  detailBody.innerHTML = `<table style="width:100%; border-collapse:collapse;">${renderDetailRows(rows)}</table>`;
+
+  // Custos extras (da mãe)
+  let custosArr = [];
+  if (mae.custos_extras) {
+    try { custosArr = JSON.parse(mae.custos_extras); } catch (e) {}
+    if (!custosArr.length && typeof mae.custos_extras === 'string' && mae.custos_extras.includes(':')) {
+      custosArr = String(mae.custos_extras).split('|').map(s => {
+        const [d, val] = s.split(':');
+        return { descricao: d, valor: Number(val) };
+      }).filter(c => c.descricao);
+    }
+  }
+  if (custosArr.length) {
+    rows.push(['Custos Extras', custosArr.map(c => `• ${esc(c.descricao)}: ${money(c.valor)}`).join('<br>')]);
+  }
+
+  // Totais
+  const subtotal = itens.reduce((s, it) => s + (Number(it.valor_total || 0) * Number(it.quantidade || 0)), 0);
+  const frete = freteReq;
+  const desconto = descontoReq;
+  const totalFinal = subtotal + frete - desconto;
+
+  // Lucro total (mãe concentra extras + frete + desconto)
+  let lucroTotal = 0;
+  itens.forEach((it, i) => {
+    const custoUnit = Number(it.custo_unitario || 0);
+    const qtd = Number(it.quantidade || 0);
+    const valorUnit = Number(it.valor_total || 0);
+    let extrasLinha = 0;
+    let freteLinha = 0;
+    let descLinha = 0;
+    if (i === 0) {
+      freteLinha = frete;
+      descLinha = desconto;
+      if (it.custos_extras) {
+        try {
+          const arr = JSON.parse(it.custos_extras);
+          arr.forEach(c => extrasLinha += Number(c.valor || 0));
+        } catch(e) {}
+      }
+    }
+    lucroTotal += (valorUnit * qtd) - (custoUnit * qtd) - extrasLinha - freteLinha - descLinha;
+  });
+
+  const itensHtml = `
+    <div style="margin-top:16px;">
+      <h4 style="margin:0 0 8px 0; font-size:13px; color:#202a35;">Itens do Pedido (${itens.length})</h4>
+      <table style="width:100%; border-collapse:collapse; font-size:12px;">
+        <thead><tr style="background:#fafbfc; text-align:left;">
+          <th style="padding:8px;">Produto</th><th>Num.</th><th>Qtd.</th><th>Custo Un.</th><th>Valor Un.</th><th>Subtotal</th>
+        </tr></thead>
+        <tbody>
+          ${itens.map(it => {
+            const p = productById(it.id_produto);
+            const nome = p ? `${esc(p.marca)} ${esc(p.modelo)}` : 'Excluído';
+            return `<tr>
+              <td style="padding:8px 0; border-bottom:1px solid var(--line);">${nome}<br><small style="color:#738091">${esc(it.sku_variacao || '')}</small></td>
+              <td style="border-bottom:1px solid var(--line);">${esc(it.numero || '')}</td>
+              <td style="border-bottom:1px solid var(--line);">${it.quantidade}</td>
+              <td style="border-bottom:1px solid var(--line);">${money(it.custo_unitario)}</td>
+              <td style="border-bottom:1px solid var(--line);">${money(it.valor_total)}</td>
+              <td style="border-bottom:1px solid var(--line);"><strong>${money(Number(it.valor_total||0) * Number(it.quantidade||0))}</strong></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+      <div style="margin-top:12px; padding-top:10px; border-top:1px dashed var(--line); font-size:12px;">
+        <div style="display:flex; justify-content:space-between;"><span>Subtotal:</span><strong>${money(subtotal)}</strong></div>
+        ${frete > 0 ? `<div style="display:flex; justify-content:space-between;"><span>Frete:</span><strong>${money(frete)}</strong></div>` : ''}
+        ${desconto > 0 ? `<div style="display:flex; justify-content:space-between;"><span>Desconto:</span><strong style="color:#b04545;">− ${money(desconto)}</strong></div>` : ''}
+        <div style="display:flex; justify-content:space-between; margin-top:6px; padding-top:6px; border-top:1px solid var(--line); font-size:14px;"><span><strong>Total:</strong></span><strong style="color:#27775d;">${money(totalFinal)}</strong></div>
+        <div style="display:flex; justify-content:space-between; margin-top:4px;"><span><strong>Lucro:</strong></span><strong style="color:#27775d;">${money(lucroTotal)}</strong></div>
+      </div>
+    </div>
+  `;
+
+  detailBody.innerHTML = `
+    <table style="width:100%; border-collapse:collapse;">${renderDetailRows(rows)}</table>
+    ${itensHtml}
+  `;
   detailModal.style.display = 'flex';
 };
+
 
     detailDeleteBtn?.addEventListener('click', () => {
       const k = detailKind, id = detailId;
@@ -5647,6 +5785,7 @@ window.viewRequest = function(id) {
       document.getElementById('reqDiscount').value = mae.valor_desconto || 0;
       document.getElementById('reqTracking').value = mae.codigo_rastreio || '';
       document.getElementById('reqShippingStatus').value = mae.status_envio || 'Não enviado';
+      document.getElementById('reqPayment').value = mae.forma_pagamento || 'Dinheiro';
 
       // Endereço
       setTimeout(() => {
@@ -5712,7 +5851,6 @@ window.viewRequest = function(id) {
       notify(`Pedido duplicado (${itens.length} item${itens.length > 1 ? 's' : ''}). Ajuste se necessário e salve.`);
       setTimeout(() => requestFormPanel.scrollIntoView({ behavior:'smooth', block:'start' }), 100);
     }
-
 
     function editarVendaExistente(v) {
       // Descobre todas as linhas da compra
@@ -5914,6 +6052,7 @@ function editarPedidoExistente(r) {
   setTimeout(() => document.getElementById('requestFormPanel').scrollIntoView({ behavior:'smooth', block:'start' }), 100);
 }
 
+
     // ===== Submit em modo EDIÇÃO — Venda multi-item =====
     document.getElementById('orderForm').addEventListener('submit', async e => {
       if (!editingSaleId) return;
@@ -6064,6 +6203,7 @@ function editarPedidoExistente(r) {
       const endereco = document.getElementById('reqAddress')?.value || '';
       const freteEdit = Number(document.getElementById('reqFreight')?.value || 0);
       const descontoEdit = Number(document.getElementById('reqDiscount')?.value || 0);
+      const formaPagtoEdit = document.getElementById('reqPayment').value;
 
       const rows = document.querySelectorAll('#reqItemsList .req-item-row');
       if (rows.length === 0) { notify('Adicione pelo menos um item.', true); return; }
@@ -6108,7 +6248,7 @@ function editarPedidoExistente(r) {
           await apiPost({ action: 'delete', sheet: 'Pedidos', id: la.id, vendedor: usuarioLogado?.nome || 'Sistema' });
         }
 
-        // Recria as novas
+        // Recria as novas (linha 0 = mãe; demais = frete/desconto/rastreio zerados)
         for (let i = 0; i < itens.length; i++) {
           const it = itens[i];
           const ehMae = i === 0;
@@ -6130,7 +6270,8 @@ function editarPedidoExistente(r) {
               codigo_rastreio: ehMae ? tracking : '',
               status_envio: ehMae ? shippingStatus : 'Não enviado',
               valor_frete: ehMae ? freteEdit : 0,
-              valor_desconto: ehMae ? descontoEdit : 0
+              valor_desconto: ehMae ? descontoEdit : 0,
+              forma_pagamento: ehMae ? formaPagtoEdit : ''
             }
           });
         }
@@ -6149,7 +6290,6 @@ function editarPedidoExistente(r) {
         endLoad();
       }
     }, true);
-
 
     // ====== Relatórios ======
     document.getElementById('generateReportBtn')?.addEventListener('click', () => {
