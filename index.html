@@ -418,23 +418,19 @@
               </div>
 
               <!-- Cliente primeiro (obrigatório) -->
-              <div style="margin-bottom:16px; padding:15px; border:1px solid var(--line); border-radius:10px; background:#f8fafc;">
-                <div class="form-grid">
-                  <div class="field">
-                    <label for="orderCpfCnpj" style="color:#202a35; font-weight:bold;">1º Passo: CPF ou CNPJ do Cliente *</label>
-                    <div style="display:flex; gap:6px;">
-                      <input id="orderCpfCnpj" placeholder="Digite o CPF/CNPJ" style="flex:1; border:2px solid #526b83;" />
-                      <button type="button" class="btn btn-light" id="quickAddClientBtn" style="white-space:nowrap;">＋ Novo</button>
-                    </div>
-                  </div>
-                  <div class="field">
-                    <label for="orderClient">Cliente Confirmado</label>
-                    <input id="orderClient" readonly style="background:#e4e9ee; font-weight:700;" placeholder="Aguardando CPF..." />
-                  </div>
-                  <div class="field" style="grid-column: span 2;">
-                    <div id="orderClientInfo" style="display:none;"></div>
+              <div style="margin-bottom:16px; padding:16px; border:1px solid var(--line); border-radius:10px; background:#f8fafc;">
+                <div class="field" style="margin-bottom:12px;">
+                  <label for="orderCpfCnpj" style="color:#202a35; font-weight:bold; font-size:12px;">1º Passo: CPF ou CNPJ do Cliente *</label>
+                  <div style="display:flex; gap:8px; width:100%;">
+                    <input id="orderCpfCnpj" placeholder="Digite o CPF/CNPJ" style="flex:1; border:2px solid #526b83; padding:10px 12px; font-size:14px;" />
+                    <button type="button" class="btn btn-light" id="quickAddClientBtn" style="white-space:nowrap; padding:0 16px; border-color:#526b83; color:#526b83; font-weight:bold;">＋ Novo</button>
                   </div>
                 </div>
+                <div class="field">
+                  <label for="orderClient" style="font-size:11px;">Cliente Confirmado</label>
+                  <input id="orderClient" readonly style="background:#e4e9ee; font-weight:700; color:#202a35; padding:10px 12px;" placeholder="Aguardando CPF..." />
+                </div>
+                <div id="orderClientInfo" style="display:none; margin-top:10px;"></div>
               </div>
 
               <!-- O resto do formulário fica bloqueado aqui -->
@@ -552,23 +548,19 @@
               </div>
 
               <!-- Cliente primeiro (obrigatório) -->
-              <div style="margin-bottom:16px; padding:15px; border:1px solid var(--line); border-radius:10px; background:#f8fafc;">
-                <div class="form-grid">
-                  <div class="field">
-                    <label for="reqCpfCnpj" style="color:#202a35; font-weight:bold;">1º Passo: CPF ou CNPJ do Cliente *</label>
-                    <div style="display:flex; gap:6px;">
-                      <input id="reqCpfCnpj" placeholder="Digite o CPF/CNPJ" style="flex:1; border:2px solid #526b83;" />
-                      <button type="button" class="btn btn-light" id="quickAddReqClientBtn" style="white-space:nowrap;">＋ Novo</button>
-                    </div>
-                  </div>
-                  <div class="field">
-                    <label for="reqClient">Cliente Confirmado</label>
-                    <input id="reqClient" readonly style="background:#e4e9ee; font-weight:700;" placeholder="Aguardando CPF..." />
-                  </div>
-                  <div class="field" style="grid-column: span 2;">
-                    <div id="reqClientInfo" style="display:none;"></div>
+              <div style="margin-bottom:16px; padding:16px; border:1px solid var(--line); border-radius:10px; background:#f8fafc;">
+                <div class="field" style="margin-bottom:12px;">
+                  <label for="reqCpfCnpj" style="color:#202a35; font-weight:bold; font-size:12px;">1º Passo: CPF ou CNPJ do Cliente *</label>
+                  <div style="display:flex; gap:8px; width:100%;">
+                    <input id="reqCpfCnpj" placeholder="Digite o CPF/CNPJ" style="flex:1; border:2px solid #526b83; padding:10px 12px; font-size:14px;" />
+                    <button type="button" class="btn btn-light" id="quickAddReqClientBtn" style="white-space:nowrap; padding:0 16px; border-color:#526b83; color:#526b83; font-weight:bold;">＋ Novo</button>
                   </div>
                 </div>
+                <div class="field">
+                  <label for="reqClient" style="font-size:11px;">Cliente Confirmado</label>
+                  <input id="reqClient" readonly style="background:#e4e9ee; font-weight:700; color:#202a35; padding:10px 12px;" placeholder="Aguardando CPF..." />
+                </div>
+                <div id="reqClientInfo" style="display:none; margin-top:10px;"></div>
               </div>
 
               <!-- O resto do formulário fica bloqueado aqui -->
