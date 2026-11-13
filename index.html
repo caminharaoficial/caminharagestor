@@ -1231,12 +1231,12 @@ let users = [];
 
     // Calcula e preenche o frete automaticamente. prefixo = 'order' | 'req'.
     // Respeita sobrescrita manual: se o campo foi editado à mão, não sobrescreve.
-    function calcularFreteAutomatico(prefixo) {
+
+     function calcularFreteAutomatico(prefixo) {
       const idFrete = prefixo === 'order' ? 'orderFreight' : 'reqFreight';
       const idPrazo = prefixo === 'order' ? 'orderFretePrazo' : 'reqFretePrazo';
       const idDoc = prefixo === 'order' ? 'orderCpfCnpj' : 'reqCpfCnpj';
-      const idProd = prefixo === 'order' ? 'orderProduct' : 'reqProduct';
-      const idQty = prefixo === 'order' ? 'orderQty' : 'reqQty';
+      const listaItensSel = prefixo === 'order' ? '#orderItemsList .order-item-row' : '#reqItemsList .req-item-row';
 
       const campoFrete = document.getElementById(idFrete);
       const campoPrazo = document.getElementById(idPrazo);
@@ -1247,57 +1247,92 @@ let users = [];
 
       const doc = (document.getElementById(idDoc)?.value || '').trim();
       const cliente = buscarClientePorDocumento(doc);
-      const prodText = (document.getElementById(idProd)?.value || '').trim();
-      const prodObj = products.find(x => `${x.marca} ${x.modelo} ${x.cor ? '· ' + x.cor : ''} (${x.sku})` === prodText);
-      const qtd = Number(document.getElementById(idQty)?.value || 1);
 
       // Limpa prazo
       if (campoPrazo) campoPrazo.textContent = '';
 
-      if (!cliente || !prodObj) {
+      if (!cliente) {
         campoFrete.value = '';
         return;
       }
 
-      // 1. Descobre UF do cliente
+      // Lê todos os itens da lista e soma o peso
+      const rows = document.querySelectorAll(listaItensSel);
+      if (rows.length === 0) {
+        campoFrete.value = '';
+        if (campoPrazo) {
+          campoPrazo.textContent = 'Adicione pelo menos um item para calcular o frete.';
+          campoPrazo.style.color = '#a16b1e';
+        }
+        return;
+      }
+
+      let pesoTotal = 0;
+      let algumSemPeso = false;
+      let temItemValido = false;
+
+      rows.forEach(row => {
+        const prodText = (row.querySelector('.item-product')?.value || '').trim();
+        const qtd = Number(row.querySelector('.item-qty')?.value || 0);
+        if (!prodText || qtd <= 0) return;
+
+        const prodObj = products.find(x => `${x.marca} ${x.modelo} ${x.cor ? '· ' + x.cor : ''} (${x.sku})` === prodText);
+        if (!prodObj) return;
+
+        const pesoUnit = Number(prodObj.peso_kg || 0);
+        if (pesoUnit <= 0) {
+          algumSemPeso = true;
+          return;
+        }
+        pesoTotal += pesoUnit * qtd;
+        temItemValido = true;
+      });
+
+      if (!temItemValido) {
+        campoFrete.value = '';
+        if (campoPrazo) {
+          campoPrazo.textContent = algumSemPeso
+            ? 'Produto(s) sem peso cadastrado — cadastre em Produtos para calcular o frete.'
+            : 'Preencha os itens (produto e quantidade) para calcular o frete.';
+          campoPrazo.style.color = '#a16b1e';
+        }
+        return;
+      }
+
+      // Descobre UF do cliente
       let uf = String(cliente.estado || '').trim().toUpperCase();
       if (!uf || uf.length !== 2) {
         uf = ufPorCep(cliente.cep || '');
       }
       if (!uf) {
         campoFrete.value = '';
-        if (campoPrazo) campoPrazo.textContent = 'UF do cliente não identificada — informe o frete manualmente.';
-        campoPrazo.style.color = '#a16b1e';
+        if (campoPrazo) {
+          campoPrazo.textContent = 'UF do cliente não identificada — informe o frete manualmente.';
+          campoPrazo.style.color = '#a16b1e';
+        }
         return;
       }
 
-      // 2. Peso total = peso do produto × quantidade
-      const pesoUnit = Number(prodObj.peso_kg || 0);
-      if (pesoUnit <= 0) {
-        campoFrete.value = '';
-        if (campoPrazo) campoPrazo.textContent = 'Produto sem peso cadastrado — cadastre em Produtos para calcular o frete.';
-        campoPrazo.style.color = '#a16b1e';
-        return;
-      }
-      const pesoTotal = pesoUnit * qtd;
-
-      // 3. Busca faixa
+      // Busca faixa
       const faixa = buscarFretePorUfEPeso(uf, pesoTotal);
       if (!faixa) {
         campoFrete.value = '';
-        if (campoPrazo) campoPrazo.textContent = `Sem faixa de frete para ${uf} com ${pesoTotal.toFixed(3)} kg — cadastre em Configurações.`;
-        campoPrazo.style.color = '#b04545';
+        if (campoPrazo) {
+          campoPrazo.textContent = `Sem faixa de frete para ${uf} com ${pesoTotal.toFixed(3)} kg — cadastre em Configurações.`;
+          campoPrazo.style.color = '#b04545';
+        }
         return;
       }
 
-      // 4. Preenche
+      // Preenche
       campoFrete.value = faixa.valor.toFixed(2);
       if (campoPrazo) {
-        campoPrazo.textContent = `Estimado: ${uf} · ${pesoTotal.toFixed(3)} kg · prazo ${faixa.prazo_dias} dia(s).`;
-        campoPrazo.style.color = '#27775d';
+        const avisoSemPeso = algumSemPeso ? ' (alguns itens sem peso cadastrado)' : '';
+        campoPrazo.textContent = `Estimado: ${uf} · ${pesoTotal.toFixed(3)} kg · prazo ${faixa.prazo_dias} dia(s).${avisoSemPeso}`;
+        campoPrazo.style.color = algumSemPeso ? '#a16b1e' : '#27775d';
       }
 
-      // Recalcula lucro (o frete afeta o lucro)
+      // Recalcula lucro
       if (prefixo === 'order') calcularLucroVenda();
       else calcularLucroPedido();
     }
@@ -2552,15 +2587,14 @@ document.getElementById('orderClient')?.addEventListener('input', atualizarEnder
     // ====== Fim Frete manual/reset ======
 
     // ====== Frete: gatilhos de cálculo ======
-    ['orderCpfCnpj','orderProduct','orderQty'].forEach(id => {
+    // Gatilho pelo CPF/CNPJ (o único campo fixo que ainda dispara cálculo)
+    ['orderCpfCnpj','reqCpfCnpj'].forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;
-      el.addEventListener('change', () => setTimeout(() => calcularFreteAutomatico('order'), 80));
-    });
-    ['reqCpfCnpj','reqProduct','reqQty'].forEach(id => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      el.addEventListener('change', () => setTimeout(() => calcularFreteAutomatico('req'), 80));
+      el.addEventListener('change', () => setTimeout(() => {
+        const prefixo = id.startsWith('order') ? 'order' : 'req';
+        calcularFreteAutomatico(prefixo);
+      }, 80));
     });
     // ====== Fim Frete gatilhos ======
 
@@ -2880,13 +2914,14 @@ document.getElementById('orderClearFilterBtn')?.addEventListener('click', () => 
         calcularLucroVenda();
       });
 
-      // Recalcula ao mudar qtd/custo/valor
+      // Recalcula lucro e frete ao mudar qtd/custo/valor
       [numSel, div.querySelector('.item-qty'), costInput, priceInput].forEach(el => {
-        el.addEventListener('input', calcularLucroVenda);
-        el.addEventListener('change', calcularLucroVenda);
+        el.addEventListener('input', () => { calcularLucroVenda(); setTimeout(() => calcularFreteAutomatico('order'), 50); });
+        el.addEventListener('change', () => { calcularLucroVenda(); setTimeout(() => calcularFreteAutomatico('order'), 50); });
       });
 
       list.appendChild(div);
+      setTimeout(() => calcularFreteAutomatico('order'), 50);
     }
 
     document.getElementById('addOrderItemBtn')?.addEventListener('click', addOrderItemRow);
@@ -4391,11 +4426,12 @@ function renderSuppliers() {
       });
 
       [numSel, div.querySelector('.item-qty'), costInput, priceInput].forEach(el => {
-        el.addEventListener('input', calcularLucroPedido);
-        el.addEventListener('change', calcularLucroPedido);
+        el.addEventListener('input', () => { calcularLucroPedido(); setTimeout(() => calcularFreteAutomatico('req'), 50); });
+        el.addEventListener('change', () => { calcularLucroPedido(); setTimeout(() => calcularFreteAutomatico('req'), 50); });
       });
 
       list.appendChild(div);
+      setTimeout(() => calcularFreteAutomatico('req'), 50);
     }
 
     document.getElementById('addReqItemBtn')?.addEventListener('click', addReqItemRow);
