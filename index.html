@@ -703,6 +703,47 @@
             </form>
           </div>
 
+          <!-- Painel de Fechamento Mensal -->
+          <div class="panel" id="panelFechamento" style="margin-bottom: 20px;">
+            <div class="panel-head">
+              <div>
+                <h2>Fechamento Mensal</h2>
+                <div class="panel-desc">Calcule o balanço e trave os dados de um mês para auditoria.</div>
+              </div>
+            </div>
+            <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+              <div class="field" style="flex:1; min-width:150px;">
+                <label for="fechMes">Mês/Ano</label>
+                <input type="month" id="fechMes" class="search" style="width:100%;" />
+              </div>
+              <button class="btn btn-primary" id="btnFecharMes" style="height:39px;">🔒 Realizar Fechamento</button>
+              <button class="btn btn-light" id="btnVerFechados" style="height:39px;">📋 Ver Meses Fechados</button>
+            </div>
+
+            <!-- Tabela de Meses Fechados (escondida por padrão) -->
+            <div id="tabelaFechadosWrapper" style="display:none; margin-top:20px;">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Mês/Ano</th>
+                      <th>Total Vendas</th>
+                      <th>Custos Prod.</th>
+                      <th>Despesas</th>
+                      <th>Lucro Líquido</th>
+                      <th>Fechado em</th>
+                      <th>Por</th>
+                      <th>Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tabelaFechadosBody">
+                    <tr><td colspan="8" class="table-empty">Nenhum mês fechado ainda.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
        <!-- Histórico de Despesas -->
        <section class="panel">
          <div class="panel-head">
@@ -1164,7 +1205,8 @@
     let requests = []; 
     let suppliers = []; // <-- NOVO
     let tabelaFrete = [];
-let users = [];
+    let users = [];
+    let fechamentos = []; // <-- NOVO
     let connected = false;
     let permitirVendaSemEstoque = false; // padrão: bloqueia
 
@@ -1476,9 +1518,12 @@ let users = [];
       startLoad();
       try {
         setConnection(true);
-        const [p, s, v, d, c, oc, r, e, f, tf] = await Promise.all([
-          apiRead('Produtos'), apiRead('Estoque'), apiRead('Vendas'), apiRead('Despesas'), apiRead('Clientes'), apiRead('Custos'), apiRead('Pedidos'), apiRead('Enderecos_Entrega'), apiRead('Fornecedores'), apiRead('Tabela_Frete')
+        const [p, s, v, d, c, oc, r, e, f, tf, fech] = await Promise.all([
+          apiRead('Produtos'), apiRead('Estoque'), apiRead('Vendas'), apiRead('Despesas'), apiRead('Clientes'), apiRead('Custos'), apiRead('Pedidos'), apiRead('Enderecos_Entrega'), apiRead('Fornecedores'), apiRead('Tabela_Frete'), apiRead('Fechamentos')
         ]);
+
+        fechamentos = (fech || []).filter(x => x && x.id && String(x.id).trim() !== '');
+
         // ...
         requests = r.filter(x => x && x.id && String(x.id).trim() !== ''); // <-- ADICIONE
         
@@ -1536,9 +1581,9 @@ renderZeroStockAlert();
       renderRequests();       
       fillRequestProducts();  
       renderSuppliers();
-renderUsers();
-renderTabelaFrete();    
-}
+      renderUsers();
+      renderTabelaFrete();
+      renderFechamentos(); // <-- ADICIONE ESTA LINHA
 
 function renderZeroStockAlert() {
   const alertEl = document.getElementById('zeroStockAlert');
@@ -3424,6 +3469,122 @@ document.getElementById('expenseForm')?.addEventListener('submit', async e => {
   }
 });
 
+    // ====== FECHAMENTO MENSAL ======
+    function calcularBalancoMes(mesAno) {
+      // mesAno no formato "YYYY-MM"
+      const [ano, mes] = mesAno.split('-').map(Number);
+      if (!ano || !mes) return null;
+
+      // 1. Vendas do mês (bruto e lucro)
+      const vendasMes = sales.filter(s => {
+        if (!s.data_venda) return false;
+        const d = new Date(s.data_venda);
+        return d.getFullYear() === ano && (d.getMonth() + 1) === mes;
+      });
+
+      let totalVendas = 0;
+      let totalCustos = 0;
+      let lucroBrutoVendas = 0;
+
+      // Agrupa por id_compra para lidar com frete/desconto na "mãe"
+      const compras = {};
+      vendasMes.forEach(v => {
+        const chave = (v.id_compra && String(v.id_compra).trim()) ? String(v.id_compra).trim() : 'solo-' + v.id;
+        if (!compras[chave]) compras[chave] = [];
+        compras[chave].push(v);
+      });
+
+      Object.keys(compras).forEach(chave => {
+        const itens = compras[chave];
+        const mae = itens[0];
+        const subtotal = itens.reduce((s, it) => s + (Number(it.valor_venda || 0) * Number(it.quantidade || 0)), 0);
+        const frete = Number(mae.valor_frete || 0);
+        const desconto = Number(mae.valor_desconto || 0);
+        totalVendas += subtotal + frete - desconto;
+
+        itens.forEach(it => {
+          totalCustos += (Number(it.custo_unitario || 0) * Number(it.quantidade || 0));
+          lucroBrutoVendas += Number(it.lucro || 0);
+        });
+      });
+
+      // 2. Despesas do mês (pelo vencimento)
+      const despesasMes = expenses.filter(d => {
+        if (!d.data_vencimento) return false;
+        const data = new Date(d.data_vencimento + 'T12:00:00');
+        return data.getFullYear() === ano && (data.getMonth() + 1) === mes;
+      });
+      const totalDespesas = despesasMes.reduce((s, d) => s + Number(d.valor || 0), 0);
+
+      // 3. Lucro Líquido
+      const lucroLiquido = lucroBrutoVendas - totalDespesas;
+
+      return {
+        mes_ano: mesAno,
+        total_vendas: totalVendas.toFixed(2),
+        total_custos: totalCustos.toFixed(2),
+        total_despesas: totalDespesas.toFixed(2),
+        lucro_liquido: lucroLiquido.toFixed(2)
+      };
+    }
+
+    // Renderiza a tabela de meses fechados
+    function renderFechamentos() {
+      const tbody = document.getElementById('tabelaFechadosBody');
+      if (!tbody) return;
+
+      if (!fechamentos || fechamentos.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="table-empty">Nenhum mês fechado ainda.</td></tr>';
+        return;
+      }
+
+      const sorted = [...fechamentos].sort((a, b) => String(b.mes_ano).localeCompare(String(a.mes_ano)));
+
+      tbody.innerHTML = sorted.map(f => {
+        const dataFech = f.data_fechamento ? new Date(f.data_fechamento).toLocaleString('pt-BR') : '—';
+        // Formata o mes_ano "YYYY-MM" para "MM/YYYY"
+        let mesFmt = f.mes_ano;
+        if (f.mes_ano && f.mes_ano.includes('-')) {
+          const [a, m] = f.mes_ano.split('-');
+          mesFmt = `${m}/${a}`;
+        }
+
+        return `<tr>
+          <td><strong>${esc(mesFmt)}</strong></td>
+          <td>${money(f.total_vendas)}</td>
+          <td>${money(f.total_custos)}</td>
+          <td>${money(f.total_despesas)}</td>
+          <td><strong style="color:${Number(f.lucro_liquido) >= 0 ? '#27775d' : '#b04545'}">${money(f.lucro_liquido)}</strong></td>
+          <td>${dataFech}</td>
+          <td>${esc(f.usuario || '—')}</td>
+          <td>
+            <button class="btn btn-danger" style="padding:4px 8px; font-size:10px;" onclick="deleteFechamento('${esc(f.id)}')">Excluir</button>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    // Excluir um fechamento
+    window.deleteFechamento = async function(id) {
+      const f = fechamentos.find(x => String(x.id) === String(id));
+      if (!f) return;
+
+      if (!confirm(`Excluir o fechamento de ${f.mes_ano}?\n\nIsso permite lançar/editar vendas e despesas novamente nesse mês.`)) return;
+
+      window.pedirSenhaGerente(async () => {
+        startLoad();
+        try {
+          await apiPost({ action: 'delete', sheet: 'Fechamentos', id, vendedor: usuarioLogado?.nome || 'Sistema' });
+          notify('Fechamento excluído.');
+          await loadAll();
+        } catch (err) {
+          notify('Erro ao excluir: ' + err.message, true);
+        } finally {
+          endLoad();
+        }
+      });
+    };
+
     // Renderiza a tabela de despesas
 function renderExpenses() {
   const tbody = document.getElementById('expensesTable');
@@ -3502,6 +3663,55 @@ async function deleteExpense(id) {
     }
   });
 }
+
+    // Eventos do Fechamento Mensal
+    document.getElementById('btnFecharMes')?.addEventListener('click', async () => {
+      const mesInput = document.getElementById('fechMes');
+      if (!mesInput.value) { notify('Selecione o mês/ano.', true); return; }
+      
+      const mesAno = mesInput.value;
+      
+      // Verifica se o mês já está fechado
+      const jaFechado = fechamentos.find(f => String(f.mes_ano) === mesAno);
+      if (jaFechado) {
+        notify('Este mês já está fechado. Exclua o fechamento antes de refazer.', true);
+        return;
+      }
+
+      const balanco = calcularBalancoMes(mesAno);
+      if (!balanco) { notify('Erro ao calcular o balanço.', true); return; }
+
+      if (!confirm(`Fechar o mês ${mesAno}?\n\nVendas: ${money(balanco.total_vendas)}\nCustos: ${money(balanco.total_custos)}\nDespesas: ${money(balanco.total_despesas)}\nLucro Líquido: ${money(balanco.lucro_liquido)}`)) return;
+
+      startLoad();
+      try {
+        const payload = {
+          id: uuid(),
+          mes_ano: mesAno,
+          total_vendas: balanco.total_vendas,
+          total_custos: balanco.total_custos,
+          total_despesas: balanco.total_despesas,
+          lucro_liquido: balanco.lucro_liquido,
+          data_fechamento: new Date().toISOString(),
+          usuario: usuarioLogado?.nome || 'Sistema'
+        };
+
+        await apiPost({ action: 'append', sheet: 'Fechamentos', data: payload });
+        notify('Mês fechado com sucesso!');
+        document.getElementById('tabelaFechadosWrapper').style.display = 'block';
+        await loadAll();
+      } catch (err) {
+        notify('Erro ao fechar mês: ' + err.message, true);
+      } finally {
+        endLoad();
+      }
+    });
+
+    document.getElementById('btnVerFechados')?.addEventListener('click', () => {
+      const wrapper = document.getElementById('tabelaFechadosWrapper');
+      wrapper.style.display = wrapper.style.display === 'none' ? 'block' : 'none';
+      if (wrapper.style.display === 'block') renderFechamentos();
+    });
 
     // ====== Clientes ======
     const clientFormPanel = document.getElementById('clientFormPanel');
