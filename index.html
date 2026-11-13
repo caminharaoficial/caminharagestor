@@ -1126,6 +1126,52 @@
           </div>
         </div>
 
+        <!-- LIXEIRA DE EXCLUSÕES -->
+        <div class="panel" style="margin-top: 20px;">
+          <div class="panel-head">
+            <div>
+              <h2>🗑 Lixeira de Exclusões</h2>
+              <div class="panel-desc">Itens apagados nos últimos 30 dias. Clique em ♻️ Restaurar para reverter.</div>
+            </div>
+            <button class="btn btn-light" id="btnCarregarLixeira">🔄 Carregar</button>
+          </div>
+
+          <div class="toolbar" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:16px;">
+            <select id="lixeiraFilterTabela" class="search" style="flex:1; max-width:200px;">
+              <option value="">Todas as abas</option>
+              <option>Vendas</option>
+              <option>Pedidos</option>
+              <option>Despesas</option>
+              <option>Clientes</option>
+              <option>Produtos</option>
+              <option>Fornecedores</option>
+              <option>Estoque</option>
+              <option>Usuarios</option>
+            </select>
+            <input type="date" id="lixeiraFilterStart" class="search" style="max-width:150px;" title="De" />
+            <input type="date" id="lixeiraFilterEnd" class="search" style="max-width:150px;" title="Até" />
+            <button class="btn btn-primary" id="lixeiraFilterBtn">Filtrar</button>
+            <button class="btn btn-light" id="lixeiraClearBtn">Limpar</button>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Data/Hora</th>
+                  <th>Aba</th>
+                  <th>Quem apagou</th>
+                  <th>Resumo</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="lixeiraTable">
+                <tr><td colspan="5" class="table-empty">Clique em "🔄 Carregar" para ver os itens apagados.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <div class="panel" style="margin-top: 20px;">
           <div class="panel-head">
             <div><h2>Tabela de Frete</h2><div class="panel-desc">Faixas de peso por UF. Usado no cálculo automático do frete na Venda/Pedido.</div></div>
@@ -2466,6 +2512,149 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
     document.querySelectorAll('[data-section]').forEach(b => b.addEventListener('click', () => showSection(b.dataset.section)));
     document.querySelectorAll('[data-section="settings"]').forEach(b => {
       b.addEventListener('click', () => { carregarConfig(); renderTabelaFrete(); });
+    });
+
+    // ====== LIXEIRA DE EXCLUSÕES ======
+    let lixeiraItens = [];
+
+    async function carregarLixeira() {
+      const tbody = document.getElementById('lixeiraTable');
+      if (!tbody) return;
+
+      const filtroTabela = document.getElementById('lixeiraFilterTabela')?.value || '';
+      const startInput = document.getElementById('lixeiraFilterStart')?.value;
+      const endInput = document.getElementById('lixeiraFilterEnd')?.value;
+
+      tbody.innerHTML = '<tr><td colspan="5" class="table-empty">Carregando...</td></tr>';
+      try {
+        startLoad();
+        const logRaw = await apiRead('Log_Exclusoes');
+
+        // Limita aos últimos 30 dias se não houver filtro de data
+        const hoje = new Date();
+        const limitePadrao = new Date();
+        limitePadrao.setDate(hoje.getDate() - 30);
+        limitePadrao.setHours(0, 0, 0, 0);
+
+        const startDate = startInput ? new Date(startInput + 'T00:00:00') : limitePadrao;
+        const endDate = endInput ? new Date(endInput + 'T23:59:59') : new Date();
+
+        lixeiraItens = logRaw
+          .filter(item => item && item.id && item.id_apagado)
+          .filter(item => {
+            // Ignora logs de EDIT_ (edição), só exclusões reais
+            if (String(item.tabela || '').startsWith('EDIT_')) return false;
+            if (filtroTabela && String(item.tabela) !== filtroTabela) return false;
+            if (!item.data_exclusao) return false;
+            const d = new Date(item.data_exclusao);
+            return d >= startDate && d <= endDate;
+          })
+          .sort((a, b) => new Date(b.data_exclusao) - new Date(a.data_exclusao));
+
+        if (lixeiraItens.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" class="table-empty">Nenhum item apagado no período.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = lixeiraItens.map((item, idx) => {
+          // Tenta fazer um "resumo" amigável lendo o JSON dos dados antigos
+          let resumo = '';
+          try {
+            const dados = JSON.parse(item.dados_antigos || '{}');
+            if (item.tabela === 'Vendas' || item.tabela === 'Pedidos') {
+              const nome = dados.cliente || dados.sku_variacao || '—';
+              const valor = dados.valor_venda || dados.valor_total || 0;
+              resumo = `${nome} — ${money(valor)}`;
+            } else if (item.tabela === 'Despesas') {
+              resumo = `${dados.descricao || '—'} — ${money(dados.valor)}`;
+            } else if (item.tabela === 'Clientes') {
+              resumo = `${dados.nome || '—'} (${dados.cpf || 'sem CPF'})`;
+            } else if (item.tabela === 'Produtos') {
+              resumo = `${dados.marca || ''} ${dados.modelo || ''} (${dados.sku || '—'})`;
+            } else if (item.tabela === 'Fornecedores') {
+              resumo = `${dados.razao_social || '—'} (${dados.cnpj || '—'})`;
+            } else if (item.tabela === 'Estoque') {
+              resumo = `Produto #${dados.id_produto || '?'} num ${dados.numero || '?'} qtd ${dados.quantidade || 0}`;
+            } else if (item.tabela === 'Usuarios') {
+              resumo = `${dados.nome || '—'} (${dados.perfil || '—'})`;
+            } else {
+              resumo = '(registro)';
+            }
+          } catch (e) { resumo = '(erro ao ler dados)'; }
+
+          const dataStr = new Date(item.data_exclusao).toLocaleString('pt-BR');
+          return `<tr>
+            <td>${dataStr}</td>
+            <td><span class="tag">${esc(item.tabela || '—')}</span></td>
+            <td>${esc(item.vendedor || '—')}</td>
+            <td>${esc(resumo)}</td>
+            <td>
+              <button class="btn btn-primary" style="padding:4px 8px; font-size:10px; background:#27775d;" onclick="restaurarItem(${idx})">♻️ Restaurar</button>
+            </td>
+          </tr>`;
+        }).join('');
+
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="5" class="table-empty" style="color:#b04545;">Erro ao carregar: ${esc(err.message)}</td></tr>`;
+      } finally {
+        endLoad();
+      }
+    }
+
+    window.restaurarItem = async function(idx) {
+      const item = lixeiraItens[idx];
+      if (!item) return;
+
+      let dadosAntigos;
+      try {
+        dadosAntigos = JSON.parse(item.dados_antigos || '{}');
+      } catch (e) {
+        notify('Não foi possível ler os dados antigos.', true);
+        return;
+      }
+
+      const ok = confirm(
+        `Restaurar este item para a aba "${item.tabela}"?\n\n` +
+        `ID original: ${item.id_apagado}\n` +
+        `Apagado por: ${item.vendedor || '—'}\n` +
+        `Data: ${new Date(item.data_exclusao).toLocaleString('pt-BR')}\n\n` +
+        `⚠️ O item voltará como um NOVO registro (com o mesmo conteúdo).`
+      );
+      if (!ok) return;
+
+      window.pedirSenhaGerente(async () => {
+        startLoad();
+        try {
+          // Remove qualquer referência a id_compra que possa causar duplicação
+          const novo = { ...dadosAntigos, vendedor: usuarioLogado?.nome || 'Sistema' };
+
+          // Garante que tem um id único (o original pode ter sido "queimado" em outras tabelas)
+          if (!novo.id || String(novo.id).trim() === '') {
+            novo.id = uuid();
+          }
+
+          await apiPost({ action: 'append', sheet: item.tabela, data: novo });
+          notify(`✅ Item restaurado em "${item.tabela}"!`);
+
+          // Recarrega os dados gerais e a lixeira
+          await loadAll();
+          await carregarLixeira();
+        } catch (err) {
+          notify('Erro ao restaurar: ' + err.message, true);
+        } finally {
+          endLoad();
+        }
+      });
+    };
+
+    // Eventos da lixeira
+    document.getElementById('btnCarregarLixeira')?.addEventListener('click', carregarLixeira);
+    document.getElementById('lixeiraFilterBtn')?.addEventListener('click', carregarLixeira);
+    document.getElementById('lixeiraClearBtn')?.addEventListener('click', () => {
+      document.getElementById('lixeiraFilterTabela').value = '';
+      document.getElementById('lixeiraFilterStart').value = '';
+      document.getElementById('lixeiraFilterEnd').value = '';
+      carregarLixeira();
     });
 
     document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => showSection(b.dataset.go)));
