@@ -4098,8 +4098,14 @@ function renderSuppliers() {
       requestFormPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
 
-    document.getElementById('cancelRequestBtn')?.addEventListener('click', () => { 
-      requestFormPanel.hidden = true; 
+    document.getElementById('cancelRequestBtn')?.addEventListener('click', () => {
+      document.getElementById('requestForm').reset();
+      document.getElementById('reqItemsList').innerHTML = '';
+      document.getElementById('reqCostsList').innerHTML = '';
+      editingRequestId = null;
+      window._editingRequestIdCompra = null;
+      requestFormPanel.hidden = true;
+      calcularLucroPedido();
     });
 
     function fillRequestProducts() {
@@ -5424,78 +5430,97 @@ window.viewRequest = function(id) {
     }
 
     function duplicarPedido(r) {
-      // Limpa o formulário
+      const idCompra = r.id_compra ? String(r.id_compra).trim() : '';
+      const itens = idCompra
+        ? requests.filter(x => String(x.id_compra || '').trim() === idCompra)
+        : [r];
+      const mae = itens[0];
+
       document.getElementById('requestForm').reset();
+      document.getElementById('reqItemsList').innerHTML = '';
       document.getElementById('reqCostsList').innerHTML = '';
       editingRequestId = null;
+      window._editingRequestIdCompra = null;
 
       showSection('orders');
       requestFormPanel.hidden = false;
 
-      // Preenche cliente (input de texto) e produto (dispara change para carregar numerações)
-      document.getElementById('reqClient').value = r.cliente || '';
-      document.getElementById('reqProduct').value = r.id_produto;
-      document.getElementById('reqProduct').dispatchEvent(new Event('change', { bubbles: true }));
+      // Cabeçalho
+      document.getElementById('reqClient').value = mae.cliente || '';
+      document.getElementById('reqCpfCnpj').value = (() => {
+        const cli = clients.find(c => String(c.nome).trim() === String(mae.cliente || '').trim());
+        return cli ? (cli.cpf || '') : '';
+      })();
+      document.getElementById('reqNote').value = mae.observacao || '';
+      document.getElementById('reqStatus').value = mae.status_pedido || 'Em preparo';
+      document.getElementById('reqFreight').value = mae.valor_frete || 0;
+      document.getElementById('reqDiscount').value = mae.valor_desconto || 0;
+      document.getElementById('reqTracking').value = mae.codigo_rastreio || '';
+      document.getElementById('reqShippingStatus').value = mae.status_envio || 'Não enviado';
 
-      // Preenche o resto depois que o change do produto terminar (setTimeout curto)
+      // Endereço
       setTimeout(() => {
-        document.getElementById('reqNumber').value = r.numero || '';
-        document.getElementById('reqQty').value = r.quantidade || 1;
-        document.getElementById('reqCostUnit').value = r.custo_unitario || 0;
-        document.getElementById('reqPrice').value = r.valor_total || 0;
-        document.getElementById('reqNote').value = r.observacao || '';
-        document.getElementById('reqStatus').value = r.status_pedido || 'Em preparo';
-        document.getElementById('reqFreight').value = r.valor_frete || 0;
-        document.getElementById('reqDiscount').value = r.valor_desconto || 0;
-        document.getElementById('reqTracking').value = r.codigo_rastreio || '';
-        document.getElementById('reqShippingStatus').value = r.status_envio || 'Não enviado';
-
-        // Recria os custos extras
-        let custosArr = [];
-        if (r.custos_extras) {
-          try { custosArr = JSON.parse(r.custos_extras); } catch (e) {
-            custosArr = String(r.custos_extras).split('|').map(s => {
-              const [d, val] = s.split(':');
-              return { descricao: d, valor: Number(val) };
-            }).filter(c => c.descricao);
+        atualizarEnderecoPedido();
+        if (mae.endereco_entrega) {
+          const sel = document.getElementById('reqAddress');
+          if (sel) {
+            let achou = false;
+            for (const opt of sel.options) {
+              if (String(opt.value).trim() === String(mae.endereco_entrega).trim()) { sel.value = opt.value; achou = true; break; }
+            }
+            if (!achou) sel.add(new Option(mae.endereco_entrega, mae.endereco_entrega, true, true));
           }
         }
+      }, 100);
 
-        const lista = document.getElementById('reqCostsList');
-        custosArr.forEach(c => {
-          const div = document.createElement('div');
-          div.style.display = 'flex'; div.style.gap = '10px'; div.style.marginBottom = '10px';
+      // Cria uma linha por item
+      itens.forEach(it => {
+        addReqItemRow();
+        const rows = document.querySelectorAll('#reqItemsList .req-item-row');
+        const row = rows[rows.length - 1];
+        const prodObj = productById(it.id_produto);
+        if (!prodObj) return;
 
-          const inputDesc = document.createElement('input');
-          inputDesc.type = 'text';
-          inputDesc.className = 'req-cost-desc';
-          inputDesc.value = c.descricao || '';
-          inputDesc.style.cssText = 'flex:2; padding:8px; border:1px solid var(--line); border-radius:6px;';
+        const prodInput = row.querySelector('.item-product');
+        prodInput.value = `${prodObj.marca} ${prodObj.modelo} ${prodObj.cor ? '· ' + prodObj.cor : ''} (${prodObj.sku})`;
+        prodInput.dispatchEvent(new Event('change', { bubbles: true }));
 
-          const inputVal = document.createElement('input');
-          inputVal.type = 'number';
-          inputVal.className = 'req-cost-val';
-          inputVal.value = Number(c.valor || 0);
-          inputVal.min = '0'; inputVal.step = '0.01';
-          inputVal.style.cssText = 'flex:1; padding:8px; border:1px solid var(--line); border-radius:6px;';
+        setTimeout(() => {
+          row.querySelector('.item-number').value = it.numero || '';
+          row.querySelector('.item-qty').value = it.quantidade || 1;
+          row.querySelector('.item-cost').value = it.custo_unitario || 0;
+          row.querySelector('.item-price').value = it.valor_total || 0;
+          calcularLucroPedido();
+        }, 60);
+      });
 
-          const btnDel = document.createElement('button');
-          btnDel.type = 'button';
-          btnDel.className = 'btn btn-danger';
-          btnDel.textContent = 'X';
-          btnDel.style.cssText = 'padding:8px;';
-          btnDel.onclick = () => { div.remove(); calcularLucroPedido(); };
+      // Custos extras
+      let custosArr = [];
+      if (mae.custos_extras) {
+        try { custosArr = JSON.parse(mae.custos_extras); } catch (e) {}
+        if (!custosArr.length && typeof mae.custos_extras === 'string' && mae.custos_extras.includes(':')) {
+          custosArr = String(mae.custos_extras).split('|').map(s => {
+            const [d, val] = s.split(':');
+            return { descricao: d, valor: Number(val) };
+          }).filter(c => c.descricao);
+        }
+      }
+      const lista = document.getElementById('reqCostsList');
+      custosArr.forEach(c => {
+        const div = document.createElement('div');
+        div.style.cssText = 'display:flex; gap:10px; margin-bottom:10px;';
+        div.innerHTML = `
+          <input type="text" class="req-cost-desc" value="${esc(c.descricao||'')}" style="flex:2; padding:8px; border:1px solid var(--line); border-radius:6px;" />
+          <input type="number" class="req-cost-val" value="${Number(c.valor||0)}" min="0" step="0.01" style="flex:1; padding:8px; border:1px solid var(--line); border-radius:6px;" />
+          <button type="button" class="btn btn-danger" style="padding:8px;">X</button>
+        `;
+        div.querySelector('button').onclick = () => { div.remove(); calcularLucroPedido(); };
+        lista.appendChild(div);
+      });
 
-          div.appendChild(inputDesc);
-          div.appendChild(inputVal);
-          div.appendChild(btnDel);
-          lista.appendChild(div);
-        });
-
-        calcularLucroPedido();
-        notify('Pedido duplicado para edição. Ajuste se necessário e salve.');
-        setTimeout(() => requestFormPanel.scrollIntoView({ behavior:'smooth', block:'start' }), 50);
-      }, 80);
+      calcularLucroPedido();
+      notify(`Pedido duplicado (${itens.length} item${itens.length > 1 ? 's' : ''}). Ajuste se necessário e salve.`);
+      setTimeout(() => requestFormPanel.scrollIntoView({ behavior:'smooth', block:'start' }), 100);
     }
 
 
@@ -5604,71 +5629,98 @@ window.viewRequest = function(id) {
 
 
 function editarPedidoExistente(r) {
-  editingRequestId = r.id;
+  const idCompra = r.id_compra ? String(r.id_compra).trim() : '';
+  const itens = idCompra
+    ? requests.filter(x => String(x.id_compra || '').trim() === idCompra)
+    : [r];
+  const mae = itens[0];
+
+  editingRequestId = mae.id;
+  window._editingRequestIdCompra = idCompra || ('solo-' + mae.id);
+
   showSection('orders');
   requestFormPanel.hidden = false;
-  
-  // Preenche os dados básicos
-  document.getElementById('reqClient').value = r.cliente || '';
-  document.getElementById('reqProduct').value = r.id_produto;
-  document.getElementById('reqProduct').dispatchEvent(new Event('change', { bubbles: true }));
-  
-  document.getElementById('reqNumber').value = r.numero || '';
-  document.getElementById('reqQty').value = r.quantidade || 1;
-  document.getElementById('reqCostUnit').value = r.custo_unitario || 0;
-  document.getElementById('reqPrice').value = r.valor_total || 0;
-  document.getElementById('reqNote').value = r.observacao || '';
-  document.getElementById('reqStatus').value = r.status_pedido || 'Em preparo';
-document.getElementById('reqFreight').value = r.valor_frete || 0;
-document.getElementById('reqDiscount').value = r.valor_desconto || 0;
-document.getElementById('reqTracking').value = r.codigo_rastreio || '';
-document.getElementById('reqShippingStatus').value = r.status_envio || 'Não enviado';
 
-  // Lê e recria os custos extras
+  // Cabeçalho
+  document.getElementById('reqClient').value = mae.cliente || '';
+  document.getElementById('reqCpfCnpj').value = (() => {
+    const cli = clients.find(c => String(c.nome).trim() === String(mae.cliente || '').trim());
+    return cli ? (cli.cpf || '') : '';
+  })();
+  document.getElementById('reqNote').value = mae.observacao || '';
+  document.getElementById('reqStatus').value = mae.status_pedido || 'Em preparo';
+  document.getElementById('reqFreight').value = mae.valor_frete || 0;
+  document.getElementById('reqDiscount').value = mae.valor_desconto || 0;
+  document.getElementById('reqTracking').value = mae.codigo_rastreio || '';
+  document.getElementById('reqShippingStatus').value = mae.status_envio || 'Não enviado';
+  document.getElementById('reqFreight').dataset.manual = 'true';
+
+  // Endereço
+  setTimeout(() => {
+    atualizarEnderecoPedido();
+    if (mae.endereco_entrega) {
+      const sel = document.getElementById('reqAddress');
+      if (sel) {
+        let achou = false;
+        for (const opt of sel.options) {
+          if (String(opt.value).trim() === String(mae.endereco_entrega).trim()) { sel.value = opt.value; achou = true; break; }
+        }
+        if (!achou) sel.add(new Option(mae.endereco_entrega, mae.endereco_entrega, true, true));
+      }
+    }
+  }, 100);
+
+  // Limpa listas
+  document.getElementById('reqItemsList').innerHTML = '';
+  document.getElementById('reqCostsList').innerHTML = '';
+
+  // Cria uma linha por item
+  itens.forEach(it => {
+    addReqItemRow();
+    const rows = document.querySelectorAll('#reqItemsList .req-item-row');
+    const row = rows[rows.length - 1];
+    const prodObj = productById(it.id_produto);
+    if (!prodObj) return;
+
+    const prodInput = row.querySelector('.item-product');
+    prodInput.value = `${prodObj.marca} ${prodObj.modelo} ${prodObj.cor ? '· ' + prodObj.cor : ''} (${prodObj.sku})`;
+    prodInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    setTimeout(() => {
+      row.querySelector('.item-number').value = it.numero || '';
+      row.querySelector('.item-qty').value = it.quantidade || 1;
+      row.querySelector('.item-cost').value = it.custo_unitario || 0;
+      row.querySelector('.item-price').value = it.valor_total || 0;
+      calcularLucroPedido();
+    }, 60);
+  });
+
+  // Custos extras
   let custosArr = [];
-  if (r.custos_extras) {
-    try { custosArr = JSON.parse(r.custos_extras); } catch (e) {
-      custosArr = String(r.custos_extras).split('|').map(s => {
+  if (mae.custos_extras) {
+    try { custosArr = JSON.parse(mae.custos_extras); } catch (e) {}
+    if (!custosArr.length && typeof mae.custos_extras === 'string' && mae.custos_extras.includes(':')) {
+      custosArr = String(mae.custos_extras).split('|').map(s => {
         const [d, val] = s.split(':');
         return { descricao: d, valor: Number(val) };
       }).filter(c => c.descricao);
     }
   }
-
   const lista = document.getElementById('reqCostsList');
-  lista.innerHTML = '';
   custosArr.forEach(c => {
     const div = document.createElement('div');
-    div.style.display = 'flex'; div.style.gap = '10px'; div.style.marginBottom = '10px';
-    
-    const inputDesc = document.createElement('input');
-    inputDesc.type = 'text';
-    inputDesc.className = 'req-cost-desc';
-    inputDesc.value = c.descricao || '';
-    inputDesc.style.cssText = 'flex:2; padding:8px; border:1px solid var(--line); border-radius:6px;';
-
-    const inputVal = document.createElement('input');
-    inputVal.type = 'number';
-    inputVal.className = 'req-cost-val';
-    inputVal.value = Number(c.valor || 0);
-    inputVal.min = '0'; inputVal.step = '0.01';
-    inputVal.style.cssText = 'flex:1; padding:8px; border:1px solid var(--line); border-radius:6px;';
-
-    const btnDel = document.createElement('button');
-    btnDel.type = 'button';
-    btnDel.className = 'btn btn-danger';
-    btnDel.textContent = 'X';
-    btnDel.style.cssText = 'padding:8px;';
-    btnDel.onclick = () => { div.remove(); calcularLucroPedido(); };
-
-    div.appendChild(inputDesc);
-    div.appendChild(inputVal);
-    div.appendChild(btnDel);
+    div.style.cssText = 'display:flex; gap:10px; margin-bottom:10px;';
+    div.innerHTML = `
+      <input type="text" class="req-cost-desc" value="${esc(c.descricao||'')}" style="flex:2; padding:8px; border:1px solid var(--line); border-radius:6px;" />
+      <input type="number" class="req-cost-val" value="${Number(c.valor||0)}" min="0" step="0.01" style="flex:1; padding:8px; border:1px solid var(--line); border-radius:6px;" />
+      <button type="button" class="btn btn-danger" style="padding:8px;">X</button>
+    `;
+    div.querySelector('button').onclick = () => { div.remove(); calcularLucroPedido(); };
     lista.appendChild(div);
   });
 
   calcularLucroPedido();
-  setTimeout(() => document.getElementById('requestFormPanel').scrollIntoView({ behavior:'smooth', block:'start' }), 50);
+  setTimeout(() => document.getElementById('requestFormPanel').scrollIntoView({ behavior:'smooth', block:'start' }), 100);
 }
 
     // ===== Submit em modo EDIÇÃO — Venda multi-item =====
@@ -5808,49 +5860,105 @@ document.getElementById('reqShippingStatus').value = r.status_envio || 'Não env
     }, true);
 
 
-    // ===== Submit em modo EDIÇÃO — Pedido =====
+    // ===== Submit em modo EDIÇÃO — Pedido multi-item =====
     document.getElementById('requestForm').addEventListener('submit', async e => {
       if (!editingRequestId) return;
       e.preventDefault(); e.stopImmediatePropagation();
 
-      const idPed = editingRequestId;
-      const antigo = requests.find(x => String(x.id) === String(idPed));
-      const cliente = document.getElementById('reqClient').value;
-      const id_produto = document.getElementById('reqProduct').value;
-      const numero = document.getElementById('reqNumber').value;
-      const qtd = Number(document.getElementById('reqQty').value);
-      const custo = Number(document.getElementById('reqCostUnit').value || 0);
-      const valor = Number(document.getElementById('reqPrice').value);
-      const obs = document.getElementById('reqNote').value;
+      const cliente = document.getElementById('reqClient').value.trim();
+      const obs = document.getElementById('reqNote').value.trim();
       const status = document.getElementById('reqStatus').value;
-const tracking = document.getElementById('reqTracking').value.trim();
-const shippingStatus = document.getElementById('reqShippingStatus').value;
-      const p = productById(id_produto);
+      const tracking = document.getElementById('reqTracking').value.trim();
+      const shippingStatus = document.getElementById('reqShippingStatus').value;
+      const endereco = document.getElementById('reqAddress')?.value || '';
+      const freteEdit = Number(document.getElementById('reqFreight')?.value || 0);
+      const descontoEdit = Number(document.getElementById('reqDiscount')?.value || 0);
+
+      const rows = document.querySelectorAll('#reqItemsList .req-item-row');
+      if (rows.length === 0) { notify('Adicione pelo menos um item.', true); return; }
+
+      const itens = [];
+      for (const row of rows) {
+        const prodText = row.querySelector('.item-product').value.trim();
+        const prodObj = products.find(x => `${x.marca} ${x.modelo} ${x.cor ? '· ' + x.cor : ''} (${x.sku})` === prodText);
+        const numero = row.querySelector('.item-number').value;
+        const qtd = Number(row.querySelector('.item-qty').value || 0);
+        const custo = Number(row.querySelector('.item-cost').value || 0);
+        const valor = Number(row.querySelector('.item-price').value || 0);
+        if (!prodObj || !numero || qtd <= 0 || valor <= 0) {
+          notify('Preencha todos os itens corretamente.', true);
+          return;
+        }
+        itens.push({ prodObj, numero, qtd, custo, valor });
+      }
+
+      let somaCustosExtras = 0;
+      const custosParaSalvar = [];
+      document.querySelectorAll('#reqCostsList > div').forEach(div => {
+        const desc = div.querySelector('.req-cost-desc').value.trim();
+        const val = Number(div.querySelector('.req-cost-val').value);
+        if (desc && val > 0) { somaCustosExtras += val; custosParaSalvar.push({ descricao: desc, valor: val }); }
+      });
+      const custosString = custosParaSalvar.length ? JSON.stringify(custosParaSalvar) : '';
 
       try {
         startLoad();
-        await apiPost({
-          action: 'update', sheet: 'Pedidos',
-          data: {
-            id: idPed, cliente, id_produto,
-            vendedor: usuarioLogado?.nome || 'Sistema',
-            sku_variacao: `${p.sku}-${numero}`, numero,
-            quantidade: qtd, valor_total: valor, custo_unitario: custo,
-            data_pedido: antigo?.data_pedido || new Date().toISOString(),
-status_pedido: status, observacao: obs,
-codigo_rastreio: tracking, status_envio: shippingStatus,
-         valor_frete: Number(document.getElementById('reqFreight')?.value || 0),
-         valor_desconto: Number(document.getElementById('reqDiscount')?.value || 0)
-       }
-     });
-     notify('Pedido atualizado!');
-        editingRequestId = null; requestFormPanel.hidden = true;
+
+        const idCompraAntiga = window._editingRequestIdCompra || ('solo-' + editingRequestId);
+        const linhasAntigas = idCompraAntiga.startsWith('solo-')
+          ? requests.filter(x => String(x.id) === String(editingRequestId))
+          : requests.filter(x => String(x.id_compra || '').trim() === idCompraAntiga);
+
+        const dataOriginal = linhasAntigas[0]?.data_pedido || new Date().toISOString();
+        const idCompraNova = idCompraAntiga.startsWith('solo-') ? uuid() : idCompraAntiga;
+
+        // Apaga linhas antigas
+        for (const la of linhasAntigas) {
+          await apiPost({ action: 'delete', sheet: 'Pedidos', id: la.id, vendedor: usuarioLogado?.nome || 'Sistema' });
+        }
+
+        // Recria as novas
+        for (let i = 0; i < itens.length; i++) {
+          const it = itens[i];
+          const ehMae = i === 0;
+          const est = stock.find(s => String(s.id_produto) === String(it.prodObj.id) && String(s.numero) === String(it.numero));
+          const skuVar = (est ? est.sku_variacao : null) || `${it.prodObj.sku}-${it.numero}`;
+
+          await apiPost({
+            action: 'append', sheet: 'Pedidos',
+            data: {
+              id: uuid(), id_compra: idCompraNova,
+              vendedor: usuarioLogado?.nome || 'Sistema',
+              cliente: cliente, id_produto: it.prodObj.id, sku_variacao: skuVar,
+              numero: it.numero, quantidade: it.qtd, valor_total: it.valor,
+              custo_unitario: it.custo,
+              data_pedido: dataOriginal,
+              status_pedido: status, endereco_entrega: endereco,
+              custos_extras: ehMae ? custosString : '',
+              observacao: obs,
+              codigo_rastreio: ehMae ? tracking : '',
+              status_envio: ehMae ? shippingStatus : 'Não enviado',
+              valor_frete: ehMae ? freteEdit : 0,
+              valor_desconto: ehMae ? descontoEdit : 0
+            }
+          });
+        }
+
+        notify(`Pedido atualizado (${itens.length} item${itens.length > 1 ? 's' : ''})!`);
+        editingRequestId = null;
+        window._editingRequestIdCompra = null;
+        document.getElementById('reqItemsList').innerHTML = '';
+        document.getElementById('reqCostsList').innerHTML = '';
+        document.getElementById('requestForm').reset();
+        requestFormPanel.hidden = true;
         await loadAll();
       } catch (err) {
         notify('Erro ao atualizar pedido: ' + err.message, true);
+      } finally {
         endLoad();
       }
     }, true);
+
 
     // ====== Relatórios ======
     document.getElementById('generateReportBtn')?.addEventListener('click', () => {
