@@ -3630,6 +3630,37 @@ window.deleteAddress = async function(idAddr) {
 
     // ====================================
 
+    function duplicarCliente(id) {
+      const c = clients.find(x => String(x.id) === String(id));
+      if (!c) return;
+
+      // Abre o formulário de cadastro (novo)
+      document.getElementById('clientForm').reset();
+      document.getElementById('clientEditId').value = '';
+      document.getElementById('clientFormTitle').textContent = 'Cadastrar Cliente (Duplicado)';
+
+      // Preenche campos copiados. Nome com prefixo "Cópia de".
+      document.getElementById('clientName').value = 'Cópia de ' + (c.nome || '');
+      document.getElementById('clientWhatsapp').value = '';
+      document.getElementById('clientCpf').value = '';
+      document.getElementById('clientEmail').value = '';
+      document.getElementById('clientCep').value = c.cep || '';
+      document.getElementById('clientLogradouro').value = c.logradouro || '';
+      document.getElementById('clientNumeroEnd').value = c.numero_end || '';
+      document.getElementById('clientComplemento').value = c.complemento || '';
+      document.getElementById('clientBairro').value = c.bairro || '';
+      document.getElementById('clientCity').value = c.cidade || '';
+      document.getElementById('clientEstado').value = c.estado || '';
+      document.getElementById('clientObs').value = c.observacao || '';
+
+      clientFormPanel.hidden = false;
+      showSection('contacts');
+      clientFormPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setTimeout(() => document.getElementById('clientName').focus(), 100);
+      notify('Dados copiados. Preencha WhatsApp (obrigatório) e salve como novo cliente.');
+    }
+
+
     window.viewClient = function(id) {
       const c = clients.find(x => String(x.id) === String(id));
       if (!c) return;
@@ -3687,6 +3718,10 @@ window.deleteAddress = async function(idAddr) {
       detailTitle.textContent = 'Ficha do Cliente';
   document.getElementById('detailPrintBtn').style.display = 'none';
   document.getElementById('detailLabelBtn').style.display = 'none';
+  document.getElementById('detailWhatsBtn').style.display = 'none';
+  const dupCli = document.getElementById('detailDuplicateBtn');
+  dupCli.style.display = 'inline-flex';
+  dupCli.onclick = () => { fecharDetail(); duplicarCliente(id); };
   document.getElementById('detailWhatsBtn').style.display = 'none';
       
       detailBody.innerHTML = `
@@ -4089,6 +4124,31 @@ document.getElementById('supplierForm')?.addEventListener('submit', async e => {
   }
 });
 
+    window.duplicarFornecedor = function(id) {
+      const f = suppliers.find(x => String(x.id) === String(id));
+      if (!f) return;
+
+      document.getElementById('supplierForm').reset();
+      document.getElementById('supplierEditId').value = '';
+      document.getElementById('supplierFormTitle').textContent = 'Cadastrar Fornecedor (Duplicado)';
+
+      // Copia a maioria, mas CNPJ fica vazio (para não duplicar)
+      document.getElementById('supplierRazao').value = 'Cópia de ' + (f.razao_social || '');
+      document.getElementById('supplierFantasia').value = f.nome_fantasia || '';
+      document.getElementById('supplierCnpj').value = '';
+      document.getElementById('supplierPhone').value = f.telefone || '';
+      document.getElementById('supplierEmail').value = f.email || '';
+      document.getElementById('supplierCity').value = f.cidade || '';
+      document.getElementById('supplierState').value = f.estado || '';
+      document.getElementById('supplierObs').value = f.observacao || '';
+
+      supplierFormPanel.hidden = false;
+      showSection('suppliers');
+      supplierFormPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setTimeout(() => document.getElementById('supplierRazao').focus(), 100);
+      notify('Dados copiados. Preencha o CNPJ (obrigatório) e salve como novo fornecedor.');
+    };
+
 
     window.editSupplier = function(id) {
       const f = suppliers.find(x => String(x.id) === String(id));
@@ -4152,12 +4212,14 @@ function renderSuppliers() {
       <td>${esc(f.cidade || '—')}${f.estado ? '/' + esc(f.estado) : ''}</td>
       <td>
         <button class="btn btn-light" data-edit-supplier="${esc(f.id)}" style="padding:6px 9px">Editar</button>
+        <button class="btn btn-light" data-dup-supplier="${esc(f.id)}" style="padding:6px 9px; color:#526b83; border-color:#526b83;">📄 Duplicar</button>
         <button class="btn btn-danger" data-del-supplier="${esc(f.id)}" style="padding:6px 9px">Excluir</button>
       </td>
     </tr>
   `).join('') : `<tr><td colspan="6" class="table-empty">${q ? 'Nenhum fornecedor encontrado com este termo.' : 'Nenhum fornecedor cadastrado.'}</td></tr>`;
 
   tbody.querySelectorAll('[data-edit-supplier]').forEach(b => b.onclick = () => editSupplier(b.dataset.editSupplier));
+  tbody.querySelectorAll('[data-dup-supplier]').forEach(b => b.onclick = () => duplicarFornecedor(b.dataset.dupSupplier));
   tbody.querySelectorAll('[data-del-supplier]').forEach(b => b.onclick = () => deleteSupplier(b.dataset.delSupplier));
 }
 
