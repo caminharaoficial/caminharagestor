@@ -401,6 +401,7 @@
           <div class="panel" id="orderFormPanel" style="margin-bottom:18px">
             <div class="panel-head"><div><h2>Registrar nova venda</h2><div class="panel-desc">A baixa no estoque será automática.</div></div></div>
             <form id="orderForm">
+              <datalist id="orderProductList"></datalist>
               <!-- Lista de itens (multi-item) -->
               <div id="orderItemsWrapper" style="margin-bottom:16px; padding:15px; border:1px solid var(--line); border-radius:10px; background:#fafbfc;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -519,6 +520,7 @@
           <div class="panel" id="requestFormPanel" style="margin-bottom:18px">
             <div class="panel-head"><div><h2>Registrar novo pedido</h2><div class="panel-desc">O estoque não é baixado até o faturamento.</div></div></div>
              <form id="requestForm">
+              <datalist id="reqProductList"></datalist>
               <div class="form-grid">
                 <div class="field">
                   <label for="reqCpfCnpj">CPF ou CNPJ *</label>
