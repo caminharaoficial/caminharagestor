@@ -232,6 +232,21 @@
             <div><h1>Visão geral</h1><p class="subtitle">Acompanhe os principais indicadores da operação.</p></div>
             <button class="btn btn-primary" data-go="products">＋ Cadastrar produto</button>
           </div>
+
+          <div style="background:#fff; border:1px solid var(--line); border-radius:14px; padding:16px 20px; margin-bottom:20px; box-shadow:var(--shadow); display:flex; align-items:center; justify-content:space-between; gap:16px;">
+            <div style="display:flex; align-items:center; gap:14px;">
+              <div style="width:44px; height:44px; border-radius:12px; background:#e6f4ea; color:#27775d; display:grid; place-items:center; font-size:22px;">💵</div>
+              <div>
+                <div style="color:#738091; font-size:11px; letter-spacing:.06em; text-transform:uppercase;">Total Vendido Hoje</div>
+                <div style="font-size:22px; font-weight:750; color:#202936; margin-top:2px;" id="metricTodaySales">R$ 0,00</div>
+              </div>
+            </div>
+            <div style="text-align:right;">
+              <div style="color:#738091; font-size:11px;" id="metricTodayCount">0 compra(s)</div>
+              <div style="color:#738091; font-size:10px; margin-top:2px;" id="metricTodayTicket">Ticket médio: R$ 0,00</div>
+            </div>
+          </div>
+
           <div class="metrics">
             <article class="metric"><div class="metric-top"><span class="metric-label">Produtos cadastrados</span><span class="metric-icon">◇</span></div><div class="metric-value" id="metricProducts">0</div><div class="metric-note">Modelos registrados</div></article>
             <article class="metric"><div class="metric-top"><span class="metric-label">Unidades em estoque</span><span class="metric-icon">▤</span></div><div class="metric-value" id="metricStock">0</div><div class="metric-note">Soma das quantidades</div></article>
@@ -571,6 +586,17 @@
                     <option>Em preparo</option><option>Aguardando Fornecedor</option><option>Pronto para Retirada</option>
                   </select>
                 </div>
+
+                <div class="field"><label for="reqPayment">Forma de Pagamento</label>
+                  <select id="reqPayment">
+                    <option value="Dinheiro">Dinheiro</option>
+                    <option value="Pix">Pix</option>
+                    <option value="Cartão Débito">Cartão Débito</option>
+                    <option value="Cartão Crédito">Cartão Crédito</option>
+                    <option value="Boleto">Boleto</option>
+                  </select>
+                </div>
+
                 <div class="field"><label for="reqTracking">Código de Rastreio</label>
                   <input id="reqTracking" maxlength="50" placeholder="Ex.: BR123456789" />
                 </div>
@@ -1442,6 +1468,7 @@ renderZeroStockAlert();
       updateNetProfit();      
       renderSalesChart();
       renderMonthMetrics();
+      renderTodayMetrics();
       renderAlertas();
       renderClients();        
       fillOrderClients();      
@@ -1598,6 +1625,47 @@ function renderZeroStockAlert() {
         }
       });
     }
+
+    function renderTodayMetrics() {
+      const hoje = new Date();
+      const anoHoje = hoje.getFullYear();
+      const mesHoje = hoje.getMonth();
+      const diaHoje = hoje.getDate();
+
+      // Filtra vendas de hoje
+      const vendasHoje = sales.filter(s => {
+        if (!s.data_venda) return false;
+        const d = new Date(s.data_venda);
+        return d.getFullYear() === anoHoje && d.getMonth() === mesHoje && d.getDate() === diaHoje;
+      });
+
+      // Agrupa por compra (id_compra) para contar compras, não itens
+      const compras = {};
+      vendasHoje.forEach(s => {
+        const chave = (s.id_compra && String(s.id_compra).trim()) ? String(s.id_compra).trim() : 'solo-' + s.id;
+        if (!compras[chave]) compras[chave] = [];
+        compras[chave].push(s);
+      });
+
+      let total = 0;
+      Object.keys(compras).forEach(chave => {
+        const itens = compras[chave];
+        const mae = itens[0];
+        const subtotal = itens.reduce((s, it) => s + (Number(it.valor_venda || 0) * Number(it.quantidade || 0)), 0);
+        total += subtotal + Number(mae.valor_frete || 0) - Number(mae.valor_desconto || 0);
+      });
+
+      const numCompras = Object.keys(compras).length;
+      const ticket = numCompras > 0 ? total / numCompras : 0;
+
+      const elTotal = document.getElementById('metricTodaySales');
+      const elCount = document.getElementById('metricTodayCount');
+      const elTicket = document.getElementById('metricTodayTicket');
+      if (elTotal) elTotal.textContent = money(total);
+      if (elCount) elCount.textContent = `${numCompras} compra${numCompras === 1 ? '' : 's'}`;
+      if (elTicket) elTicket.textContent = `Ticket médio: ${money(ticket)}`;
+    }
+
 
     function renderMonthMetrics() {
       const agora = new Date();
@@ -2133,6 +2201,15 @@ const titles = { dashboard:'Dashboard', products:'Produtos', stock:'Estoque', sa
 
     document.getElementById('globalSearch')?.addEventListener('focus', function() {
       if (this.value.trim().length >= 2) renderBuscaGlobal(this.value);
+    });
+
+    // Atalho Ctrl+K / Cmd+K para focar a busca global
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        const busca = document.getElementById('globalSearch');
+        if (busca) { busca.focus(); busca.select(); }
+      }
     });
 
     // Fecha ao clicar fora
@@ -4287,6 +4364,7 @@ function renderSuppliers() {
       const endereco = document.getElementById('reqAddress')?.value || '';
       const fretePedido = Number(document.getElementById('reqFreight').value || 0);
       const descontoPedido = Number(document.getElementById('reqDiscount').value || 0);
+      const formaPagtoPedido = document.getElementById('reqPayment').value;
 
       const rows = document.querySelectorAll('#reqItemsList .req-item-row');
       if (rows.length === 0) {
@@ -4366,7 +4444,8 @@ function renderSuppliers() {
               status_envio: ehMae ? shippingStatus : 'Não enviado',
               observacao: obs,
               valor_frete: ehMae ? fretePedido : 0,
-              valor_desconto: ehMae ? descontoPedido : 0
+              valor_desconto: ehMae ? descontoPedido : 0,
+              forma_pagamento: ehMae ? formaPagtoPedido : ''
             }
           });
         }
@@ -4462,6 +4541,7 @@ function renderSuppliers() {
       try {
         startLoad();
         const idCompraVenda = uuid();
+        const formaPagtoMae = pedido.forma_pagamento || 'Não informada';
 
         for (let i = 0; i < linhasPedido.length; i++) {
           const p = linhasPedido[i];
@@ -4502,7 +4582,7 @@ function renderSuppliers() {
               custo_unitario: custoUnitario,
               lucro: lucro,
               status_pagamento: 'OK',
-              forma_pagamento: p.forma_pagamento || 'Não informada',
+              forma_pagamento: ehMae ? formaPagtoMae : (pedido.forma_pagamento || 'Não informada'),
               custos_extras: ehMae ? (p.custos_extras || '') : '',
               valor_frete: freteVenda,
               valor_desconto: descontoVenda
@@ -5653,6 +5733,7 @@ function editarPedidoExistente(r) {
   document.getElementById('reqDiscount').value = mae.valor_desconto || 0;
   document.getElementById('reqTracking').value = mae.codigo_rastreio || '';
   document.getElementById('reqShippingStatus').value = mae.status_envio || 'Não enviado';
+  document.getElementById('reqPayment').value = mae.forma_pagamento || 'Dinheiro';
   document.getElementById('reqFreight').dataset.manual = 'true';
 
   // Endereço
@@ -5989,33 +6070,43 @@ function editarPedidoExistente(r) {
         return;
       }
 
-      // Calcula os totais gerais
+       // Agrupa por compra (id_compra) — compatível com vendas antigas (1 item)
+      const compras = {};
+      filtered.forEach(s => {
+        const chave = (s.id_compra && String(s.id_compra).trim()) ? String(s.id_compra).trim() : 'solo-' + s.id;
+        if (!compras[chave]) compras[chave] = [];
+        compras[chave].push(s);
+      });
+
       let totalVendido = 0;
       let totalLucro = 0;
       const porDia = {};
 
-      filtered.forEach(s => {
-        const valor = Number(s.valor_venda || 0);
-        const lucro = Number(s.lucro || 0);
-        
-        totalVendido += valor;
-        totalLucro += lucro;
+      Object.keys(compras).forEach(chave => {
+        const itens = compras[chave];
+        const mae = itens[0];
+        const subtotal = itens.reduce((s, it) => s + (Number(it.valor_venda || 0) * Number(it.quantidade || 0)), 0);
+        const frete = Number(mae.valor_frete || 0);
+        const desconto = Number(mae.valor_desconto || 0);
+        const totalCompra = subtotal + frete - desconto;
+        const lucroCompra = itens.reduce((s, it) => s + Number(it.lucro || 0), 0);
 
-        // Agrupa por dia (YYYY-MM-DD)
-        const diaStr = new Date(s.data_venda).toISOString().split('T')[0];
-        if (!porDia[diaStr]) {
-          porDia[diaStr] = { count: 0, valor: 0, lucro: 0 };
-        }
+        totalVendido += totalCompra;
+        totalLucro += lucroCompra;
+
+        const diaStr = new Date(mae.data_venda).toISOString().split('T')[0];
+        if (!porDia[diaStr]) porDia[diaStr] = { count: 0, valor: 0, lucro: 0 };
         porDia[diaStr].count++;
-        porDia[diaStr].valor += valor;
-        porDia[diaStr].lucro += lucro;
+        porDia[diaStr].valor += totalCompra;
+        porDia[diaStr].lucro += lucroCompra;
       });
 
-      // Atualiza as métricas do topo
+      const totalCompras = Object.keys(compras).length;
+
       document.getElementById('repTotal').textContent = money(totalVendido);
       document.getElementById('repProfit').textContent = money(totalLucro);
-      document.getElementById('repCount').textContent = filtered.length;
-      document.getElementById('repAvg').textContent = money(totalVendido / filtered.length);
+      document.getElementById('repCount').textContent = totalCompras;
+      document.getElementById('repAvg').textContent = money(totalCompras > 0 ? totalVendido / totalCompras : 0);
 
       // Renderiza a tabela por dia (ordenado do mais recente pro mais antigo)
       const diasOrdenados = Object.keys(porDia).sort().reverse();
@@ -6254,19 +6345,32 @@ document.getElementById('reportSellerTable').innerHTML = vendedoresOrdenados.len
       linhas.push(linha(['Período', startStr + ' a ' + endStr]));
       linhas.push('');
 
-      // Resumo geral
-      let totalVendido = 0, totalLucro = 0;
+      // Agrupa por compra
+      const comprasCsv = {};
       filtered.forEach(s => {
-        totalVendido += Number(s.valor_venda || 0);
-        totalLucro += Number(s.lucro || 0);
+        const chave = (s.id_compra && String(s.id_compra).trim()) ? String(s.id_compra).trim() : 'solo-' + s.id;
+        if (!comprasCsv[chave]) comprasCsv[chave] = [];
+        comprasCsv[chave].push(s);
       });
+
+      let totalVendido = 0, totalLucro = 0;
+      Object.keys(comprasCsv).forEach(chave => {
+        const itens = comprasCsv[chave];
+        const mae = itens[0];
+        const subtotal = itens.reduce((s, it) => s + (Number(it.valor_venda || 0) * Number(it.quantidade || 0)), 0);
+        const totalCompra = subtotal + Number(mae.valor_frete || 0) - Number(mae.valor_desconto || 0);
+        totalVendido += totalCompra;
+        totalLucro += itens.reduce((s, it) => s + Number(it.lucro || 0), 0);
+      });
+      const totalCompras = Object.keys(comprasCsv).length;
+
       linhas.push(linha(['RESUMO GERAL']));
       linhas.push(linha(['Total Vendido', 'Lucro Total', 'Qtd Vendas', 'Ticket Médio']));
       linhas.push(linha([
         totalVendido.toFixed(2),
         totalLucro.toFixed(2),
-        filtered.length,
-        (totalVendido / filtered.length).toFixed(2)
+        totalCompras,
+        (totalCompras > 0 ? totalVendido / totalCompras : 0).toFixed(2)
       ]));
       linhas.push('');
 
@@ -6285,15 +6389,21 @@ document.getElementById('reportSellerTable').innerHTML = vendedoresOrdenados.len
       });
       linhas.push('');
 
-      // Por dia
+      // Por dia (agrupado por compra)
       const porDia = {};
-      filtered.forEach(s => {
-        const d = new Date(s.data_venda).toISOString().split('T')[0];
+      Object.keys(comprasCsv).forEach(chave => {
+        const itens = comprasCsv[chave];
+        const mae = itens[0];
+        const d = new Date(mae.data_venda).toISOString().split('T')[0];
+        const subtotal = itens.reduce((s, it) => s + (Number(it.valor_venda || 0) * Number(it.quantidade || 0)), 0);
+        const totalCompra = subtotal + Number(mae.valor_frete || 0) - Number(mae.valor_desconto || 0);
+        const lucroCompra = itens.reduce((s, it) => s + Number(it.lucro || 0), 0);
         if (!porDia[d]) porDia[d] = { count: 0, valor: 0, lucro: 0 };
         porDia[d].count++;
-        porDia[d].valor += Number(s.valor_venda || 0);
-        porDia[d].lucro += Number(s.lucro || 0);
+        porDia[d].valor += totalCompra;
+        porDia[d].lucro += lucroCompra;
       });
+
       linhas.push(linha(['RESUMO POR DIA']));
       linhas.push(linha(['Data', 'Qtd', 'Total', 'Lucro']));
       Object.keys(porDia).sort().reverse().forEach(d => {
